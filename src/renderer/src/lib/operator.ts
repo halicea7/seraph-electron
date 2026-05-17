@@ -1,6 +1,68 @@
 import type { Finding, TargetSummary } from '@/types'
 import { getTemplatesForTools, formatTemplatesForPrompt } from '@/lib/templates'
 
+// ── Mode definitions ──────────────────────────────────────────────────────────
+
+export type OperatorMode = 'attack' | 'audit' | 'recon'
+
+export interface ModeConfig {
+  id: OperatorMode
+  label: string
+  color: string     // hex — used for text and accents
+  bg: string        // rgba — card background when active
+  border: string    // rgba — card border when active
+  desc: string
+  defaultTools: string[]
+  defaultMsf: string[]
+}
+
+export const MODE_CONFIGS: Record<OperatorMode, ModeConfig> = {
+  attack: {
+    id: 'attack',
+    label: 'Attack',
+    color: '#f87171',
+    bg: 'rgba(239,68,68,0.08)',
+    border: 'rgba(239,68,68,0.35)',
+    desc: 'Exploit, escalate, persist',
+    defaultTools: ['nmap', 'sqlmap', 'hydra', 'nxc', 'kerbrute', 'searchsploit'],
+    defaultMsf: [
+      'exploit/windows/smb/ms17_010_eternalblue',
+      'exploit/unix/ftp/vsftpd_234_backdoor',
+      'exploit/multi/handler',
+      'post/multi/recon/local_exploit_suggester',
+      'post/windows/gather/hashdump',
+    ],
+  },
+  recon: {
+    id: 'recon',
+    label: 'Recon',
+    color: '#60a5fa',
+    bg: 'rgba(59,130,246,0.08)',
+    border: 'rgba(59,130,246,0.35)',
+    desc: 'Map the surface, no exploitation',
+    defaultTools: ['nmap', 'masscan', 'rustscan', 'gobuster', 'ffuf', 'theHarvester', 'subfinder'],
+    defaultMsf: [
+      'auxiliary/scanner/portscan/tcp',
+      'auxiliary/scanner/http/http_version',
+      'auxiliary/scanner/ssh/ssh_version',
+      'auxiliary/scanner/ftp/ftp_version',
+    ],
+  },
+  audit: {
+    id: 'audit',
+    label: 'Audit',
+    color: '#fbbf24',
+    bg: 'rgba(251,191,36,0.08)',
+    border: 'rgba(251,191,36,0.35)',
+    desc: 'Identify and document, do not exploit',
+    defaultTools: ['nmap', 'nikto', 'testssl', 'nuclei', 'enum4linux', 'nxc'],
+    defaultMsf: [
+      'auxiliary/scanner/smb/smb_ms17_010',
+      'auxiliary/scanner/http/http_version',
+    ],
+  },
+}
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
 export interface OperatorTool {
@@ -50,21 +112,64 @@ export const MSF_MODULES: OperatorTool[] = [
 export const PENTEST_CATEGORIES = [...new Set(PENTEST_TOOLS.map(t => t.category))]
 export const MSF_CATEGORIES     = [...new Set(MSF_MODULES.map(t => t.category))]
 
+// ── Mode-specific persona builders ────────────────────────────────────────────
+
+function buildPersona(mode: OperatorMode, hostname: string): string {
+  switch (mode) {
+    case 'attack':
+      return `You are an expert penetration tester conducting an authorized red team engagement against ${hostname}. Your objective is to compromise the target, escalate privileges to the highest level achievable, and map every viable attack path. Be methodical: enumerate services, identify vulnerabilities, exploit them, then move laterally or escalate.`
+    case 'recon':
+      return `You are a security researcher performing authorized reconnaissance against ${hostname}. Your objective is to fully map the attack surface: open ports, running services, software versions, usernames, subdomains, and potential entry points. DO NOT attempt exploitation, brute-force credentials, or cause any disruption — discovery and enumeration only.`
+    case 'audit':
+      return `You are a security auditor conducting a compliance-oriented assessment of ${hostname}. Your objective is to identify, verify, and document security vulnerabilities and misconfigurations — without exploiting them. For each finding, note the severity (Critical / High / Medium / Low) and a brief remediation recommendation. Prioritize coverage breadth over exploitation depth.`
+  }
+}
+
+function buildRules(mode: OperatorMode, hostname: string): string {
+  const scopeRule = `1. ONLY target ${hostname}. Never expand scope.`
+  switch (mode) {
+    case 'attack':
+      return `${scopeRule}
+2. Use ONLY tools and modules from the enabled lists above.
+3. Use example command templates as a starting point — adapt variables to the actual target.
+4. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
+5. Build on what you know — don't repeat scans unless you need fresh data.
+6. After each result, identify any new attack path steps worth recording.
+7. When you have no more productive actions, return next_action: null.
+8. Keep commands targeted — avoid wide spray attacks.`
+    case 'recon':
+      return `${scopeRule}
+2. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
+3. DO NOT run password sprays, exploit modules, or any command that modifies the target.
+4. Use example command templates as a starting point — adapt variables to the actual target.
+5. Work methodically: scan ports, enumerate services, then enumerate further based on findings.
+6. After each result, note what new attack surface or information you've uncovered.
+7. When the target surface is fully mapped, return next_action: null.`
+    case 'audit':
+      return `${scopeRule}
+2. Use ONLY non-destructive scanning tools from the enabled lists above.
+3. DO NOT exploit vulnerabilities — identify and document them only.
+4. Use example command templates as a starting point — adapt variables to the actual target.
+5. For each finding, state the risk level: Critical, High, Medium, or Low.
+6. After each scan, summarize what was found and what it means for security posture.
+7. When audit coverage is complete, return next_action: null.`
+  }
+}
+
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
 export function buildSystemPrompt(
+  mode: OperatorMode,
   target: TargetSummary,
   findings: Finding[],
   enabledTools: string[],
   enabledMsf: string[]
 ): string {
-  // Build rich template list for pentest tools
   const pentestTemplates = getTemplatesForTools(enabledTools, 3)
   const pentestSection = enabledTools.length
     ? formatTemplatesForPrompt(pentestTemplates)
     : '  (none enabled)'
 
-  // Build MSF list with full one-liner patterns
   const msfList = enabledMsf.length
     ? enabledMsf.map(id => {
         const t = MSF_MODULES.find(x => x.id === id)
@@ -78,7 +183,7 @@ export function buildSystemPrompt(
       ).join('\n')
     : '  None yet.'
 
-  return `You are an expert penetration tester conducting an authorized, scoped engagement.
+  return `${buildPersona(mode, target.hostname_or_ip)}
 
 TARGET:
   Host: ${target.hostname_or_ip}
@@ -95,14 +200,7 @@ ENABLED METASPLOIT MODULES:
 ${msfList}
 
 RULES — read carefully:
-1. ONLY target ${target.hostname_or_ip}. Never expand scope.
-2. Use ONLY tools and modules from the lists above.
-3. Use the example command templates as a starting point — adapt variables to the actual target.
-4. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-5. Build on what you know — don't repeat scans unless you need fresh data.
-6. After each result, identify any new attack path steps worth recording.
-7. When you have no more productive actions, return next_action: null.
-8. Keep commands concise and targeted — avoid wide spray attacks.
+${buildRules(mode, target.hostname_or_ip)}
 
 RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation outside the JSON:
 {
@@ -115,6 +213,22 @@ RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation ou
     "rationale": "<one sentence: why this step now>"
   }
 }`
+}
+
+// Preview variant — findings shown as placeholder (loaded at session start)
+export function buildPreviewPrompt(
+  mode: OperatorMode,
+  target: TargetSummary,
+  enabledTools: string[],
+  enabledMsf: string[]
+): string {
+  const placeholder: Finding[] = []  // findings load at session start
+  const base = buildSystemPrompt(mode, target, placeholder, enabledTools, enabledMsf)
+  // Replace "None yet." with a clear indicator
+  return base.replace(
+    '  None yet.',
+    '  (loaded from project database at session start)'
+  )
 }
 
 export function buildInitialUserMessage(): string {
@@ -144,12 +258,9 @@ export interface OperatorResponse {
 }
 
 function extractJSON(text: string): string | null {
-  // Direct parse
   try { JSON.parse(text); return text } catch { /* continue */ }
-  // Markdown code fence
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fence) { try { JSON.parse(fence[1]); return fence[1] } catch { /* continue */ } }
-  // First brace block
   const brace = text.match(/\{[\s\S]*\}/)
   if (brace) { try { JSON.parse(brace[0]); return brace[0] } catch { /* continue */ } }
   return null
