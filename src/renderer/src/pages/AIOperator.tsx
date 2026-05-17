@@ -649,7 +649,31 @@ export default function AIOperator() {
         </div>
 
         {/* Start / Stop / New */}
-        <div className="p-4 border-t border-cyan-900/20">
+        <div className="p-4 border-t border-cyan-900/20 space-y-3">
+
+          {/* Stream toggle */}
+          <button
+            onClick={() => setShowStream(s => !s)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all"
+            style={showStream
+              ? { color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }
+              : { color: '#475569', background: 'transparent', border: '1px solid rgba(71,85,105,0.2)' }
+            }
+          >
+            <span className="flex items-center gap-1.5 font-semibold">
+              {showStream ? <Eye size={12} /> : <EyeOff size={12} />}
+              Live model stream
+            </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide"
+              style={showStream
+                ? { color: modeConfig.color, background: `${modeConfig.color}22` }
+                : { color: '#475569', background: 'rgba(71,85,105,0.15)' }
+              }
+            >
+              {showStream ? 'On' : 'Off'}
+            </span>
+          </button>
           {phase === 'idle' ? (
             <button
               onClick={startSession}
@@ -725,21 +749,6 @@ export default function AIOperator() {
                     <div className="text-amber-400/70 text-[10px]">Custom prompt</div>
                   </>
                 )}
-                {/* Stream toggle — right-aligned */}
-                <div className="ml-auto">
-                  <button
-                    onClick={() => setShowStream(s => !s)}
-                    title={showStream ? 'Hide model stream' : 'Show live model output'}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors"
-                    style={showStream
-                      ? { color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }
-                      : { color: '#475569', background: 'transparent', border: '1px solid rgba(71,85,105,0.2)' }
-                    }
-                  >
-                    {showStream ? <Eye size={11} /> : <EyeOff size={11} />}
-                    Stream
-                  </button>
-                </div>
               </div>
             )}
 
