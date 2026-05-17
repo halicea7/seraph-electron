@@ -1,4 +1,5 @@
 import type { Finding, TargetSummary } from '@/types'
+import { getTemplatesForTools, formatTemplatesForPrompt } from '@/lib/templates'
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -57,13 +58,13 @@ export function buildSystemPrompt(
   enabledTools: string[],
   enabledMsf: string[]
 ): string {
-  const pentestList = enabledTools.length
-    ? enabledTools.map(id => {
-        const t = PENTEST_TOOLS.find(x => x.id === id)
-        return `  - ${id}${t ? ` — ${t.desc}` : ''}`
-      }).join('\n')
+  // Build rich template list for pentest tools
+  const pentestTemplates = getTemplatesForTools(enabledTools, 3)
+  const pentestSection = enabledTools.length
+    ? formatTemplatesForPrompt(pentestTemplates)
     : '  (none enabled)'
 
+  // Build MSF list with full one-liner patterns
   const msfList = enabledMsf.length
     ? enabledMsf.map(id => {
         const t = MSF_MODULES.find(x => x.id === id)
@@ -87,8 +88,8 @@ TARGET:
 EXISTING FINDINGS (from prior automated scans):
 ${findingLines}
 
-ENABLED PENTEST TOOLS:
-${pentestList}
+ENABLED PENTEST TOOLS (with example command templates):
+${pentestSection}
 
 ENABLED METASPLOIT MODULES:
 ${msfList}
@@ -96,11 +97,12 @@ ${msfList}
 RULES — read carefully:
 1. ONLY target ${target.hostname_or_ip}. Never expand scope.
 2. Use ONLY tools and modules from the lists above.
-3. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-4. Build on what you know — don't repeat scans unless you need fresh data.
-5. After each result, identify any new attack path steps worth recording.
-6. When you have no more productive actions, return next_action: null.
-7. Keep commands concise and targeted — avoid wide spray attacks.
+3. Use the example command templates as a starting point — adapt variables to the actual target.
+4. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
+5. Build on what you know — don't repeat scans unless you need fresh data.
+6. After each result, identify any new attack path steps worth recording.
+7. When you have no more productive actions, return next_action: null.
+8. Keep commands concise and targeted — avoid wide spray attacks.
 
 RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation outside the JSON:
 {

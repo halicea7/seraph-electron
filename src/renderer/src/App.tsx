@@ -28,6 +28,7 @@ import AttackPaths from '@/pages/AttackPaths'
 import AIOperator from '@/pages/AIOperator'
 import CveWatch from '@/pages/CveWatch'
 import Timeline from '@/pages/Timeline'
+import CommandLibrary from '@/pages/CommandLibrary'
 import { Loader } from 'lucide-react'
 
 function ProtectedRoutes() {
@@ -66,6 +67,7 @@ function ProtectedRoutes() {
         <Route path="operator" element={<AIOperator />} />
         <Route path="cve-watch" element={<CveWatch />} />
         <Route path="timeline" element={<Timeline />} />
+        <Route path="command-library" element={<CommandLibrary />} />
         <Route path="c2" element={<C2Console />} />
         <Route path="vault" element={<CredentialVault />} />
         <Route path="reports" element={<Reports />} />
