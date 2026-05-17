@@ -1,0 +1,496 @@
+import { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
+import { getApiBase, getWsBase } from '@/lib/config'
+import { getProjects, getTargets, getFindings, createPentestScan } from '@/api/client'
+import {
+  MODE_CONFIGS, OperatorMode,
+  buildSystemPrompt, buildPreviewPrompt,
+  buildInitialUserMessage, buildOutputUserMessage, buildSkipUserMessage,
+  parseOperatorResponse,
+} from '@/lib/operator'
+import type { Project, TargetSummary, Finding } from '@/types'
+
+// ── Types (exported so the page can use them) ─────────────────────────────────
+
+export interface ChatMessage { role: string; content: string }
+
+export interface OperatorStep {
+  id: number
+  analysis: string
+  attackPathNote: string | null
+  action: { tool: string; command: string; rationale: string } | null
+  result: 'pending' | 'approved' | 'skipped' | 'error'
+  output: string
+  outputOpen: boolean
+}
+
+export type OperatorPhase = 'idle' | 'thinking' | 'awaiting' | 'running' | 'done'
+
+export interface ModelOption { key: string; label: string }
+
+// ── Context type ──────────────────────────────────────────────────────────────
+
+export interface AIOperatorContextValue {
+  // Config
+  mode: OperatorMode
+  projects: Project[]
+  targets: TargetSummary[]
+  selectedProject: string
+  selectedTarget: string
+  modelOptions: ModelOption[]
+  selectedModelKey: string
+  loadingModels: boolean
+  enabledTools: Set<string>
+  enabledMsf: Set<string>
+
+  // Prompt editor
+  promptDraft: string
+  promptIsAuto: boolean
+
+  // Session
+  phase: OperatorPhase
+  steps: OperatorStep[]
+  liveOutput: string
+  llmStream: string
+  errorMsg: string
+  showStream: boolean
+
+  // Config setters
+  setSelectedProject: (id: string) => void
+  setSelectedTarget: (id: string) => void
+  setSelectedModelKey: (key: string) => void
+  toggleTool: (id: string) => void
+  toggleMsf: (id: string) => void
+  setShowStream: (fn: boolean | ((p: boolean) => boolean)) => void
+  setPromptDraft: (v: string) => void
+  setPromptIsAuto: (v: boolean) => void
+
+  // Actions
+  loadModelOptions: () => Promise<void>
+  applyModeSwitch: (newMode: OperatorMode, resetTools: boolean) => void
+  regeneratePrompt: () => void
+  startSession: () => Promise<void>
+  handleApprove: (step: OperatorStep) => Promise<void>
+  handleSkip: (step: OperatorStep) => Promise<void>
+  handleStop: () => void
+  toggleStepOutput: (stepId: number) => void
+  resetSession: () => void
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
+
+const AIOperatorContext = createContext<AIOperatorContextValue | null>(null)
+
+export function useAIOperator(): AIOperatorContextValue {
+  const ctx = useContext(AIOperatorContext)
+  if (!ctx) throw new Error('useAIOperator must be used inside AIOperatorProvider')
+  return ctx
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isMsfTool(toolId: string): boolean {
+  return toolId.includes('/') || toolId.startsWith('auxiliary') || toolId.startsWith('exploit') || toolId.startsWith('post')
+}
+
+function phaseIdFor(mode: OperatorMode, toolId: string): string {
+  if (mode === 'recon') return 'recon'
+  if (mode === 'audit') return 'scanning'
+  return isMsfTool(toolId) ? 'exploitation' : 'scanning'
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+
+export function AIOperatorProvider({ children }: { children: React.ReactNode }) {
+  // ── Config state ────────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<OperatorMode>('attack')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProject, setSelectedProject] = useState('')
+  const [targets, setTargets] = useState<TargetSummary[]>([])
+  const [selectedTarget, setSelectedTarget] = useState('')
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [selectedModelKey, setSelectedModelKey] = useState('')
+  const [loadingModels, setLoadingModels] = useState(false)
+  const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set(MODE_CONFIGS.attack.defaultTools))
+  const [enabledMsf, setEnabledMsf] = useState<Set<string>>(new Set(MODE_CONFIGS.attack.defaultMsf))
+
+  // ── Prompt state ────────────────────────────────────────────────────────────
+  const [promptDraft, setPromptDraft] = useState('')
+  const [promptIsAuto, setPromptIsAuto] = useState(true)
+
+  // ── Session state ────────────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<OperatorPhase>('idle')
+  const [steps, setSteps] = useState<OperatorStep[]>([])
+  const [liveOutput, setLiveOutput] = useState('')
+  const [llmStream, setLlmStream] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [showStream, setShowStream] = useState(false)
+
+  // ── Refs (survive re-renders, not tied to any mounted component) ─────────────
+  const messages = useRef<ChatMessage[]>([])
+  const stopped = useRef(false)
+  const wsRef = useRef<WebSocket | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    getProjects().then(ps => {
+      setProjects(ps)
+      if (ps.length) setSelectedProject(ps[0].id)
+    })
+    loadModelOptions()
+  }, [])
+
+  useEffect(() => {
+    if (!selectedProject) return
+    getTargets(selectedProject).then(ts => {
+      setTargets(ts)
+      setSelectedTarget(ts[0]?.id ?? '')
+    })
+  }, [selectedProject])
+
+  // Auto-regenerate preview prompt when anything changes (unless user has customised it)
+  useEffect(() => {
+    if (!promptIsAuto) return
+    const t = targets.find(x => x.id === selectedTarget)
+    if (!t) return
+    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf]))
+  }, [mode, enabledTools, enabledMsf, selectedTarget, targets, promptIsAuto])
+
+  // ── Model loading ────────────────────────────────────────────────────────────
+
+  async function loadModelOptions() {
+    setLoadingModels(true)
+    const opts: ModelOption[] = []
+    try {
+      const localModels = await window.electronAPI.ollamaModels()
+      localModels.forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
+    } catch { /* Ollama not running */ }
+    try {
+      const cfg = await fetch(`${getApiBase()}/ai/config`).then(r => r.json())
+      if (cfg.model) opts.push({ key: `server:${cfg.model}`, label: `[Server] ${cfg.model}` })
+    } catch { /* server offline */ }
+    setModelOptions(opts)
+    if (opts.length) setSelectedModelKey(opts[0].key)
+    setLoadingModels(false)
+  }
+
+  // ── Mode switch ──────────────────────────────────────────────────────────────
+
+  function applyModeSwitch(newMode: OperatorMode, resetTools: boolean) {
+    const cfg = MODE_CONFIGS[newMode]
+    setMode(newMode)
+    if (resetTools) {
+      setEnabledTools(new Set(cfg.defaultTools))
+      setEnabledMsf(new Set(cfg.defaultMsf))
+    }
+    if (promptIsAuto) {
+      const t = targets.find(x => x.id === selectedTarget)
+      if (t) {
+        const tools = resetTools ? cfg.defaultTools : [...enabledTools]
+        const msf   = resetTools ? cfg.defaultMsf   : [...enabledMsf]
+        setPromptDraft(buildPreviewPrompt(newMode, t, tools, msf))
+      }
+    }
+  }
+
+  // ── Tool toggles ─────────────────────────────────────────────────────────────
+
+  function toggleTool(id: string) {
+    setEnabledTools(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  function toggleMsf(id: string) {
+    setEnabledMsf(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  // ── Prompt helpers ────────────────────────────────────────────────────────────
+
+  function regeneratePrompt() {
+    const t = targets.find(x => x.id === selectedTarget)
+    if (!t) return
+    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf]))
+    setPromptIsAuto(true)
+  }
+
+  // ── LLM call (streaming) ──────────────────────────────────────────────────────
+
+  async function callLLM(msgs: ChatMessage[], onToken: (t: string) => void): Promise<string> {
+    abortRef.current = new AbortController()
+    const { signal } = abortRef.current
+    const [source, ...parts] = selectedModelKey.split(':')
+    const model = parts.join(':')
+
+    if (source === 'local') {
+      const settings = await window.electronAPI.ollamaGetSettings()
+      const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
+      const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: msgs, stream: true }),
+        signal,
+      })
+      if (!resp.ok || !resp.body) throw new Error(`Ollama error: ${resp.status}`)
+
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+      let buf = ''
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done || stopped.current) break
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue
+            try {
+              const data = JSON.parse(trimmed.slice(6))
+              const token: string = data.choices?.[0]?.delta?.content ?? ''
+              if (token) { full += token; onToken(token) }
+            } catch { /* malformed SSE */ }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+      return full
+    }
+
+    const res = await fetch(`${getApiBase()}/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: msgs, model }),
+      signal,
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'AI chat failed')
+    onToken(data.content)
+    return data.content
+  }
+
+  // ── WebSocket execution ───────────────────────────────────────────────────────
+
+  async function executeViaWS(scanId: string, command: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(`${getWsBase()}/ws/execute/${scanId}`)
+      wsRef.current = ws
+      let output = ''
+
+      ws.onopen = () => ws.send(JSON.stringify({ action: 'run', script: command }))
+
+      ws.onmessage = (e) => {
+        if (stopped.current) { ws.close(); resolve(output); return }
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.type === 'stdout' || msg.type === 'stderr') {
+            output += msg.data
+            setLiveOutput(o => o + msg.data)
+          }
+          if (msg.type === 'exit') { ws.close(); resolve(output) }
+        } catch { /* non-JSON */ }
+      }
+
+      ws.onerror = () => reject(new Error('WebSocket connection failed'))
+      ws.onclose = () => resolve(output)
+    })
+  }
+
+  // ── Advance LLM ───────────────────────────────────────────────────────────────
+
+  const advanceLLM = useCallback(async (userMsg: string, rawAssistant: string) => {
+    if (stopped.current) { setPhase('done'); return }
+
+    const newMsgs: ChatMessage[] = [
+      ...messages.current,
+      { role: 'assistant', content: rawAssistant },
+      { role: 'user', content: userMsg },
+    ]
+    messages.current = newMsgs
+    setPhase('thinking')
+    setErrorMsg('')
+    setLlmStream('')
+
+    try {
+      const rawResp = await callLLM(newMsgs, t => setLlmStream(prev => prev + t))
+      if (stopped.current) { setPhase('done'); return }
+
+      const parsed = parseOperatorResponse(rawResp)
+      messages.current = [...newMsgs, { role: 'assistant', content: rawResp }]
+
+      if (!parsed) {
+        setErrorMsg('Model returned non-JSON. Try again or switch to a more capable model.')
+        setPhase('done')
+        return
+      }
+      if (!parsed.next_action) {
+        setPhase('done')
+        return
+      }
+
+      const step: OperatorStep = {
+        id: Date.now(),
+        analysis: parsed.analysis,
+        attackPathNote: parsed.attack_path_note,
+        action: parsed.next_action,
+        result: 'pending',
+        output: '',
+        outputOpen: false,
+      }
+      setSteps(prev => [...prev, step])
+      setPhase('awaiting')
+    } catch (err: any) {
+      if (!stopped.current) {
+        setErrorMsg(err.message || 'LLM call failed')
+        setPhase('done')
+      }
+    }
+  }, [selectedModelKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Session start ─────────────────────────────────────────────────────────────
+
+  async function startSession() {
+    const target = targets.find(t => t.id === selectedTarget)
+    if (!selectedProject || !target || !selectedModelKey) return
+
+    stopped.current = false
+    messages.current = []
+    setSteps([])
+    setLiveOutput('')
+    setErrorMsg('')
+    setLlmStream('')
+    setPhase('thinking')
+
+    try {
+      const findings: Finding[] = await getFindings(selectedProject)
+      const systemPrompt = promptIsAuto
+        ? buildSystemPrompt(mode, target, findings, [...enabledTools], [...enabledMsf])
+        : promptDraft
+
+      const initMsgs: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: buildInitialUserMessage() },
+      ]
+      messages.current = initMsgs
+
+      const rawResp = await callLLM(initMsgs, t => setLlmStream(prev => prev + t))
+      if (stopped.current) { setPhase('done'); return }
+
+      const parsed = parseOperatorResponse(rawResp)
+      messages.current = [...initMsgs, { role: 'assistant', content: rawResp }]
+
+      if (!parsed || !parsed.next_action) {
+        setErrorMsg(parsed ? 'Model returned no action.' : 'Model returned non-JSON. Try a more capable model.')
+        setPhase('done')
+        return
+      }
+
+      setSteps([{
+        id: Date.now(),
+        analysis: parsed.analysis,
+        attackPathNote: parsed.attack_path_note,
+        action: parsed.next_action,
+        result: 'pending',
+        output: '',
+        outputOpen: false,
+      }])
+      setPhase('awaiting')
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to start session')
+      setPhase('idle')
+    }
+  }
+
+  // ── Approve ───────────────────────────────────────────────────────────────────
+
+  async function handleApprove(step: OperatorStep) {
+    if (!step.action) return
+    setPhase('running')
+    setLiveOutput('')
+    setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved' } : s))
+
+    let output = ''
+    try {
+      const scan = await createPentestScan({
+        project_id: selectedProject,
+        target_id: selectedTarget,
+        engagement_type: 'ai_operator',
+        phase_id: phaseIdFor(mode, step.action!.tool),
+        tool_name: step.action!.tool,
+        command: step.action!.command,
+        notes: `AI Operator [${mode}]: ${step.action!.rationale}`,
+      })
+      output = await executeViaWS(scan.scan_id, step.action!.command)
+    } catch (err: any) {
+      output = `Error: ${err.message}`
+    }
+
+    if (stopped.current) { setPhase('done'); return }
+
+    setSteps(prev => prev.map(s => s.id === step.id ? { ...s, output, outputOpen: true } : s))
+
+    const rawAssistant = JSON.stringify({
+      analysis: step.analysis,
+      attack_path_note: step.attackPathNote,
+      next_action: step.action,
+    })
+    await advanceLLM(buildOutputUserMessage(step.action!.command, output), rawAssistant)
+  }
+
+  // ── Skip / Stop / Reset ───────────────────────────────────────────────────────
+
+  async function handleSkip(step: OperatorStep) {
+    setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'skipped' } : s))
+    const rawAssistant = JSON.stringify({
+      analysis: step.analysis,
+      attack_path_note: step.attackPathNote,
+      next_action: step.action,
+    })
+    await advanceLLM(buildSkipUserMessage(), rawAssistant)
+  }
+
+  function handleStop() {
+    stopped.current = true
+    wsRef.current?.close()
+    abortRef.current?.abort()
+    setPhase('done')
+  }
+
+  function resetSession() {
+    setPhase('idle')
+    setSteps([])
+    setLlmStream('')
+    messages.current = []
+  }
+
+  function toggleStepOutput(stepId: number) {
+    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, outputOpen: !s.outputOpen } : s))
+  }
+
+  // ── Context value ─────────────────────────────────────────────────────────────
+
+  const value: AIOperatorContextValue = {
+    mode, projects, targets, selectedProject, selectedTarget,
+    modelOptions, selectedModelKey, loadingModels,
+    enabledTools, enabledMsf,
+    promptDraft, promptIsAuto,
+    phase, steps, liveOutput, llmStream, errorMsg, showStream,
+
+    setSelectedProject, setSelectedTarget, setSelectedModelKey,
+    toggleTool, toggleMsf,
+    setShowStream: (fn) => setShowStream(fn as any),
+    setPromptDraft, setPromptIsAuto,
+
+    loadModelOptions, applyModeSwitch, regeneratePrompt,
+    startSession, handleApprove, handleSkip, handleStop,
+    toggleStepOutput, resetSession,
+  }
+
+  return (
+    <AIOperatorContext.Provider value={value}>
+      {children}
+    </AIOperatorContext.Provider>
+  )
+}

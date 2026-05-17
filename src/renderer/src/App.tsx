@@ -2,6 +2,7 @@ import { HashRouter as BrowserRouter, Routes, Route, Navigate } from 'react-rout
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AINarrativeProvider } from '@/contexts/AINarrativeContext'
+import { AIOperatorProvider } from '@/contexts/AIOperatorContext'
 import { ConnectScreen } from '@/components/ConnectScreen'
 import { getServerUrl } from '@/lib/config'
 import Layout from '@/components/Layout'
@@ -107,7 +108,9 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AINarrativeProvider>
-            <AuthGate />
+            <AIOperatorProvider>
+              <AuthGate />
+            </AIOperatorProvider>
           </AINarrativeProvider>
         </AuthProvider>
       </ThemeProvider>
