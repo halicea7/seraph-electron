@@ -274,27 +274,41 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   // ── WebSocket execution ───────────────────────────────────────────────────────
 
   async function executeViaWS(scanId: string, command: string): Promise<string> {
+    const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`${getWsBase()}/ws/execute/${scanId}`)
       wsRef.current = ws
       let output = ''
+      let settled = false
+
+      const finish = (result: string) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        ws.close()
+        resolve(result)
+      }
+
+      const timer = setTimeout(() => {
+        finish(output + '\n[operator] Command timed out after 5 minutes and was killed.')
+      }, TIMEOUT_MS)
 
       ws.onopen = () => ws.send(JSON.stringify({ action: 'run', script: command }))
 
       ws.onmessage = (e) => {
-        if (stopped.current) { ws.close(); resolve(output); return }
+        if (stopped.current) { finish(output); return }
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'stdout' || msg.type === 'stderr') {
             output += msg.data
             setLiveOutput(o => o + msg.data)
           }
-          if (msg.type === 'exit') { ws.close(); resolve(output) }
+          if (msg.type === 'exit') finish(output)
         } catch { /* non-JSON */ }
       }
 
-      ws.onerror = () => reject(new Error('WebSocket connection failed'))
-      ws.onclose = () => resolve(output)
+      ws.onerror = () => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error('WebSocket connection failed')) } }
+      ws.onclose = () => finish(output)
     })
   }
 
