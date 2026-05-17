@@ -177,32 +177,36 @@ function buildPersona(mode: OperatorMode, hostname: string): string {
 function buildRules(mode: OperatorMode, hostname: string): string {
   const scopeRule = `1. ONLY target ${hostname}. Never expand scope.`
   const reconRule = `2. Study PREVIOUS RECONNAISSANCE carefully before proposing any action. Do NOT re-run a tool that already appears there unless you have a specific, stated reason (e.g. a different port range, a new credential to test, or stale data that needs refreshing).`
+  const sudoRule = `3. Use sudo ONLY for tools that require raw socket access: nmap, masscan, tcpdump. Every other tool (gobuster, ffuf, feroxbuster, nikto, hydra, sqlmap, searchsploit, enum4linux, nxc, kerbrute, nuclei, testssl, theHarvester, subfinder, hashcat, john) must be run WITHOUT sudo.`
   switch (mode) {
     case 'attack':
       return `${scopeRule}
 ${reconRule}
-3. Use ONLY tools and modules from the enabled lists above.
-4. Use example command templates as a starting point — adapt variables to the actual target.
-5. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-6. After each result, identify any new attack path steps worth recording.
-7. When you have no more productive actions, return next_action: null.
-8. Keep commands targeted — avoid wide spray attacks.`
+${sudoRule}
+4. Use ONLY tools and modules from the enabled lists above.
+5. Use example command templates as a starting point — adapt variables to the actual target.
+6. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
+7. After each result, identify any new attack path steps worth recording.
+8. When you have no more productive actions, return next_action: null.
+9. Keep commands targeted — avoid wide spray attacks.`
     case 'recon':
       return `${scopeRule}
 ${reconRule}
-3. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
-4. DO NOT run password sprays, exploit modules, or any command that modifies the target.
-5. Use example command templates as a starting point — adapt variables to the actual target.
-6. After each result, note what new attack surface or information you've uncovered.
-7. When the target surface is fully mapped, return next_action: null.`
+${sudoRule}
+4. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
+5. DO NOT run password sprays, exploit modules, or any command that modifies the target.
+6. Use example command templates as a starting point — adapt variables to the actual target.
+7. After each result, note what new attack surface or information you've uncovered.
+8. When the target surface is fully mapped, return next_action: null.`
     case 'audit':
       return `${scopeRule}
 ${reconRule}
-3. Use ONLY non-destructive scanning tools from the enabled lists above.
-4. DO NOT exploit vulnerabilities — identify and document them only.
-5. Use example command templates as a starting point — adapt variables to the actual target.
-6. For each finding, state the risk level: Critical, High, Medium, or Low.
-7. When audit coverage is complete, return next_action: null.`
+${sudoRule}
+4. Use ONLY non-destructive scanning tools from the enabled lists above.
+5. DO NOT exploit vulnerabilities — identify and document them only.
+6. Use example command templates as a starting point — adapt variables to the actual target.
+7. For each finding, state the risk level: Critical, High, Medium, or Low.
+8. When audit coverage is complete, return next_action: null.`
   }
 }
 
