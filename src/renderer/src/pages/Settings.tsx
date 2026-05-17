@@ -452,6 +452,13 @@ export default function Settings() {
   const [aiSaving, setAiSaving] = useState(false)
   const [aiTesting, setAiTesting] = useState(false)
 
+  // Local Ollama state
+  const [localOllamaSettings, setLocalOllamaSettings] = useState({ useLocalOllama: false, localOllamaUrl: 'http://localhost:11434', localOllamaModel: '' })
+  const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([])
+  const [localOllamaTesting, setLocalOllamaTesting] = useState(false)
+  const [localOllamaSaving, setLocalOllamaSaving] = useState(false)
+  const [localOllamaStatus, setLocalOllamaStatus] = useState<{ online: boolean; error?: string } | null>(null)
+
   useEffect(() => {
     loadTools()
     loadProfiles()
@@ -460,6 +467,7 @@ export default function Settings() {
     loadPasskeys()
     loadApiTokens()
     loadWebhooks()
+    loadLocalOllamaSettings()
     if (currentUser?.role === 'admin') {
       loadUsers()
       loadDemoStatus()
@@ -878,6 +886,41 @@ export default function Settings() {
       }
     } finally {
       setAiTesting(false)
+    }
+  }
+
+  async function loadLocalOllamaSettings() {
+    try {
+      const s = await window.electronAPI.ollamaGetSettings()
+      setLocalOllamaSettings(s)
+    } catch { /* ignore */ }
+  }
+
+  async function saveLocalOllamaSettings() {
+    setLocalOllamaSaving(true)
+    try {
+      await window.electronAPI.ollamaSetSettings(localOllamaSettings)
+    } finally {
+      setLocalOllamaSaving(false)
+    }
+  }
+
+  async function testLocalOllama() {
+    setLocalOllamaTesting(true)
+    setLocalOllamaStatus(null)
+    setLocalOllamaModels([])
+    try {
+      await window.electronAPI.ollamaSetSettings(localOllamaSettings)
+      const models = await window.electronAPI.ollamaModels()
+      setLocalOllamaModels(models)
+      setLocalOllamaStatus({ online: true })
+      if (!localOllamaSettings.localOllamaModel && models.length > 0) {
+        setLocalOllamaSettings(s => ({ ...s, localOllamaModel: models[0] }))
+      }
+    } catch (err: any) {
+      setLocalOllamaStatus({ online: false, error: err.message })
+    } finally {
+      setLocalOllamaTesting(false)
     }
   }
 
@@ -1383,6 +1426,101 @@ export default function Settings() {
             {aiSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
             Save AI Settings
           </button>
+
+          {/* ── Local Ollama ─────────────────────────────────────────────────── */}
+          <div className="border-t border-cyan-900/20 pt-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200">Local Ollama (this machine)</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Use Ollama running on your laptop instead of the server. Narratives are generated
+                  locally — no data leaves your machine.
+                </p>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => setLocalOllamaSettings(s => ({ ...s, useLocalOllama: !s.useLocalOllama }))}
+                className={`relative w-11 h-6 rounded-full transition-colors ${localOllamaSettings.useLocalOllama ? 'bg-cyan-500' : 'bg-slate-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${localOllamaSettings.useLocalOllama ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {localOllamaSettings.useLocalOllama && (
+              <div className="space-y-4 pl-0">
+                {/* URL */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ollama URL</label>
+                  <input
+                    type="text"
+                    value={localOllamaSettings.localOllamaUrl}
+                    onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaUrl: e.target.value }))}
+                    placeholder="http://localhost:11434"
+                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
+                    style={{ background: '#090d14' }}
+                  />
+                </div>
+
+                {/* Test + status */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={testLocalOllama}
+                    disabled={localOllamaTesting}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50 transition-all"
+                  >
+                    {localOllamaTesting ? <Loader size={14} className="animate-spin text-cyan-400" /> : <Wifi size={14} />}
+                    Test Connection
+                  </button>
+                  {localOllamaStatus && (
+                    <div className={`flex items-center gap-2 text-sm ${localOllamaStatus.online ? 'text-green-400' : 'text-red-400'}`}>
+                      {localOllamaStatus.online
+                        ? <><CheckCircle size={14} /> Connected · {localOllamaModels.length} model{localOllamaModels.length !== 1 ? 's' : ''} available</>
+                        : <><WifiOff size={14} /> Offline — {localOllamaStatus.error}</>
+                      }
+                    </div>
+                  )}
+                </div>
+
+                {/* Model selector */}
+                {localOllamaModels.length > 0 ? (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model</label>
+                    <select
+                      value={localOllamaSettings.localOllamaModel}
+                      onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaModel: e.target.value }))}
+                      className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
+                      style={{ background: '#090d14' }}
+                    >
+                      <option value="">Select a model...</option>
+                      {localOllamaModels.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Name</label>
+                    <input
+                      type="text"
+                      value={localOllamaSettings.localOllamaModel}
+                      onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaModel: e.target.value }))}
+                      placeholder="e.g. llama3.2, mistral, deepseek-r1:8b"
+                      className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
+                      style={{ background: '#090d14' }}
+                    />
+                    <p className="text-xs text-slate-500">Click "Test Connection" to auto-populate from your local Ollama instance.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={saveLocalOllamaSettings}
+              disabled={localOllamaSaving}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-all hover:shadow-glow-blue"
+            >
+              {localOllamaSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              Save Local Ollama Settings
+            </button>
+          </div>
         </div>
       )}
 

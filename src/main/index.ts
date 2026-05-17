@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, net, shell } from 'electron'
 import { join } from 'path'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -11,6 +11,9 @@ interface Settings {
   windowHeight: number
   windowX: number | null
   windowY: number | null
+  useLocalOllama: boolean
+  localOllamaUrl: string
+  localOllamaModel: string
 }
 
 const SETTINGS_DEFAULTS: Settings = {
@@ -19,6 +22,9 @@ const SETTINGS_DEFAULTS: Settings = {
   windowHeight: 800,
   windowX: null,
   windowY: null,
+  useLocalOllama: false,
+  localOllamaUrl: 'http://localhost:11434',
+  localOllamaModel: '',
 }
 
 const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
@@ -92,15 +98,67 @@ function createWindow(): void {
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
 
+function ollamaBase(): string {
+  return (settings.localOllamaUrl || 'http://localhost:11434').replace(/\/$/, '')
+}
+
 function setupIPC(): void {
   ipcMain.handle('settings:get-server-url', () => settings.serverUrl)
 
   ipcMain.handle('settings:set-server-url', (_, url: string | null) => {
     settings.serverUrl = url
     saveSettings(settings)
-    // Reload so the renderer picks up the new URL
     mainWindow?.webContents.reload()
     return true
+  })
+
+  // ── Local Ollama ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('ollama:get-settings', () => ({
+    useLocalOllama: settings.useLocalOllama,
+    localOllamaUrl: settings.localOllamaUrl,
+    localOllamaModel: settings.localOllamaModel,
+  }))
+
+  ipcMain.handle('ollama:set-settings', (_, s: { useLocalOllama: boolean; localOllamaUrl: string; localOllamaModel: string }) => {
+    settings.useLocalOllama = s.useLocalOllama
+    settings.localOllamaUrl = s.localOllamaUrl.trim().replace(/\/$/, '') || 'http://localhost:11434'
+    settings.localOllamaModel = s.localOllamaModel
+    saveSettings(settings)
+    return true
+  })
+
+  ipcMain.handle('ollama:models', async () => {
+    const url = `${ollamaBase()}/v1/models`
+    const res = await net.fetch(url)
+    if (!res.ok) throw new Error(`Ollama ${res.status}`)
+    const data = await res.json() as { data?: Array<{ id: string }> }
+    return (data.data || []).map(m => m.id)
+  })
+
+  ipcMain.handle('ollama:chat', async (_, { messages, model }: { messages: Array<{ role: string; content: string }>; model?: string }) => {
+    const url = `${ollamaBase()}/v1/chat/completions`
+    const m = model || settings.localOllamaModel
+    if (!m) throw new Error('No local Ollama model configured')
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 300_000) // 5 min
+    try {
+      const res = await net.fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: m, messages, stream: false }),
+        signal: controller.signal,
+      })
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Ollama ${res.status}: ${txt}`)
+      }
+      const data = await res.json() as { choices: Array<{ message: { content: string } }> }
+      return data.choices[0].message.content
+    } finally {
+      clearTimeout(timeout)
+    }
   })
 }
 
