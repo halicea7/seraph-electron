@@ -30,6 +30,7 @@ import {
   Cpu,
   GitBranch,
   Clock,
+  Bot,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -84,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/c2',           label: 'C2 Console',        icon: <Terminal size={18} /> },
       { to: '/playbooks',    label: 'Playbooks',         icon: <BookOpen size={18} /> },
       { to: '/attack-paths', label: 'Attack Paths',      icon: <GitBranch size={18} /> },
+      { to: '/operator',     label: 'AI Operator',       icon: <Bot size={18} /> },
     ],
   },
   {
