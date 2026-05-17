@@ -271,6 +271,19 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     return data.content
   }
 
+  // ── Command sanitizer ─────────────────────────────────────────────────────────
+
+  const SUDO_ALLOWED = new Set(['nmap', 'masscan', 'tcpdump'])
+
+  function sanitizeCommand(cmd: string): string {
+    // Strip leading "sudo" unless the primary binary actually needs raw sockets
+    const match = cmd.match(/^sudo\s+(\S+)/)
+    if (!match) return cmd
+    const binary = match[1].split('/').pop() ?? ''
+    if (SUDO_ALLOWED.has(binary)) return cmd
+    return cmd.replace(/^sudo\s+/, '')
+  }
+
   // ── WebSocket execution ───────────────────────────────────────────────────────
 
   async function executeViaWS(scanId: string, command: string): Promise<string> {
@@ -445,6 +458,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setLiveOutput('')
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved' } : s))
 
+    const safeCommand = sanitizeCommand(step.action!.command)
     let output = ''
     try {
       const scan = await createPentestScan({
@@ -453,10 +467,10 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
         engagement_type: 'ai_operator',
         phase_id: phaseIdFor(mode, step.action!.tool),
         tool_name: step.action!.tool,
-        command: step.action!.command,
+        command: safeCommand,
         notes: `AI Operator [${mode}]: ${step.action!.rationale}`,
       })
-      output = await executeViaWS(scan.scan_id, step.action!.command)
+      output = await executeViaWS(scan.scan_id, safeCommand)
     } catch (err: any) {
       output = `Error: ${err.message}`
     }
@@ -470,7 +484,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       attack_path_note: step.attackPathNote,
       next_action: step.action,
     })
-    await advanceLLM(buildOutputUserMessage(step.action!.command, output), rawAssistant)
+    await advanceLLM(buildOutputUserMessage(safeCommand, output), rawAssistant)
   }
 
   // ── Skip / Stop / Reset ───────────────────────────────────────────────────────
