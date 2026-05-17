@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Bot, Play, Square, SkipForward, CheckCircle, Loader,
   ChevronDown, ChevronRight, Terminal, GitBranch, AlertTriangle, RefreshCw,
-  Swords, Search, FileSearch, RotateCcw, ChevronUp, Pencil,
+  Swords, Search, FileSearch, RotateCcw, ChevronUp, Pencil, Eye, EyeOff,
 } from 'lucide-react'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { getProjects, getTargets, getFindings, createPentestScan } from '@/api/client'
@@ -87,9 +87,12 @@ export default function AIOperator() {
   const [steps, setSteps] = useState<OperatorStep[]>([])
   const [liveOutput, setLiveOutput] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [llmStream, setLlmStream] = useState('')       // live token feed
+  const [showStream, setShowStream] = useState(false)  // user toggle
   const messages = useRef<ChatMessage[]>([])
   const stopped = useRef(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const modeConfig = MODE_CONFIGS[mode]
@@ -188,21 +191,64 @@ export default function AIOperator() {
     setPromptIsAuto(true)
   }
 
-  // ── LLM call ────────────────────────────────────────────────────────────────
+  // ── LLM call (streaming) ────────────────────────────────────────────────────
 
-  async function callLLM(msgs: ChatMessage[]): Promise<string> {
+  async function callLLM(msgs: ChatMessage[], onToken: (t: string) => void): Promise<string> {
+    abortRef.current = new AbortController()
+    const { signal } = abortRef.current
     const [source, ...parts] = selectedModelKey.split(':')
     const model = parts.join(':')
+
     if (source === 'local') {
-      return window.electronAPI.ollamaChat(msgs, model)
+      // Stream directly from Ollama — bypass IPC so we can read SSE chunks
+      const settings = await window.electronAPI.ollamaGetSettings()
+      const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
+      const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: msgs, stream: true }),
+        signal,
+      })
+      if (!resp.ok || !resp.body) throw new Error(`Ollama error: ${resp.status}`)
+
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+      let buf = ''
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done || stopped.current) break
+          buf += decoder.decode(value, { stream: true })
+          // Process complete SSE lines from the buffer
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''  // keep incomplete last line in buffer
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue
+            try {
+              const data = JSON.parse(trimmed.slice(6))
+              const token: string = data.choices?.[0]?.delta?.content ?? ''
+              if (token) { full += token; onToken(token) }
+            } catch { /* malformed SSE line */ }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+      return full
     }
+
+    // Server model — non-streaming fallback (server endpoint doesn't stream yet)
     const res = await fetch(`${getApiBase()}/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: msgs, model }),
+      signal,
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'AI chat failed')
+    onToken(data.content)  // deliver all at once
     return data.content
   }
 
@@ -246,9 +292,10 @@ export default function AIOperator() {
     messages.current = newMsgs
     setPhase('thinking')
     setErrorMsg('')
+    setLlmStream('')
 
     try {
-      const rawResp = await callLLM(newMsgs)
+      const rawResp = await callLLM(newMsgs, t => setLlmStream(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       const parsed = parseOperatorResponse(rawResp)
@@ -294,6 +341,7 @@ export default function AIOperator() {
     setSteps([])
     setLiveOutput('')
     setErrorMsg('')
+    setLlmStream('')
     setPhase('thinking')
 
     try {
@@ -311,7 +359,7 @@ export default function AIOperator() {
       ]
       messages.current = initMsgs
 
-      const rawResp = await callLLM(initMsgs)
+      const rawResp = await callLLM(initMsgs, t => setLlmStream(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       const parsed = parseOperatorResponse(rawResp)
@@ -393,6 +441,7 @@ export default function AIOperator() {
   function handleStop() {
     stopped.current = true
     wsRef.current?.close()
+    abortRef.current?.abort()
     setPhase('done')
   }
 
@@ -676,6 +725,21 @@ export default function AIOperator() {
                     <div className="text-amber-400/70 text-[10px]">Custom prompt</div>
                   </>
                 )}
+                {/* Stream toggle — right-aligned */}
+                <div className="ml-auto">
+                  <button
+                    onClick={() => setShowStream(s => !s)}
+                    title={showStream ? 'Hide model stream' : 'Show live model output'}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors"
+                    style={showStream
+                      ? { color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }
+                      : { color: '#475569', background: 'transparent', border: '1px solid rgba(71,85,105,0.2)' }
+                    }
+                  >
+                    {showStream ? <Eye size={11} /> : <EyeOff size={11} />}
+                    Stream
+                  </button>
+                </div>
               </div>
             )}
 
@@ -700,9 +764,37 @@ export default function AIOperator() {
 
             {/* Thinking */}
             {phase === 'thinking' && (
-              <div className="flex items-center gap-3 px-4 py-3 glass rounded-xl border border-cyan-900/20">
-                <Loader size={14} className="animate-spin text-cyan-400 shrink-0" />
-                <span className="text-sm text-slate-400">Analyzing and planning next action…</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 px-4 py-3 glass rounded-xl border border-cyan-900/20">
+                  <Loader size={14} className="animate-spin text-cyan-400 shrink-0" />
+                  <span className="text-sm text-slate-400">Analyzing and planning next action…</span>
+                </div>
+
+                {/* Live token stream pane */}
+                {showStream && (
+                  <div
+                    className="rounded-xl border overflow-hidden"
+                    style={{ background: '#060b10', borderColor: `${modeConfig.border}` }}
+                  >
+                    <div
+                      className="flex items-center gap-2 px-3 py-2 border-b text-[10px] font-semibold uppercase tracking-widest"
+                      style={{ borderColor: 'rgba(6,182,212,0.08)', color: modeConfig.color }}
+                    >
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
+                        style={{ background: modeConfig.color }}
+                      />
+                      Model output — live
+                    </div>
+                    <pre
+                      className="px-4 py-3 text-[11px] font-mono text-slate-300 leading-relaxed overflow-y-auto whitespace-pre-wrap break-all"
+                      style={{ maxHeight: '280px', minHeight: '60px' }}
+                    >
+                      {llmStream || <span className="text-slate-600 italic">waiting for first token…</span>}
+                      {llmStream && <span className="animate-pulse text-cyan-400">▌</span>}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
 
