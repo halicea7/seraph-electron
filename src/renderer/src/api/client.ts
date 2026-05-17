@@ -11,13 +11,11 @@ import type {
 } from '@/types'
 import { getApiBase } from '@/lib/config'
 
-const BASE_URL = getApiBase()
-
 async function request<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${BASE_URL}${path}`
+  const url = `${getApiBase()}${path}`
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -138,7 +136,7 @@ export function generateScript(
 }
 
 export function downloadScriptUrl(scanId: string): string {
-  return `${BASE_URL}/audit/script/${scanId}/download`
+  return `${getApiBase()}/audit/script/${scanId}/download`
 }
 
 // ── Pentest ────────────────────────────────────────────────────────────────────
@@ -207,7 +205,7 @@ export function generateReport(
 }
 
 export function getReportDownloadUrl(projectId: string, format: 'html' | 'markdown'): string {
-  return `${BASE_URL}/audit/reports/download/${projectId}?format=${format}`
+  return `${getApiBase()}/audit/reports/download/${projectId}?format=${format}`
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
