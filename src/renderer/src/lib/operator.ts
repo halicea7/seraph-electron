@@ -112,6 +112,55 @@ export const MSF_MODULES: OperatorTool[] = [
 export const PENTEST_CATEGORIES = [...new Set(PENTEST_TOOLS.map(t => t.category))]
 export const MSF_CATEGORIES     = [...new Set(MSF_MODULES.map(t => t.category))]
 
+// ── Prior recon record ────────────────────────────────────────────────────────
+
+export interface PentestScanRecord {
+  tool_name: string
+  command: string
+  status: string
+  raw_output: string | null
+}
+
+/** Extract only the signal lines from scan output so we don't flood the prompt. */
+function extractKeyOutput(tool: string, output: string | null): string | null {
+  if (!output) return null
+  const lines = output.split('\n')
+
+  // For port scanners, pull open port lines
+  if (['nmap', 'masscan', 'rustscan'].includes(tool)) {
+    const ports = lines
+      .filter(l => /\d+\/(tcp|udp)\s+(open|filtered)/.test(l))
+      .map(l => l.trim())
+      .slice(0, 30)
+    return ports.length ? ports.join('\n') : null
+  }
+
+  // For directory/subdomain fuzzers, grab found entries
+  if (['gobuster', 'ffuf', 'feroxbuster'].includes(tool)) {
+    const hits = lines
+      .filter(l => /\b(200|301|302|403|401|Found|Status)\b/.test(l))
+      .map(l => l.trim())
+      .slice(0, 20)
+    return hits.length ? hits.join('\n') : output.slice(0, 400)
+  }
+
+  // Default: first 400 chars
+  return output.slice(0, 400)
+}
+
+function buildPriorReconSection(priorScans: PentestScanRecord[]): string {
+  if (!priorScans.length) return '  None — this is the first engagement against this target.'
+
+  return priorScans.map(s => {
+    const cmd = s.command ? ` → \`${s.command.slice(0, 100)}${s.command.length > 100 ? '…' : ''}\`` : ''
+    const key = extractKeyOutput(s.tool_name, s.raw_output)
+    const outputLine = key
+      ? `\n    Key output:\n${key.split('\n').map(l => `      ${l}`).join('\n')}`
+      : ''
+    return `  - ${s.tool_name}${cmd}${outputLine}`
+  }).join('\n')
+}
+
 // ── Mode-specific persona builders ────────────────────────────────────────────
 
 function buildPersona(mode: OperatorMode, hostname: string): string {
@@ -127,31 +176,32 @@ function buildPersona(mode: OperatorMode, hostname: string): string {
 
 function buildRules(mode: OperatorMode, hostname: string): string {
   const scopeRule = `1. ONLY target ${hostname}. Never expand scope.`
+  const reconRule = `2. Study PREVIOUS RECONNAISSANCE carefully before proposing any action. Do NOT re-run a tool that already appears there unless you have a specific, stated reason (e.g. a different port range, a new credential to test, or stale data that needs refreshing).`
   switch (mode) {
     case 'attack':
       return `${scopeRule}
-2. Use ONLY tools and modules from the enabled lists above.
-3. Use example command templates as a starting point — adapt variables to the actual target.
-4. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-5. Build on what you know — don't repeat scans unless you need fresh data.
+${reconRule}
+3. Use ONLY tools and modules from the enabled lists above.
+4. Use example command templates as a starting point — adapt variables to the actual target.
+5. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
 6. After each result, identify any new attack path steps worth recording.
 7. When you have no more productive actions, return next_action: null.
 8. Keep commands targeted — avoid wide spray attacks.`
     case 'recon':
       return `${scopeRule}
-2. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
-3. DO NOT run password sprays, exploit modules, or any command that modifies the target.
-4. Use example command templates as a starting point — adapt variables to the actual target.
-5. Work methodically: scan ports, enumerate services, then enumerate further based on findings.
+${reconRule}
+3. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
+4. DO NOT run password sprays, exploit modules, or any command that modifies the target.
+5. Use example command templates as a starting point — adapt variables to the actual target.
 6. After each result, note what new attack surface or information you've uncovered.
 7. When the target surface is fully mapped, return next_action: null.`
     case 'audit':
       return `${scopeRule}
-2. Use ONLY non-destructive scanning tools from the enabled lists above.
-3. DO NOT exploit vulnerabilities — identify and document them only.
-4. Use example command templates as a starting point — adapt variables to the actual target.
-5. For each finding, state the risk level: Critical, High, Medium, or Low.
-6. After each scan, summarize what was found and what it means for security posture.
+${reconRule}
+3. Use ONLY non-destructive scanning tools from the enabled lists above.
+4. DO NOT exploit vulnerabilities — identify and document them only.
+5. Use example command templates as a starting point — adapt variables to the actual target.
+6. For each finding, state the risk level: Critical, High, Medium, or Low.
 7. When audit coverage is complete, return next_action: null.`
   }
 }
@@ -163,7 +213,8 @@ export function buildSystemPrompt(
   target: TargetSummary,
   findings: Finding[],
   enabledTools: string[],
-  enabledMsf: string[]
+  enabledMsf: string[],
+  priorScans: PentestScanRecord[] = []
 ): string {
   const pentestTemplates = getTemplatesForTools(enabledTools, 3)
   const pentestSection = enabledTools.length
@@ -183,12 +234,21 @@ export function buildSystemPrompt(
       ).join('\n')
     : '  None yet.'
 
+  const knownPorts = target.ports
+    ? target.ports
+    : priorScans.some(s => ['nmap', 'masscan', 'rustscan'].includes(s.tool_name))
+      ? 'see PREVIOUS RECONNAISSANCE below'
+      : 'unknown'
+
   return `${buildPersona(mode, target.hostname_or_ip)}
 
 TARGET:
   Host: ${target.hostname_or_ip}
   Type: ${target.target_type.replace(/_/g, ' ')}
-  Known ports/services: ${target.ports || 'unknown — discover first'}
+  Known ports/services: ${knownPorts}
+
+PREVIOUS RECONNAISSANCE (tools already run against this target — read before acting):
+${buildPriorReconSection(priorScans)}
 
 EXISTING FINDINGS (from prior automated scans):
 ${findingLines}
@@ -215,23 +275,29 @@ RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation ou
 }`
 }
 
-// Preview variant — findings shown as placeholder (loaded at session start)
+// Preview variant — dynamic data shown as placeholders
 export function buildPreviewPrompt(
   mode: OperatorMode,
   target: TargetSummary,
   enabledTools: string[],
   enabledMsf: string[]
 ): string {
-  const placeholder: Finding[] = []  // findings load at session start
-  const base = buildSystemPrompt(mode, target, placeholder, enabledTools, enabledMsf)
-  // Replace "None yet." with a clear indicator
-  return base.replace(
-    '  None yet.',
-    '  (loaded from project database at session start)'
-  )
+  const base = buildSystemPrompt(mode, target, [], enabledTools, enabledMsf, [])
+  return base
+    .replace(
+      '  None — this is the first engagement against this target.',
+      '  (loaded from project database at session start)'
+    )
+    .replace(
+      '  None yet.',
+      '  (loaded from project database at session start)'
+    )
 }
 
-export function buildInitialUserMessage(): string {
+export function buildInitialUserMessage(hasPriorRecon: boolean): string {
+  if (hasPriorRecon) {
+    return 'Review the PREVIOUS RECONNAISSANCE section carefully. Identify what has already been covered and what gaps remain. Start from where the prior work left off — only propose a scan if it covers something genuinely not yet explored.'
+  }
   return 'Begin the engagement. Analyze what you know and propose your first action.'
 }
 

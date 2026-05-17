@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
 import { getApiBase, getWsBase } from '@/lib/config'
-import { getProjects, getTargets, getFindings, createPentestScan } from '@/api/client'
+import { getProjects, getTargets, getFindings, getPentestScans, createPentestScan } from '@/api/client'
 import {
   MODE_CONFIGS, OperatorMode,
   buildSystemPrompt, buildPreviewPrompt,
   buildInitialUserMessage, buildOutputUserMessage, buildSkipUserMessage,
-  parseOperatorResponse,
+  parseOperatorResponse, type PentestScanRecord,
 } from '@/lib/operator'
 import type { Project, TargetSummary, Finding } from '@/types'
 
@@ -364,14 +364,34 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setPhase('thinking')
 
     try {
-      const findings: Finding[] = await getFindings(selectedProject)
+      const [findings, allScans] = await Promise.all([
+        getFindings(selectedProject),
+        getPentestScans(selectedProject),
+      ])
+
+      // Normalise pentest scan records — the API returns more fields than the
+      // TypeScript type models, so we cast and defensively extract what we need.
+      const priorScans: PentestScanRecord[] = (allScans as any[])
+        .filter((s: any) => s.target_id === selectedTarget)
+        .map((s: any) => {
+          let tool = s.tool_name || ''
+          let command = s.command || ''
+          if (!tool && s.config_json) {
+            try { const c = JSON.parse(s.config_json); tool = c.tool_name || c.tool || ''; command = command || c.command || '' } catch { /* ignore */ }
+          }
+          if (!tool) tool = s.scan_type || ''
+          return { tool_name: tool, command, status: s.status || '', raw_output: s.raw_output || null }
+        })
+        .filter((s: PentestScanRecord) => !!s.tool_name)
+        .slice(-40)   // last 40 runs, most recent context
+
       const systemPrompt = promptIsAuto
-        ? buildSystemPrompt(mode, target, findings, [...enabledTools], [...enabledMsf])
+        ? buildSystemPrompt(mode, target, findings, [...enabledTools], [...enabledMsf], priorScans)
         : promptDraft
 
       const initMsgs: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: buildInitialUserMessage() },
+        { role: 'user', content: buildInitialUserMessage(priorScans.length > 0) },
       ]
       messages.current = initMsgs
 
