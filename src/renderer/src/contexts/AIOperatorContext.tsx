@@ -3,6 +3,7 @@ import { getApiBase, getWsBase } from '@/lib/config'
 import { getProjects, getTargets, getFindings, getPentestScans, createPentestScan } from '@/api/client'
 import {
   MODE_CONFIGS, OperatorMode,
+  PENTEST_TOOLS, MSF_MODULES,
   buildSystemPrompt, buildPreviewPrompt,
   buildInitialUserMessage, buildOutputUserMessage, buildSkipUserMessage,
   parseOperatorResponse, type PentestScanRecord,
@@ -276,13 +277,18 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   const SUDO_ALLOWED = new Set(['nmap', 'masscan', 'tcpdump'])
 
   function sanitizeCommand(cmd: string): string {
-    // Strip leading "sudo" unless the primary binary actually needs raw sockets
-    const match = cmd.match(/^sudo\s+(\S+)/)
-    if (!match) return cmd
-    const binary = match[1].split('/').pop() ?? ''
-    if (SUDO_ALLOWED.has(binary)) return cmd
-    return cmd.replace(/^sudo\s+/, '')
+    // Walk every token in the command and strip "sudo" unless it precedes an allowed binary.
+    // Handles sudo in pipelines, xargs chains, etc.
+    return cmd.replace(/sudo\s+(\S+)/g, (_match, nextToken) => {
+      const binary = nextToken.split('/').pop() ?? ''
+      return SUDO_ALLOWED.has(binary) ? `sudo ${nextToken}` : nextToken
+    })
   }
+
+  const KNOWN_TOOL_IDS = new Set([
+    ...PENTEST_TOOLS.map(t => t.id),
+    ...MSF_MODULES.map(t => t.id),
+  ])
 
   // ── WebSocket execution ───────────────────────────────────────────────────────
 
@@ -454,6 +460,16 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
 
   async function handleApprove(step: OperatorStep) {
     if (!step.action) return
+
+    // Reject hallucinated tool IDs before they reach the backend
+    if (!KNOWN_TOOL_IDS.has(step.action.tool)) {
+      const errMsg = `[operator] Rejected: unknown tool "${step.action.tool}". The model invented a tool that is not in the enabled list. Skipping.`
+      setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved', output: errMsg, outputOpen: true } : s))
+      const rawAssistant = JSON.stringify({ analysis: step.analysis, attack_path_note: step.attackPathNote, next_action: step.action })
+      await advanceLLM(buildOutputUserMessage(step.action.command, errMsg), rawAssistant)
+      return
+    }
+
     setPhase('running')
     setLiveOutput('')
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved' } : s))
