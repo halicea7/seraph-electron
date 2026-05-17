@@ -174,15 +174,35 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setLoadingModels(true)
     const opts: ModelOption[] = []
     try {
+      const settings = await window.electronAPI.ollamaGetSettings()
+      const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
       const localModels = await window.electronAPI.ollamaModels()
-      localModels.forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
+
+      // Check each model's capabilities via /api/show — only keep models with "tools" support
+      const checks = await Promise.all(
+        localModels.map(async (m: string) => {
+          try {
+            const res = await fetch(`${baseUrl}/api/show`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: m }),
+            })
+            const data = await res.json()
+            const caps: string[] = data.capabilities ?? []
+            return caps.includes('tools') ? m : null
+          } catch {
+            return null
+          }
+        })
+      )
+      checks.filter(Boolean).forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
     } catch { /* Ollama not running */ }
     try {
       const cfg = await fetch(`${getApiBase()}/ai/config`).then(r => r.json())
       if (cfg.model) opts.push({ key: `server:${cfg.model}`, label: `[Server] ${cfg.model}` })
     } catch { /* server offline */ }
     setModelOptions(opts)
-    if (opts.length) setSelectedModelKey(opts[0].key)
+    if (opts.length && !opts.find(o => o.key === selectedModelKey)) setSelectedModelKey(opts[0].key)
     setLoadingModels(false)
   }
 

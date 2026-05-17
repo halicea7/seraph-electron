@@ -138,7 +138,7 @@ export default function AIOperator() {
                 {op.modelOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             ) : (
-              <p className="text-[11px] text-amber-400/80">No models found. Configure in Settings.</p>
+              <p className="text-[11px] text-amber-400/80">No tool-capable models found. Pull a model that supports tools (e.g. <code>ollama pull qwen3</code>).</p>
             )}
           </div>
 
