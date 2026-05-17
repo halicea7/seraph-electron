@@ -176,37 +176,41 @@ function buildPersona(mode: OperatorMode, hostname: string): string {
 
 function buildRules(mode: OperatorMode, hostname: string): string {
   const scopeRule = `1. ONLY target ${hostname}. Never expand scope.`
-  const reconRule = `2. Study PREVIOUS RECONNAISSANCE carefully before proposing any action. Do NOT re-run a tool that already appears there unless you have a specific, stated reason (e.g. a different port range, a new credential to test, or stale data that needs refreshing).`
-  const sudoRule = `3. Use sudo ONLY for tools that require raw socket access: nmap, masscan, tcpdump. Every other tool (gobuster, ffuf, feroxbuster, nikto, hydra, sqlmap, searchsploit, enum4linux, nxc, kerbrute, nuclei, testssl, theHarvester, subfinder, hashcat, john) must be run WITHOUT sudo.`
+  const reconRule = `2. PREVIOUS RECONNAISSANCE is authoritative — treat it as ground truth. If a tool already appears there (e.g. nmap, masscan, gobuster), its data is sufficient. Do NOT re-run it with different flags, scripts, or options. Use the existing output and move to the next logical step.`
+  const sudoRule = `3. Use sudo ONLY for tools that require raw socket access: nmap, masscan, tcpdump. Every other tool must be run WITHOUT sudo.`
+  const scriptRule = `4. When using nmap NSE scripts, only use scripts that are known to exist: pgsql-brute, ftp-anon, ftp-brute, ssh-brute, http-title, http-headers, smb-vuln-ms17-010, smb-enum-shares, smtp-enum-users, ssl-cert. Do NOT invent script names.`
   switch (mode) {
     case 'attack':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-4. Use ONLY tools and modules from the enabled lists above.
-5. Use example command templates as a starting point — adapt variables to the actual target.
-6. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-7. After each result, identify any new attack path steps worth recording.
-8. When you have no more productive actions, return next_action: null.
-9. Keep commands targeted — avoid wide spray attacks.`
+${scriptRule}
+5. Use ONLY tools and modules from the enabled lists above.
+6. Use example command templates as a starting point — adapt variables to the actual target.
+7. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
+8. After each result, identify any new attack path steps worth recording.
+9. When you have no more productive actions, return next_action: null.
+10. Keep commands targeted — avoid wide spray attacks.`
     case 'recon':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-4. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
-5. DO NOT run password sprays, exploit modules, or any command that modifies the target.
-6. Use example command templates as a starting point — adapt variables to the actual target.
-7. After each result, note what new attack surface or information you've uncovered.
-8. When the target surface is fully mapped, return next_action: null.`
+${scriptRule}
+5. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
+6. DO NOT run password sprays, exploit modules, or any command that modifies the target.
+7. Use example command templates as a starting point — adapt variables to the actual target.
+8. After each result, note what new attack surface or information you've uncovered.
+9. When the target surface is fully mapped, return next_action: null.`
     case 'audit':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-4. Use ONLY non-destructive scanning tools from the enabled lists above.
-5. DO NOT exploit vulnerabilities — identify and document them only.
-6. Use example command templates as a starting point — adapt variables to the actual target.
-7. For each finding, state the risk level: Critical, High, Medium, or Low.
-8. When audit coverage is complete, return next_action: null.`
+${scriptRule}
+5. Use ONLY non-destructive scanning tools from the enabled lists above.
+6. DO NOT exploit vulnerabilities — identify and document them only.
+7. Use example command templates as a starting point — adapt variables to the actual target.
+8. For each finding, state the risk level: Critical, High, Medium, or Low.
+9. When audit coverage is complete, return next_action: null.`
   }
 }
 
