@@ -461,9 +461,19 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   async function handleApprove(step: OperatorStep) {
     if (!step.action) return
 
-    // Reject hallucinated tool IDs before they reach the backend
-    if (!KNOWN_TOOL_IDS.has(step.action.tool)) {
-      const errMsg = `[operator] Rejected: unknown tool "${step.action.tool}". The model invented a tool that is not in the enabled list. Skipping.`
+    // Resolve the tool ID — the model sometimes writes generic labels like "msf-exploit"
+    // instead of the exact module path. Try to recover the real ID from the command.
+    let resolvedTool = step.action.tool
+    if (!KNOWN_TOOL_IDS.has(resolvedTool)) {
+      const msfMatch = step.action.command.match(/use\s+([\w/]+)/)
+      if (msfMatch) {
+        const candidate = msfMatch[1]
+        if (KNOWN_TOOL_IDS.has(candidate)) resolvedTool = candidate
+      }
+    }
+
+    if (!KNOWN_TOOL_IDS.has(resolvedTool)) {
+      const errMsg = `[operator] Rejected: unknown tool "${step.action.tool}". Use the exact tool ID from the enabled list (e.g. "exploit/unix/ftp/vsftpd_234_backdoor"), not a generic label.`
       setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved', output: errMsg, outputOpen: true } : s))
       const rawAssistant = JSON.stringify({ analysis: step.analysis, attack_path_note: step.attackPathNote, next_action: step.action })
       await advanceLLM(buildOutputUserMessage(step.action.command, errMsg), rawAssistant)
@@ -481,8 +491,8 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
         project_id: selectedProject,
         target_id: selectedTarget,
         engagement_type: 'ai_operator',
-        phase_id: phaseIdFor(mode, step.action!.tool),
-        tool_name: step.action!.tool,
+        phase_id: phaseIdFor(mode, resolvedTool),
+        tool_name: resolvedTool,
         command: safeCommand,
         notes: `AI Operator [${mode}]: ${step.action!.rationale}`,
       })

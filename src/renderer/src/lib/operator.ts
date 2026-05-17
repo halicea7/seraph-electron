@@ -276,7 +276,7 @@ RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation ou
   "attack_path_note": null | "brief label for an attack path step you've just confirmed",
   "next_action": null | {
     "type": "command",
-    "tool": "<tool_id or msf module id>",
+    "tool": "<EXACT tool id from the enabled lists above — e.g. 'nmap', 'hydra', 'exploit/unix/ftp/vsftpd_234_backdoor'. NEVER use generic labels like 'msf-exploit' or 'metasploit'>",
     "command": "<complete shell command to run>",
     "rationale": "<one sentence: why this step now>"
   }
