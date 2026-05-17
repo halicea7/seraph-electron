@@ -42,6 +42,7 @@ export interface AIOperatorContextValue {
   loadingModels: boolean
   enabledTools: Set<string>
   enabledMsf: Set<string>
+  lhostIp: string
 
   // Prompt editor
   promptDraft: string
@@ -54,6 +55,7 @@ export interface AIOperatorContextValue {
   llmStream: string
   errorMsg: string
   showStream: boolean
+  runStartTime: number | null
 
   // Config setters
   setSelectedProject: (id: string) => void
@@ -64,6 +66,7 @@ export interface AIOperatorContextValue {
   setShowStream: (fn: boolean | ((p: boolean) => boolean)) => void
   setPromptDraft: (v: string) => void
   setPromptIsAuto: (v: boolean) => void
+  setLhostIp: (ip: string) => void
 
   // Actions
   loadModelOptions: () => Promise<void>
@@ -125,6 +128,8 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   const [llmStream, setLlmStream] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [showStream, setShowStream] = useState(false)
+  const [runStartTime, setRunStartTime] = useState<number | null>(null)
+  const [lhostIp, setLhostIp] = useState('')
 
   // ── Refs (survive re-renders, not tied to any mounted component) ─────────────
   const messages = useRef<ChatMessage[]>([])
@@ -482,9 +487,28 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
 
     setPhase('running')
     setLiveOutput('')
+    setRunStartTime(Date.now())
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'approved' } : s))
 
-    const safeCommand = sanitizeCommand(step.action!.command)
+    // Substitute common LHOST placeholders with configured IP
+    const LHOST_PATTERNS = [/<PENTESTER_IP>/gi, /<LHOST>/gi, /<YOUR_IP>/gi, /<ATTACKER_IP>/gi, /<LOCAL_IP>/gi, /<KALI_IP>/gi]
+    let rawCommand = step.action!.command
+    if (lhostIp) {
+      LHOST_PATTERNS.forEach(p => { rawCommand = rawCommand.replace(p, lhostIp) })
+    }
+
+    // Detect any remaining unfilled placeholders
+    const unfilled = rawCommand.match(/<[A-Z][A-Z0-9_]*>/g)
+    if (unfilled) {
+      const errMsg = `[operator] Command has unfilled placeholder(s): ${unfilled.join(', ')}. Set your LHOST IP in the left panel, or the model must replace all template variables with real values.`
+      setRunStartTime(null)
+      setSteps(prev => prev.map(s => s.id === step.id ? { ...s, output: errMsg, outputOpen: true } : s))
+      const rawAssistant = JSON.stringify({ analysis: step.analysis, attack_path_note: step.attackPathNote, next_action: step.action })
+      await advanceLLM(buildOutputUserMessage(step.action!.command, errMsg), rawAssistant)
+      return
+    }
+
+    const safeCommand = sanitizeCommand(rawCommand)
     let output = ''
     try {
       const scan = await createPentestScan({
@@ -501,6 +525,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       output = `Error: ${err.message}`
     }
 
+    setRunStartTime(null)
     if (stopped.current) { setPhase('done'); return }
 
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, output, outputOpen: true } : s))
@@ -548,14 +573,14 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   const value: AIOperatorContextValue = {
     mode, projects, targets, selectedProject, selectedTarget,
     modelOptions, selectedModelKey, loadingModels,
-    enabledTools, enabledMsf,
+    enabledTools, enabledMsf, lhostIp,
     promptDraft, promptIsAuto,
-    phase, steps, liveOutput, llmStream, errorMsg, showStream,
+    phase, steps, liveOutput, llmStream, errorMsg, showStream, runStartTime,
 
     setSelectedProject, setSelectedTarget, setSelectedModelKey,
     toggleTool, toggleMsf,
     setShowStream: (fn) => setShowStream(fn as any),
-    setPromptDraft, setPromptIsAuto,
+    setPromptDraft, setPromptIsAuto, setLhostIp,
 
     loadModelOptions, applyModeSwitch, regeneratePrompt,
     startSession, handleApprove, handleSkip, handleStop,

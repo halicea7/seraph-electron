@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Bot, Play, Square, SkipForward, CheckCircle, Loader,
   ChevronDown, ChevronRight, Terminal, GitBranch, AlertTriangle, RefreshCw,
-  Swords, Search, FileSearch, RotateCcw, ChevronUp, Pencil, Eye, EyeOff,
+  Swords, Search, FileSearch, RotateCcw, ChevronUp, Pencil, Eye, EyeOff, Wifi,
 } from 'lucide-react'
 import { PENTEST_TOOLS, MSF_MODULES, PENTEST_CATEGORIES, MSF_CATEGORIES, MODE_CONFIGS, OperatorMode } from '@/lib/operator'
 import { useAIOperator, type OperatorStep, type OperatorPhase } from '@/contexts/AIOperatorContext'
@@ -241,6 +241,22 @@ export default function AIOperator() {
         {/* Start / Stop / New */}
         <div className="p-4 border-t border-cyan-900/20 space-y-3">
 
+          {/* LHOST */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              <Wifi size={10} /> LHOST (your IP)
+            </label>
+            <input
+              type="text"
+              value={op.lhostIp}
+              onChange={e => op.setLhostIp(e.target.value)}
+              placeholder="e.g. 192.168.1.10"
+              className="w-full rounded-lg px-2.5 py-1.5 text-slate-200 border border-cyan-900/20 focus:border-cyan-600/40 focus:outline-none font-mono"
+              style={{ background: '#05080d', fontSize: '11px' }}
+            />
+            <p className="text-[10px] text-slate-600">Auto-substituted into MSF LHOST placeholders</p>
+          </div>
+
           {/* Stream toggle */}
           <button
             onClick={() => op.setShowStream(s => !s)}
@@ -354,6 +370,7 @@ export default function AIOperator() {
                 isActive={step.result === 'pending' && op.phase === 'awaiting'}
                 isRunning={step.result === 'approved' && op.phase === 'running'}
                 liveOutput={step.result === 'approved' && op.phase === 'running' ? op.liveOutput : ''}
+                runStartTime={step.result === 'approved' && op.phase === 'running' ? op.runStartTime : null}
                 onApprove={() => op.handleApprove(step)}
                 onSkip={() => op.handleSkip(step)}
                 onStop={op.handleStop}
@@ -469,14 +486,25 @@ interface StepCardProps {
   isActive: boolean
   isRunning: boolean
   liveOutput: string
+  runStartTime: number | null
   onApprove: () => void
   onSkip: () => void
   onStop: () => void
   onToggleOutput: () => void
 }
 
-function StepCard({ step, index, mode, isActive, isRunning, liveOutput, onApprove, onSkip, onStop, onToggleOutput }: StepCardProps) {
+function StepCard({ step, index, mode, isActive, isRunning, liveOutput, runStartTime, onApprove, onSkip, onStop, onToggleOutput }: StepCardProps) {
   const modeConfig = MODE_CONFIGS[mode]
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!isRunning || !runStartTime) { setElapsed(0); return }
+    setElapsed(Math.floor((Date.now() - runStartTime) / 1000))
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - runStartTime) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [isRunning, runStartTime])
+
+  const fmtElapsed = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`
 
   const statusColor = step.result === 'approved' ? 'text-green-400 border-green-900/30'
     : step.result === 'skipped'                  ? 'text-slate-500 border-slate-800'
@@ -544,13 +572,16 @@ function StepCard({ step, index, mode, isActive, isRunning, liveOutput, onApprov
           </div>
         )}
 
-        {isRunning && liveOutput && (
+        {isRunning && (
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider">
-              <Loader size={10} className="animate-spin" /> Live output
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider">
+                <Loader size={10} className="animate-spin" /> Live output
+              </div>
+              <span className="text-[10px] font-mono text-slate-600">{fmtElapsed(elapsed)}</span>
             </div>
-            <pre className="text-[11px] font-mono text-green-300 bg-black/60 rounded-lg px-3 py-2 max-h-48 overflow-y-auto border border-green-900/20">
-              {liveOutput.slice(-4000)}
+            <pre className="text-[11px] font-mono text-green-300 bg-black/60 rounded-lg px-3 py-2 max-h-64 overflow-y-auto border border-green-900/20 whitespace-pre-wrap break-all">
+              {liveOutput ? liveOutput.slice(-6000) : <span className="text-slate-600 italic">Waiting for process output…</span>}
             </pre>
           </div>
         )}
