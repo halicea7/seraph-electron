@@ -318,6 +318,62 @@ export function buildSkipUserMessage(): string {
   return 'Step skipped by operator. Based on what you know so far, what is your next action? If there are no more useful actions, set next_action to null.'
 }
 
+// ── Ollama tool definitions ───────────────────────────────────────────────────
+
+export function buildTools(enabledTools: string[], enabledMsf: string[]): object[] {
+  const allIds = [...enabledTools, ...enabledMsf]
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'run_tool',
+        description: 'Execute a pentest command using one of the enabled tools against the target. Call this for every action you want to take.',
+        parameters: {
+          type: 'object',
+          required: ['tool_id', 'command', 'rationale', 'analysis'],
+          properties: {
+            tool_id: {
+              type: 'string',
+              enum: allIds,
+              description: 'Exact tool ID from the enabled list — must match one of the values exactly.',
+            },
+            command: {
+              type: 'string',
+              description: 'Complete shell command to run. No unfilled placeholders. No invented flags.',
+            },
+            rationale: {
+              type: 'string',
+              description: 'One sentence: why this action now.',
+            },
+            analysis: {
+              type: 'string',
+              description: 'Brief analysis of the current situation before acting.',
+            },
+            attack_path_note: {
+              type: 'string',
+              description: 'Optional short label for an attack path step this confirms.',
+            },
+          },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'finish_engagement',
+        description: 'Call this when no more productive actions remain.',
+        parameters: {
+          type: 'object',
+          required: ['summary'],
+          properties: {
+            summary: { type: 'string', description: 'Brief summary of what was accomplished.' },
+          },
+        },
+      },
+    },
+  ]
+}
+
 // ── Response parser ───────────────────────────────────────────────────────────
 
 export interface OperatorResponse {

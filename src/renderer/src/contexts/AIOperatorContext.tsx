@@ -6,13 +6,18 @@ import {
   PENTEST_TOOLS, MSF_MODULES,
   buildSystemPrompt, buildPreviewPrompt,
   buildInitialUserMessage, buildOutputUserMessage, buildSkipUserMessage,
-  parseOperatorResponse, type PentestScanRecord,
+  buildTools, parseOperatorResponse, type PentestScanRecord,
 } from '@/lib/operator'
 import type { Project, TargetSummary, Finding } from '@/types'
 
 // ── Types (exported so the page can use them) ─────────────────────────────────
 
-export interface ChatMessage { role: string; content: string }
+export interface ChatMessage {
+  role: string
+  content: string
+  tool_calls?: Array<{ function: { name: string; arguments: Record<string, any> } }>
+  name?: string  // tool name on role:'tool' result messages
+}
 
 export interface OperatorStep {
   id: number
@@ -219,9 +224,18 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setPromptIsAuto(true)
   }
 
-  // ── LLM call (streaming) ──────────────────────────────────────────────────────
+  // ── LLM call (Ollama /api/chat with tool calling) ────────────────────────────
 
-  async function callLLM(msgs: ChatMessage[], onToken: (t: string) => void): Promise<string> {
+  interface LLMResult {
+    content: string
+    toolCalls: Array<{ function: { name: string; arguments: Record<string, any> } }> | null
+  }
+
+  async function callLLM(
+    msgs: ChatMessage[],
+    onToken: (t: string) => void,
+    tools: object[] = [],
+  ): Promise<LLMResult> {
     abortRef.current = new AbortController()
     const { signal } = abortRef.current
     const [source, ...parts] = selectedModelKey.split(':')
@@ -230,17 +244,22 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     if (source === 'local') {
       const settings = await window.electronAPI.ollamaGetSettings()
       const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
-      const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
+
+      // Use Ollama's native /api/chat with tool definitions.
+      // Chunks are newline-delimited JSON objects (not SSE).
+      // Content tokens stream in intermediate chunks; tool_calls appear in the done=true chunk.
+      const resp = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages: msgs, stream: true }),
+        body: JSON.stringify({ model, messages: msgs, tools, stream: true }),
         signal,
       })
       if (!resp.ok || !resp.body) throw new Error(`Ollama error: ${resp.status}`)
 
       const reader = resp.body.getReader()
       const decoder = new TextDecoder()
-      let full = ''
+      let content = ''
+      let toolCalls: LLMResult['toolCalls'] = null
       let buf = ''
       try {
         while (true) {
@@ -251,20 +270,24 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
           buf = lines.pop() ?? ''
           for (const line of lines) {
             const trimmed = line.trim()
-            if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue
+            if (!trimmed) continue
             try {
-              const data = JSON.parse(trimmed.slice(6))
-              const token: string = data.choices?.[0]?.delta?.content ?? ''
-              if (token) { full += token; onToken(token) }
-            } catch { /* malformed SSE */ }
+              const chunk = JSON.parse(trimmed)
+              const token: string = chunk.message?.content ?? ''
+              if (token) { content += token; onToken(token) }
+              if (chunk.done && chunk.message?.tool_calls?.length) {
+                toolCalls = chunk.message.tool_calls
+              }
+            } catch { /* malformed chunk */ }
           }
         }
       } finally {
         reader.releaseLock()
       }
-      return full
+      return { content, toolCalls }
     }
 
+    // Server-side fallback (non-Ollama) — no native tool calling, use JSON prompt
     const res = await fetch(`${getApiBase()}/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -274,7 +297,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'AI chat failed')
     onToken(data.content)
-    return data.content
+    return { content: data.content, toolCalls: null }
   }
 
   // ── Command sanitizer ─────────────────────────────────────────────────────────
@@ -338,44 +361,78 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
 
   // ── Advance LLM ───────────────────────────────────────────────────────────────
 
-  const advanceLLM = useCallback(async (userMsg: string, rawAssistant: string) => {
+  function parseStepFromResult(result: { content: string; toolCalls: any[] | null }): OperatorStep | 'done' | 'error' {
+    // Prefer structured tool calls (Ollama native tool calling)
+    if (result.toolCalls?.length) {
+      const call = result.toolCalls[0]
+      const fname: string = call.function?.name ?? ''
+      const args: Record<string, any> = call.function?.arguments ?? {}
+
+      if (fname === 'finish_engagement') return 'done'
+
+      if (fname === 'run_tool') {
+        return {
+          id: Date.now(),
+          analysis: args.analysis || result.content || '',
+          attackPathNote: args.attack_path_note || null,
+          action: { tool: args.tool_id, command: args.command, rationale: args.rationale },
+          result: 'pending',
+          output: '',
+          outputOpen: false,
+        }
+      }
+    }
+
+    // Fallback: JSON text parsing (server-side or models without tool calling support)
+    const parsed = parseOperatorResponse(result.content)
+    if (!parsed) return 'error'
+    if (!parsed.next_action) return 'done'
+    return {
+      id: Date.now(),
+      analysis: parsed.analysis,
+      attackPathNote: parsed.attack_path_note,
+      action: parsed.next_action,
+      result: 'pending',
+      output: '',
+      outputOpen: false,
+    }
+  }
+
+  const advanceLLM = useCallback(async (userMsg: string, assistantContent: string, assistantToolCalls?: any[]) => {
     if (stopped.current) { setPhase('done'); return }
 
-    const newMsgs: ChatMessage[] = [
-      ...messages.current,
-      { role: 'assistant', content: rawAssistant },
-      { role: 'user', content: userMsg },
-    ]
+    const assistantMsg: ChatMessage = assistantToolCalls?.length
+      ? { role: 'assistant', content: assistantContent, tool_calls: assistantToolCalls }
+      : { role: 'assistant', content: assistantContent }
+
+    // After a tool call, the result goes as role:'tool'; otherwise as role:'user'
+    const resultMsg: ChatMessage = assistantToolCalls?.length
+      ? { role: 'tool', content: userMsg, name: 'run_tool' }
+      : { role: 'user', content: userMsg }
+
+    const newMsgs: ChatMessage[] = [...messages.current, assistantMsg, resultMsg]
     messages.current = newMsgs
     setPhase('thinking')
     setErrorMsg('')
     setLlmStream('')
 
+    const tools = buildTools([...enabledTools], [...enabledMsf])
+
     try {
-      const rawResp = await callLLM(newMsgs, t => setLlmStream(prev => prev + t))
+      const result = await callLLM(newMsgs, t => setLlmStream(prev => prev + t), tools)
       if (stopped.current) { setPhase('done'); return }
 
-      const parsed = parseOperatorResponse(rawResp)
-      messages.current = [...newMsgs, { role: 'assistant', content: rawResp }]
+      messages.current = [
+        ...newMsgs,
+        { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
+      ]
 
-      if (!parsed) {
-        setErrorMsg('Model returned non-JSON. Try again or switch to a more capable model.')
+      const step = parseStepFromResult(result)
+      if (step === 'done') { setPhase('done'); return }
+      if (step === 'error') {
+        setErrorMsg('Model returned an unrecognised response. Try a more capable model.')
         setPhase('done')
         return
-      }
-      if (!parsed.next_action) {
-        setPhase('done')
-        return
-      }
-
-      const step: OperatorStep = {
-        id: Date.now(),
-        analysis: parsed.analysis,
-        attackPathNote: parsed.attack_path_note,
-        action: parsed.next_action,
-        result: 'pending',
-        output: '',
-        outputOpen: false,
       }
       setSteps(prev => [...prev, step])
       setPhase('awaiting')
@@ -385,7 +442,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
         setPhase('done')
       }
     }
-  }, [selectedModelKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedModelKey, enabledTools, enabledMsf]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Session start ─────────────────────────────────────────────────────────────
 
@@ -433,27 +490,22 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       ]
       messages.current = initMsgs
 
-      const rawResp = await callLLM(initMsgs, t => setLlmStream(prev => prev + t))
+      const tools = buildTools([...enabledTools], [...enabledMsf])
+      const result = await callLLM(initMsgs, t => setLlmStream(prev => prev + t), tools)
       if (stopped.current) { setPhase('done'); return }
 
-      const parsed = parseOperatorResponse(rawResp)
-      messages.current = [...initMsgs, { role: 'assistant', content: rawResp }]
+      messages.current = [
+        ...initMsgs,
+        { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
+      ]
 
-      if (!parsed || !parsed.next_action) {
-        setErrorMsg(parsed ? 'Model returned no action.' : 'Model returned non-JSON. Try a more capable model.')
+      const step = parseStepFromResult(result)
+      if (step === 'done' || step === 'error') {
+        setErrorMsg(step === 'error' ? 'Model returned an unrecognised response. Try a more capable model.' : 'Model returned no action.')
         setPhase('done')
         return
       }
-
-      setSteps([{
-        id: Date.now(),
-        analysis: parsed.analysis,
-        attackPathNote: parsed.attack_path_note,
-        action: parsed.next_action,
-        result: 'pending',
-        output: '',
-        outputOpen: false,
-      }])
+      setSteps([step])
       setPhase('awaiting')
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to start session')
@@ -530,24 +582,30 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
 
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, output, outputOpen: true } : s))
 
-    const rawAssistant = JSON.stringify({
+    // Reconstruct what the assistant said — either as a tool_call or as raw JSON text,
+    // depending on how this step was created.
+    const lastAssistantMsg = messages.current.findLast(m => m.role === 'assistant')
+    const assistantToolCalls = lastAssistantMsg?.tool_calls
+    const assistantContent = lastAssistantMsg?.content ?? JSON.stringify({
       analysis: step.analysis,
       attack_path_note: step.attackPathNote,
       next_action: step.action,
     })
-    await advanceLLM(buildOutputUserMessage(safeCommand, output), rawAssistant)
+    await advanceLLM(buildOutputUserMessage(safeCommand, output), assistantContent, assistantToolCalls)
   }
 
   // ── Skip / Stop / Reset ───────────────────────────────────────────────────────
 
   async function handleSkip(step: OperatorStep) {
     setSteps(prev => prev.map(s => s.id === step.id ? { ...s, result: 'skipped' } : s))
-    const rawAssistant = JSON.stringify({
+    const lastAssistantMsg = messages.current.findLast(m => m.role === 'assistant')
+    const assistantToolCalls = lastAssistantMsg?.tool_calls
+    const assistantContent = lastAssistantMsg?.content ?? JSON.stringify({
       analysis: step.analysis,
       attack_path_note: step.attackPathNote,
       next_action: step.action,
     })
-    await advanceLLM(buildSkipUserMessage(), rawAssistant)
+    await advanceLLM(buildSkipUserMessage(), assistantContent, assistantToolCalls)
   }
 
   function handleStop() {
