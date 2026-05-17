@@ -37,8 +37,8 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ background: '#05080d' }}>
-        <Loader size={24} className="animate-spin text-cyan-500" />
+      <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)' }}>
+        <Loader size={20} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
       </div>
     )
   }
@@ -86,8 +86,8 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ background: '#05080d' }}>
-        <Loader size={24} className="animate-spin text-cyan-500" />
+      <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)' }}>
+        <Loader size={20} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
       </div>
     )
   }

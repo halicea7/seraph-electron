@@ -3,150 +3,318 @@ import { useEffect, useState } from 'react'
 import CommandPalette from './CommandPalette'
 import NotificationBell from './NotificationBell'
 import ActiveUsers from './ActiveUsers'
+import Icon from './Icon'
 import { useAppStore } from '@/stores/appStore'
 import { useAINarrative } from '../contexts/AINarrativeContext'
-import {
-  LayoutDashboard,
-  ShieldCheck,
-  Swords,
-  FileText,
-  Settings,
-  Shield,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Terminal,
-  KeyRound,
-  Search,
-  Network,
-  Lock,
-  LogOut,
-  User,
-  BookOpen,
-  HelpCircle,
-  ShieldAlert,
-  FileSearch,
-  Radio,
-  Cpu,
-  GitBranch,
-  Clock,
-  Bot,
-  BookMarked,
-} from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-interface NavItem {
-  to: string
-  label: string
-  icon: React.ReactNode
-}
+// ── Nav structure (mirrors handoff shell.jsx) ─────────────────────────────────
 
-interface NavGroup {
-  id: string
-  label: string
-  color: string        // Tailwind text color class for the section label
-  icon: React.ReactNode
-  items: NavItem[]
-}
-
-// ── Standalone items (always visible, not grouped) ────────────────────────────
-
-const TOP_ITEM: NavItem = {
-  to: '/',
-  label: 'Dashboard',
-  icon: <LayoutDashboard size={18} />,
-}
-
-const BOTTOM_ITEMS: NavItem[] = [
-  { to: '/reports',  label: 'Reports',  icon: <FileText size={18} /> },
-  { to: '/settings', label: 'Settings', icon: <Settings size={18} /> },
-  { to: '/guide',    label: 'Guide',    icon: <HelpCircle size={18} /> },
+const NAV_TOP = [
+  { to: '/', label: 'Dashboard', icon: 'grid', end: true },
 ]
 
-// ── Grouped items ─────────────────────────────────────────────────────────────
-
-const NAV_GROUPS: NavGroup[] = [
+const NAV_GROUPS = [
   {
-    id: 'recon',
-    label: 'Recon',
-    color: 'text-blue-400',
-    icon: <Search size={13} />,
+    id: 'recon', label: 'Recon',
     items: [
-      { to: '/osint',   label: 'OSINT',      icon: <Search size={18} /> },
-      { to: '/network', label: 'Network Map', icon: <Network size={18} /> },
+      { to: '/osint',   label: 'OSINT',      icon: 'search' },
+      { to: '/network', label: 'Network Map', icon: 'network' },
     ],
   },
   {
-    id: 'offense',
-    label: 'Offense',
-    color: 'text-red-400',
-    icon: <Swords size={13} />,
+    id: 'offense', label: 'Offense',
     items: [
-      { to: '/pentest',      label: 'Pentest Workbench', icon: <Swords size={18} /> },
-      { to: '/c2',           label: 'C2 Console',        icon: <Terminal size={18} /> },
-      { to: '/playbooks',    label: 'Playbooks',         icon: <BookOpen size={18} /> },
-      { to: '/attack-paths',    label: 'Attack Paths',    icon: <GitBranch size={18} /> },
-      { to: '/operator',        label: 'AI Operator',    icon: <Bot size={18} /> },
-      { to: '/command-library', label: 'Command Library', icon: <BookMarked size={18} /> },
+      { to: '/pentest',         label: 'Pentest Workbench', icon: 'swords' },
+      { to: '/c2',              label: 'C2 Console',        icon: 'terminal' },
+      { to: '/playbooks',       label: 'Playbooks',         icon: 'book' },
+      { to: '/attack-paths',    label: 'Attack Paths',      icon: 'activity' },
+      { to: '/operator',        label: 'AI Operator',       icon: 'cube' },
+      { to: '/command-library', label: 'Command Library',   icon: 'fingerprint' },
     ],
   },
   {
-    id: 'credentials',
-    label: 'Credentials',
-    color: 'text-amber-400',
-    icon: <KeyRound size={13} />,
+    id: 'credentials', label: 'Credentials',
     items: [
-      { to: '/vault',    label: 'Credential Vault',  icon: <KeyRound size={18} /> },
-      { to: '/cracking', label: 'Password Auditing', icon: <Lock size={18} /> },
+      { to: '/vault',    label: 'Credential Vault',  icon: 'key' },
+      { to: '/cracking', label: 'Password Auditing', icon: 'lock' },
     ],
   },
   {
-    id: 'defense',
-    label: 'Defense',
-    color: 'text-green-400',
-    icon: <ShieldCheck size={13} />,
+    id: 'defense', label: 'Defense',
     items: [
-      { to: '/audit',     label: 'Audit Builder', icon: <ShieldCheck size={18} /> },
-      { to: '/agents',    label: 'Agents',        icon: <Cpu size={18} /> },
-      { to: '/listeners', label: 'Listeners',     icon: <Radio size={18} /> },
-      { to: '/vulns',     label: 'Vuln Tracker',  icon: <ShieldAlert size={18} /> },
-      { to: '/cve-watch', label: 'CVE Watch',     icon: <ShieldAlert size={18} /> },
-      { to: '/timeline',  label: 'Timeline',      icon: <Clock size={18} /> },
-      { to: '/logs',      label: 'Log Analysis',  icon: <FileSearch size={18} /> },
+      { to: '/audit',     label: 'Audit Builder', icon: 'shield' },
+      { to: '/agents',    label: 'Agents',        icon: 'cpu' },
+      { to: '/listeners', label: 'Listeners',     icon: 'radio' },
+      { to: '/vulns',     label: 'Vuln Tracker',  icon: 'flag' },
+      { to: '/cve-watch', label: 'CVE Watch',     icon: 'eye' },
+      { to: '/timeline',  label: 'Timeline',      icon: 'clock' },
+      { to: '/logs',      label: 'Log Analysis',  icon: 'history' },
     ],
   },
 ]
 
-// ── NavLink helper ────────────────────────────────────────────────────────────
+const NAV_BOTTOM = [
+  { to: '/reports',  label: 'Reports',  icon: 'file' },
+  { to: '/settings', label: 'Settings', icon: 'cog' },
+  { to: '/guide',    label: 'Guide',    icon: 'help' },
+]
 
-function NavItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+// ── Logo ──────────────────────────────────────────────────────────────────────
+
+function Logo({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" style={{ display: 'block', flexShrink: 0 }}>
+      <polygon points="16,2 4,28 28,28" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+      <polygon points="16,8 9,24 23,24" fill="var(--accent)" opacity={0.18} stroke="var(--accent)" strokeWidth="1" />
+      <line x1="16" y1="8" x2="16" y2="24" stroke="var(--accent)" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
+// ── NavRow ────────────────────────────────────────────────────────────────────
+
+function NavRow({ to, label, icon, end = false }: { to: string; label: string; icon: string; end?: boolean }) {
   return (
     <NavLink
-      to={item.to}
-      end={item.to === '/'}
-      title={collapsed ? item.label : undefined}
-      className={({ isActive }) =>
-        [
-          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
-          collapsed ? 'justify-center' : '',
-          isActive
-            ? 'nav-active text-cyan-300'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-[#0d1520]',
-        ].join(' ')
-      }
+      to={to}
+      end={end}
+      className="nav-row"
+      style={({ isActive }) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        width: '100%',
+        padding: '6px 10px',
+        marginBottom: 1,
+        background: isActive ? 'var(--accent-2)' : 'transparent',
+        border: 'none',
+        borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+        color: isActive ? 'var(--fg)' : 'var(--fg-2)',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 12.5,
+        textDecoration: 'none',
+        transition: 'color .12s, background .12s',
+      })}
     >
       {({ isActive }) => (
         <>
-          <span className={isActive ? 'text-cyan-400' : ''}>{item.icon}</span>
-          {!collapsed && (
-            <>
-              <span className="flex-1">{item.label}</span>
-              {isActive && <ChevronRight size={12} className="text-cyan-500 opacity-70" />}
-            </>
-          )}
+          <Icon name={icon} size={13} color={isActive ? 'var(--accent)' : 'currentColor'} />
+          <span style={{ flex: 1 }}>{label}</span>
+          {isActive && <Icon name="chev_r" size={10} color="var(--accent)" />}
         </>
       )}
     </NavLink>
+  )
+}
+
+// ── Ticker ────────────────────────────────────────────────────────────────────
+
+function Ticker({ backendOnline }: { backendOnline: boolean | null }) {
+  const [time, setTime] = useState(() => new Date().toLocaleTimeString('en-GB'))
+
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date().toLocaleTimeString('en-GB')), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const items = [
+    'Recon phase active',
+    'Backend ' + (backendOnline === null ? 'connecting' : backendOnline ? 'online' : 'offline'),
+    'Press ? for command palette',
+    'v2.0 — Paper Dark',
+  ]
+  const doubled = [...items, ...items]
+
+  return (
+    <div style={{
+      height: 26,
+      borderBottom: '1px solid var(--rule)',
+      background: 'var(--bg-2)',
+      overflow: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      flexShrink: 0,
+    }}>
+      <div style={{
+        flexShrink: 0,
+        padding: '0 12px',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        borderRight: '1px solid var(--rule)',
+        background: 'var(--accent)',
+        color: '#1a1408',
+      }}>
+        <span className="mono" style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase' }}>● LIVE</span>
+      </div>
+      <div style={{ overflow: 'hidden', flex: 1 }}>
+        <div className="ticker-track mono" style={{ fontSize: 10.5, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          {doubled.map((t, i) => (
+            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 16 }}>
+              <span style={{ color: 'var(--fg-4)' }}>◆</span>
+              <span>{t}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ flexShrink: 0, padding: '0 14px', borderLeft: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{time}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const { selectedProject } = useAppStore()
+
+  const initials = user?.username
+    ? user.username.slice(0, 2).toUpperCase()
+    : '??'
+
+  function handleLogout() {
+    logout()
+    navigate('/login')
+  }
+
+  return (
+    <aside style={{
+      width: 230,
+      flexShrink: 0,
+      borderRight: '1px solid var(--rule)',
+      background: 'var(--bg)',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      position: 'sticky',
+      top: 0,
+    }}>
+      {/* Brand */}
+      <div style={{ padding: '18px 18px 16px', borderBottom: '1px solid var(--rule)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Logo size={22} />
+          <div>
+            <div className="mono" style={{ fontSize: 13, letterSpacing: '0.22em', fontWeight: 600 }}>SERAPH</div>
+            <div className="mono" style={{ fontSize: 8.5, letterSpacing: '0.18em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Ops Console · v2.0</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Engagement switcher */}
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rule)' }}>
+        <div className="smcap smcap-2" style={{ marginBottom: 6 }}>Engagement</div>
+        <button style={{
+          width: '100%',
+          textAlign: 'left',
+          background: 'transparent',
+          border: '1px solid var(--rule)',
+          padding: '8px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: 'var(--fg)',
+          cursor: 'pointer',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
+              {selectedProject ? `OP-${String(selectedProject.id).padStart(4, '0')}` : 'No project'}
+            </span>
+            <span style={{ fontSize: 10.5, color: 'var(--fg-3)' }}>
+              {selectedProject?.name ?? 'Select a project'}
+            </span>
+          </div>
+          <Icon name="chev_d" size={11} color="var(--fg-3)" />
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+        {NAV_TOP.map(item => (
+          <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
+        ))}
+
+        {NAV_GROUPS.map(group => (
+          <div key={group.id} style={{ marginTop: 14 }}>
+            <div className="smcap smcap-2" style={{ padding: '0 10px 4px' }}>{group.label}</div>
+            {group.items.map(item => (
+              <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} />
+            ))}
+          </div>
+        ))}
+
+        <div style={{ borderTop: '1px solid var(--rule)', margin: '14px 8px 8px' }} />
+        <div className="smcap smcap-2" style={{ padding: '0 10px 4px' }}>Workspace</div>
+        {NAV_BOTTOM.map(item => (
+          <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} />
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid var(--rule)', padding: 10 }}>
+        {/* Status row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 4px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className={`dot ${backendOnline ? 'dot-live' : backendOnline === false ? 'dot-crit' : 'dot-idle'}`} />
+            <span className="mono" style={{ fontSize: 10, color: 'var(--fg-2)' }}>
+              {backendOnline === null ? 'connecting' : backendOnline ? 'backend online' : 'backend offline'}
+            </span>
+          </div>
+          <NotificationBell />
+        </div>
+
+        {/* User row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderTop: '1px dashed var(--rule-strong)' }}>
+          <div style={{
+            width: 22,
+            height: 22,
+            border: '1px solid var(--rule-strong)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: 'var(--fg-2)',
+            flexShrink: 0,
+          }}>
+            {initials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.username ?? '—'}
+            </div>
+            <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              {user?.role ?? '—'}
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 4,
+              height: 22,
+              width: 22,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--fg-3)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--crit)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-3)')}
+          >
+            <Icon name="logout" size={11} />
+          </button>
+        </div>
+      </div>
+    </aside>
   )
 }
 
@@ -154,49 +322,13 @@ function NavItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
 
 export default function Layout() {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('seraph_nav_collapsed') === 'true')
   const { generating, progress, done, dismissDone } = useAINarrative()
   const location = useLocation()
   const isOnReports = location.pathname === '/reports'
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
   const { selectedProject } = useAppStore()
-  // Derive current page label from pathname for presence announcements
   const currentPage = location.pathname.replace(/^\//, '') || 'dashboard'
 
-  // Group open/closed state — persisted to localStorage, auto-opens the active group
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    const defaults: Record<string, boolean> = { recon: false, offense: false, credentials: false, defense: false }
-    try {
-      const saved = localStorage.getItem('seraph_nav_groups')
-      const base = saved ? { ...defaults, ...JSON.parse(saved) } : defaults
-      // Open the group containing the current route
-      for (const group of NAV_GROUPS) {
-        if (group.items.some(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))) {
-          base[group.id] = true
-        }
-      }
-      return base
-    } catch {
-      return defaults
-    }
-  })
-
-  function toggleGroup(id: string) {
-    setOpenGroups(prev => {
-      const next = { ...prev, [id]: !prev[id] }
-      localStorage.setItem('seraph_nav_groups', JSON.stringify(next))
-      return next
-    })
-  }
-
-  function handleLogout() {
-    logout()
-    navigate('/login')
-  }
-
-  // Global keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
@@ -214,227 +346,71 @@ export default function Layout() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)', color: '#e2e8f0' }}>
-      {/* Sidebar */}
-      <aside
-        className="flex flex-col shrink-0 border-r border-cyan-900/20 relative transition-all duration-300"
-        style={{ width: collapsed ? '64px' : '220px', background: 'var(--sidebar-bg)' }}
-        aria-label="Main navigation"
-      >
-        {/* Gradient overlay */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(180deg, var(--accent-dim) 0%, transparent 40%)' }}
-        />
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)', color: 'var(--fg)' }}>
+      <Sidebar backendOnline={backendOnline} />
 
-        {/* Brand */}
-        <div className={`flex items-center gap-3 border-b border-cyan-900/20 relative z-10 ${collapsed ? 'px-4 py-5 justify-center' : 'px-5 py-5'}`}>
-          <div
-            className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 relative"
-            style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)' }}
-          >
-            <Shield size={18} className="text-cyan-400" />
-            {backendOnline !== null && (
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                {backendOnline ? (
-                  <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400" />
-                  </>
-                ) : (
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                )}
-              </span>
-            )}
-          </div>
-          {!collapsed && (
-            <div>
-              <span className="font-bold text-base tracking-widest gradient-text">SERAPH</span>
-              <p className="text-[10px] text-slate-500 font-mono tracking-wide">Security Platform</p>
+      {/* Right column: ticker + page content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        <Ticker backendOnline={backendOnline} />
+
+        <main className="page-enter" style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', position: 'relative' }}>
+          {selectedProject && (
+            <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 10 }}>
+              <ActiveUsers projectId={selectedProject.id} page={currentPage} />
             </div>
           )}
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-2 py-3 overflow-y-auto relative z-10 space-y-0.5">
-
-          {/* Dashboard — standalone top */}
-          <NavItem item={TOP_ITEM} collapsed={collapsed} />
-
-          {/* Grouped sections */}
-          {NAV_GROUPS.map(group => {
-            const isOpen = openGroups[group.id] ?? true
-            return (
-              <div key={group.id}>
-                {/* Section header */}
-                {!collapsed ? (
-                  <button
-                    onClick={() => toggleGroup(group.id)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 mt-2 rounded-lg hover:bg-[#0d1520] transition-colors"
-                  >
-                    <span className={group.color}>{group.icon}</span>
-                    <span className={`flex-1 text-left text-[10px] font-bold uppercase tracking-widest ${group.color}`}>
-                      {group.label}
-                    </span>
-                    <ChevronDown
-                      size={11}
-                      className="text-slate-600 transition-transform duration-200"
-                      style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-                    />
-                  </button>
-                ) : (
-                  /* Collapsed: show thin divider between groups */
-                  <div className="my-2 mx-3 border-t border-cyan-900/15" />
-                )}
-
-                {/* Group items */}
-                {(isOpen || collapsed) && (
-                  <div className={!collapsed ? 'ml-1' : ''}>
-                    {group.items.map(item => (
-                      <NavItem key={item.to} item={item} collapsed={collapsed} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {/* Divider before bottom standalones */}
-          <div className="my-2 mx-1 border-t border-cyan-900/15" />
-
-          {/* Reports */}
-          <NavItem item={BOTTOM_ITEMS[0]} collapsed={collapsed} />
-        </nav>
-
-        {/* Footer */}
-        <div className="px-2 py-3 border-t border-cyan-900/20 relative z-10 space-y-1.5">
-          {/* Notification bell */}
-          <div className={`flex px-1 pb-1 ${collapsed ? 'justify-center' : 'justify-end'}`}>
-            <NotificationBell />
-          </div>
-          {/* Settings + Guide */}
-          {BOTTOM_ITEMS.slice(1).map(item => (
-            <NavItem key={item.to} item={item} collapsed={collapsed} />
-          ))}
-
-          <div className="pt-1 space-y-1.5">
-            {!collapsed && user && (
-              <div className="glass rounded-lg px-3 py-2 flex items-center gap-2">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'var(--accent-mid)', border: '1px solid var(--accent-border)' }}
-                >
-                  <User size={11} className="text-cyan-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-semibold text-slate-300 truncate">{user.username}</div>
-                  <div className="text-[9px] text-slate-500 capitalize">{user.role}</div>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  title="Sign out"
-                  className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
-                >
-                  <LogOut size={13} />
-                </button>
-              </div>
-            )}
-
-            {collapsed && (
-              <button
-                onClick={handleLogout}
-                title="Sign out"
-                className="w-full flex items-center justify-center py-2 text-slate-500 hover:text-red-400 transition-colors"
-              >
-                <LogOut size={14} />
-              </button>
-            )}
-
-            {!collapsed && (
-              <div className="glass rounded-lg px-3 py-1.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: '0 0 6px rgba(34,197,94,0.8)' }} />
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {backendOnline === null ? 'connecting' : backendOnline ? 'online' : 'offline'}
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-500 font-mono">v0.1.0</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Collapse toggle */}
-        <button
-          onClick={() => setCollapsed(c => { const next = !c; localStorage.setItem('seraph_nav_collapsed', String(next)); return next })}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-6 h-6 rounded-full border border-cyan-900/40 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
-          style={{ background: 'var(--bg-surface)' }}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-        </button>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto dot-grid page-enter relative" style={{ background: 'var(--bg-base)' }}>
-        {/* Presence indicator — top-right corner, only when a project is selected */}
-        {selectedProject && (
-          <div className="absolute top-3 right-4 z-10">
-            <ActiveUsers projectId={selectedProject.id} page={currentPage} />
-          </div>
-        )}
-        <Outlet />
-      </main>
+          <Outlet />
+        </main>
+      </div>
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
 
-      {/* Floating AI narrative orb — visible while generating or after done (non-Reports pages) */}
+      {/* AI narrative orb */}
       {(generating || done) && !isOnReports && (
         <NavLink
           to="/reports"
           onClick={done ? dismissDone : undefined}
-          title={done ? 'Narrative ready — click to view' : 'AI Narrative generating… click to go to Reports'}
-          className="fixed bottom-6 right-6 z-50 flex items-center justify-center rounded-full"
+          title={done ? 'Narrative ready — click to view' : 'AI Narrative generating…'}
           style={{
-            width: 44, height: 44,
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '50%',
+            width: 44,
+            height: 44,
             background: 'rgba(10,5,20,0.92)',
             border: `1px solid ${done ? 'rgba(168,85,247,0.6)' : 'rgba(168,85,247,0.35)'}`,
             boxShadow: done
               ? '0 0 18px rgba(168,85,247,0.7), 0 0 36px rgba(168,85,247,0.3)'
               : '0 0 18px rgba(168,85,247,0.5)',
             animation: done ? 'seraph-orb-pulse 1.8s ease-in-out infinite' : undefined,
+            textDecoration: 'none',
           }}
         >
-          <svg width="44" height="44" viewBox="0 0 44 44" className="absolute inset-0">
+          <svg width="44" height="44" viewBox="0 0 44 44" style={{ position: 'absolute', inset: 0 }}>
             <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(168,85,247,0.15)" strokeWidth="3" />
             {done ? (
-              /* full ring when done */
-              <circle
-                cx="22" cy="22" r="18"
-                fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
-                style={{ filter: 'drop-shadow(0 0 5px rgba(168,85,247,0.9))' }}
-              />
+              <circle cx="22" cy="22" r="18" fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
+                style={{ filter: 'drop-shadow(0 0 5px rgba(168,85,247,0.9))' }} />
             ) : progress !== null && progress >= 0 ? (
-              /* deterministic fill */
-              <circle
-                cx="22" cy="22" r="18"
-                fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
+              <circle cx="22" cy="22" r="18" fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 18}`}
                 strokeDashoffset={`${2 * Math.PI * 18 * (1 - progress / 100)}`}
                 transform="rotate(-90 22 22)"
-                style={{ filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.8))' }}
-              />
+                style={{ filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.8))' }} />
             ) : (
-              /* indeterminate spinning arc */
-              <circle
-                cx="22" cy="22" r="18"
-                fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
+              <circle cx="22" cy="22" r="18" fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 18 * 0.3} ${2 * Math.PI * 18 * 0.7}`}
-                style={{ filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.8))', transformOrigin: '22px 22px', animation: 'spin 1s linear infinite' }}
-              />
+                style={{ filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.8))', transformOrigin: '22px 22px', animation: 'spin 1s linear infinite' }} />
             )}
           </svg>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={done ? '#e9d5ff' : '#c084fc'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke={done ? '#e9d5ff' : '#c084fc'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ position: 'relative', zIndex: 1 }}>
             <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.44-3.14Z"/>
             <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.44-3.14Z"/>
           </svg>
