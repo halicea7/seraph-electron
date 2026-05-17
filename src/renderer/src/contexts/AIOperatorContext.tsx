@@ -198,8 +198,11 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       checks.filter(Boolean).forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
     } catch { /* Ollama not running */ }
     try {
-      const cfg = await fetch(`${getApiBase()}/ai/config`).then(r => r.json())
-      if (cfg.model) opts.push({ key: `server:${cfg.model}`, label: `[Server] ${cfg.model}` })
+      const res = await fetch(`${getApiBase()}/ai/tool-models`)
+      if (res.ok) {
+        const data = await res.json()
+        ;(data.models as string[]).forEach(m => opts.push({ key: `server:${m}`, label: `[Server] ${m}` }))
+      }
     } catch { /* server offline */ }
     setModelOptions(opts)
     if (opts.length && !opts.find(o => o.key === selectedModelKey)) setSelectedModelKey(opts[0].key)
