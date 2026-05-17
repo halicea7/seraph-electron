@@ -48,34 +48,36 @@ function ProtectedRoutes() {
   }
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="audit" element={<AuditBuilder />} />
-        <Route path="pentest" element={<PentestWorkbench />} />
-        <Route path="osint" element={<OSINTModule />} />
-        <Route path="network" element={<NetworkMap />} />
-        <Route path="cracking" element={<PasswordAuditing />} />
-        <Route path="playbooks" element={<Playbooks />} />
-        <Route path="guide" element={<Guide />} />
-        <Route path="vulns" element={<VulnTracker />} />
-        <Route path="logs" element={<LogAnalysis />} />
-        <Route path="scans" element={<AllScans />} />
-        <Route path="findings" element={<AllFindings />} />
-        <Route path="listeners" element={<Listeners />} />
-        <Route path="agents" element={<Agents />} />
-        <Route path="attack-paths" element={<AttackPaths />} />
-        <Route path="operator" element={<AIOperator />} />
-        <Route path="cve-watch" element={<CveWatch />} />
-        <Route path="timeline" element={<Timeline />} />
-        <Route path="command-library" element={<CommandLibrary />} />
-        <Route path="c2" element={<C2Console />} />
-        <Route path="vault" element={<CredentialVault />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="*" element={<Dashboard />} />
-      </Route>
-    </Routes>
+    <AIOperatorProvider>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="audit" element={<AuditBuilder />} />
+          <Route path="pentest" element={<PentestWorkbench />} />
+          <Route path="osint" element={<OSINTModule />} />
+          <Route path="network" element={<NetworkMap />} />
+          <Route path="cracking" element={<PasswordAuditing />} />
+          <Route path="playbooks" element={<Playbooks />} />
+          <Route path="guide" element={<Guide />} />
+          <Route path="vulns" element={<VulnTracker />} />
+          <Route path="logs" element={<LogAnalysis />} />
+          <Route path="scans" element={<AllScans />} />
+          <Route path="findings" element={<AllFindings />} />
+          <Route path="listeners" element={<Listeners />} />
+          <Route path="agents" element={<Agents />} />
+          <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="operator" element={<AIOperator />} />
+          <Route path="cve-watch" element={<CveWatch />} />
+          <Route path="timeline" element={<Timeline />} />
+          <Route path="command-library" element={<CommandLibrary />} />
+          <Route path="c2" element={<C2Console />} />
+          <Route path="vault" element={<CredentialVault />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Dashboard />} />
+        </Route>
+      </Routes>
+    </AIOperatorProvider>
   )
 }
 
@@ -108,9 +110,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AINarrativeProvider>
-            <AIOperatorProvider>
-              <AuthGate />
-            </AIOperatorProvider>
+            <AuthGate />
           </AINarrativeProvider>
         </AuthProvider>
       </ThemeProvider>
