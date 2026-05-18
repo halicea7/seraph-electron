@@ -1,0 +1,99 @@
+# Seraph
+
+A desktop pentest management platform built on Electron. Seraph connects to a self-hosted backend and gives operators a unified interface for the full engagement lifecycle — from recon and exploitation through credential management, reporting, and AI-assisted analysis.
+
+---
+
+## Features
+
+### Recon
+- **OSINT Module** — passive intelligence gathering against targets
+- **Network Map** — interactive Cytoscape graph of discovered hosts, services, and relationships
+
+### Offense
+- **Pentest Workbench** — run scan modules, review raw output, and triage findings per target
+- **C2 Console** — Metasploit RPC integration with live session management, task execution, and loot capture
+- **Playbooks** — saved multi-step attack sequences with configurable scan categories
+- **Attack Paths** — graph-based visualization of exploitation chains across the network
+- **AI Operator** — LLM-backed assistant with full project context for attack planning, script generation, and technique guidance
+- **Command Library** — searchable reference of offensive commands organized by category
+
+### Credentials
+- **Credential Vault** — stores passwords, hashes, keys, and tokens per project; tracks source (manual, C2 loot, OSINT, brute force)
+- **Password Auditing** — hashcat/john integration for offline cracking jobs
+
+### Defense
+- **Audit Builder** — compliance-focused audit scans with control mapping (CIS, NIST, PCI)
+- **Agents** — manage persistent implants and their task queues
+- **Listeners** — configure and monitor reverse shell / beacon listeners
+- **Vuln Tracker** — per-finding status workflow (open → in-review → remediated → accepted)
+- **CVE Watch** — auto-detected services are monitored nightly against NVD; new CVEs surface as alerts
+- **Engagement Timeline** — chronological event feed (targets added, scans run, findings discovered) with severity and kind filters
+- **Log Analysis** — search and correlate raw scan logs across the project
+
+### Reporting & Settings
+- **Reports** — generate structured engagement reports from findings
+- **Settings** — configure the backend connection, Metasploit RPC, Auto-Probe, scan templates, and appearance
+- **Guide** — built-in operator reference
+
+---
+
+## Architecture
+
+Seraph-Electron is a thin desktop client. All data lives on a self-hosted [Seraph backend](https://github.com/halicea7/seraph) — a Python/FastAPI server with a PostgreSQL database. The Electron app connects over HTTP/WebSocket using a server URL configured at first launch.
+
+```
+┌─────────────────────┐        HTTP / WS        ┌──────────────────────┐
+│  Seraph-Electron    │ ──────────────────────▶ │   Seraph Backend     │
+│  (this repo)        │                          │  FastAPI + Postgres  │
+└─────────────────────┘                          └──────────────────────┘
+```
+
+---
+
+## Getting Started
+
+**Prerequisites:**
+- A running [Seraph backend](https://github.com/halicea7/seraph) instance
+- Node.js 20+
+
+```bash
+git clone https://github.com/halicea7/seraph-electron.git
+cd seraph-electron
+npm install
+npm run dev
+```
+
+On first launch you'll be prompted for your backend URL (e.g. `http://192.168.1.10:8000`) and credentials. The URL is saved locally and used for all subsequent sessions.
+
+### Building a distributable
+
+```bash
+npm run build:linux   # AppImage + .deb
+npm run build:win     # NSIS installer
+npm run build:mac     # .dmg
+```
+
+---
+
+## Stack
+
+- [Electron](https://electronjs.org) + [electron-vite](https://electron-vite.org)
+- [React 18](https://react.dev) + [React Router v6](https://reactrouter.com) + TypeScript
+- [Zustand](https://zustand-demo.pmnd.rs) for global state
+- [Cytoscape.js](https://cytoscape.org) for network graph rendering
+- [xterm.js](https://xtermjs.org) for the C2 terminal
+- [Tailwind CSS](https://tailwindcss.com) + Paper Dark design system (CSS variables)
+- [Lucide React](https://lucide.dev) icons + custom Icon component
+
+---
+
+## Navigation Structure
+
+| Section | Pages |
+|---------|-------|
+| **Recon** | OSINT, Network Map |
+| **Offense** | Pentest Workbench, C2 Console, Playbooks, Attack Paths, AI Operator, Command Library |
+| **Credentials** | Credential Vault, Password Auditing |
+| **Defense** | Audit Builder, Agents, Listeners, Vuln Tracker, CVE Watch, Timeline, Log Analysis |
+| **Other** | Dashboard, Reports, Settings, Guide |
