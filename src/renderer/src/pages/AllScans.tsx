@@ -6,6 +6,9 @@ import {
   Terminal as TerminalIcon, Loader, Cpu, Trash2, Ban,
 } from 'lucide-react'
 
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
 interface ScanRow {
   id: string
   scan_type: string
@@ -51,20 +54,20 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled:  '#f59e0b',
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  completed:  'bg-green-500/15 text-green-400 border border-green-500/30',
-  running:    'bg-blue-500/15 text-blue-400 border border-blue-500/30',
-  pending:    'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-  failed:     'bg-red-500/15 text-red-400 border border-red-500/30',
-  cancelled:  'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+const STATUS_STYLES: Record<string, { color: string; background: string; border: string }> = {
+  completed: { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.3)' },
+  running:   { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)',  border: '1px solid rgba(96,165,250,0.3)' },
+  pending:   { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
+  failed:    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.3)' },
+  cancelled: { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
 }
 
 const SEV_COLOR: Record<string, string> = {
-  critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22c55e', info: '#3b82f6',
+  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: '#60a5fa',
 }
 const SEV_BG: Record<string, string> = {
-  critical: 'rgba(239,68,68,0.15)', high: 'rgba(249,115,22,0.15)', medium: 'rgba(245,158,11,0.15)',
-  low: 'rgba(34,197,94,0.15)', info: 'rgba(59,130,246,0.15)',
+  critical: 'rgba(232,64,64,0.1)', high: 'rgba(249,115,22,0.1)', medium: 'rgba(240,168,58,0.1)',
+  low: 'rgba(84,175,97,0.1)', info: 'rgba(96,165,250,0.1)',
 }
 
 const STATUSES = ['all', 'completed', 'running', 'pending', 'failed']
@@ -197,33 +200,44 @@ export default function AllScans() {
     return s ? `${s.scan_type} @ ${s.target}` : id.slice(0, 8)
   }
 
+  const badgeStyle = (status: string): React.CSSProperties => {
+    const ss = STATUS_STYLES[status] ?? STATUS_STYLES.pending
+    return { fontSize: 10, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', color: ss.color, background: ss.background, border: ss.border }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg)', border: ruleStrong, borderRadius: 4,
+    color: 'var(--fg)', fontFamily: 'var(--font-sans)', fontSize: 13,
+    padding: '6px 12px 6px 30px', outline: 'none', width: 256,
+  }
+
   return (
-    <div className="flex h-full">
+    <div style={{ display: 'flex', height: '100%' }}>
       {/* Main content */}
-      <div className={`flex-1 p-8 space-y-6 overflow-y-auto transition-all ${drawerScan ? 'mr-[480px]' : ''}`}>
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-200 transition-colors">
+      <div style={{ flex: 1, padding: 32, display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', transition: 'margin-right 0.2s', marginRight: drawerScan ? 480 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-2)', padding: 0 }}>
             <ArrowLeft size={18} />
           </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white">All Scans</h1>
-            <p className="text-slate-400 text-sm mt-0.5">{scans.length} total scans across all projects</p>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>All Scans</h1>
+            <p style={{ color: 'var(--fg-2)', fontSize: 13, marginTop: 2 }}>{scans.length} total scans across all projects</p>
           </div>
           {/* Diff controls */}
           {selected.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">{selected.length}/2 selected</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-2)' }}>{selected.length}/2 selected</span>
               {selected.length === 2 && (
                 <button
                   onClick={runDiff}
                   disabled={diffLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600/20 text-cyan-300 border border-cyan-600/30 hover:bg-cyan-600/30 transition-colors disabled:opacity-50"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: 'rgba(240,168,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.3)', cursor: diffLoading ? 'not-allowed' : 'pointer', opacity: diffLoading ? 0.5 : 1 }}
                 >
                   <GitCompare size={13} />
                   {diffLoading ? 'Comparing…' : 'Diff Scans'}
                 </button>
               )}
-              <button onClick={() => { setSelected([]); setDiff(null) }} className="text-slate-500 hover:text-slate-300 transition-colors">
+              <button onClick={() => { setSelected([]); setDiff(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}>
                 <X size={15} />
               </button>
             </div>
@@ -232,91 +246,95 @@ export default function AllScans() {
 
         {/* Selection hint */}
         {selected.length === 0 && (
-          <p className="text-xs text-slate-600 -mt-3">
-            Click a row to view its output · check the box on two rows to <strong className="text-slate-500">Diff Scans</strong>
+          <p style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: -12 }}>
+            Click a row to view its output · check the box on two rows to <strong style={{ color: 'var(--fg-3)' }}>Diff Scans</strong>
           </p>
         )}
 
         {/* Diff result panel */}
         {diff && (
-          <div className="glass rounded-xl border border-cyan-900/20 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-cyan-900/15">
-              <div className="flex items-center gap-2">
-                <GitCompare size={14} className="text-cyan-400" />
-                <span className="text-xs font-semibold text-white uppercase tracking-wider">Scan Diff</span>
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: rule }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <GitCompare size={14} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Scan Diff</span>
               </div>
-              <div className="flex items-center gap-4 text-[11px]">
-                <span className="text-slate-500 font-mono">{scanName(diff.scan_a)}</span>
-                <span className="text-slate-600">→</span>
-                <span className="text-slate-500 font-mono">{scanName(diff.scan_b)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 11 }}>
+                <span style={{ color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{scanName(diff.scan_a)}</span>
+                <span style={{ color: 'var(--fg-4)' }}>→</span>
+                <span style={{ color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{scanName(diff.scan_b)}</span>
               </div>
-              <button onClick={() => setDiff(null)} className="text-slate-500 hover:text-slate-300 transition-colors">
+              <button onClick={() => setDiff(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}>
                 <X size={14} />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 divide-x divide-cyan-900/15">
-              <DiffBucket label="New" icon={<Plus size={12} />} color="text-red-400" findings={diff.new} />
-              <DiffBucket label="Resolved" icon={<Minus size={12} />} color="text-green-400" findings={diff.resolved} />
-              <DiffBucket label="Unchanged" icon={<Equal size={12} />} color="text-slate-500" findings={diff.unchanged} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderTop: rule }}>
+              <DiffBucket label="New" icon={<Plus size={12} />} color="var(--crit)" findings={diff.new} />
+              <div style={{ borderLeft: rule, borderRight: rule }}>
+                <DiffBucket label="Resolved" icon={<Minus size={12} />} color="var(--ok)" findings={diff.resolved} />
+              </div>
+              <DiffBucket label="Unchanged" icon={<Equal size={12} />} color="var(--fg-3)" findings={diff.unchanged} />
             </div>
           </div>
         )}
 
         {diffError && (
-          <div className="px-4 py-2 rounded-lg bg-red-900/20 border border-red-700/30 text-xs text-red-400">{diffError}</div>
+          <div style={{ padding: '8px 16px', borderRadius: 4, background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', fontSize: 11, color: 'var(--crit)' }}>{diffError}</div>
         )}
 
         {/* Filters */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }} />
             <input
               type="text"
               placeholder="Search target, project, type…"
               value={search}
               onChange={e => { setSearch(e.target.value); updateFilter(statusFilter, e.target.value) }}
-              className="pl-8 pr-4 py-1.5 rounded-lg text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none w-64"
-              style={{ background: '#090d14' }}
+              style={inputStyle}
             />
           </div>
-          <div className="flex gap-1 glass rounded-lg p-1">
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
             {STATUSES.map(s => (
               <button
                 key={s}
                 onClick={() => { setStatusFilter(s); updateFilter(s, search) }}
-                className={`px-3 py-1 rounded text-xs font-medium capitalize transition-colors ${
-                  statusFilter === s ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                }`}
+                style={{
+                  padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500,
+                  textTransform: 'capitalize', border: 'none', cursor: 'pointer',
+                  background: statusFilter === s ? 'rgba(240,168,58,0.1)' : 'none',
+                  color: statusFilter === s ? 'var(--accent)' : 'var(--fg-3)',
+                }}
               >
                 {s}
               </button>
             ))}
           </div>
-          <span className="text-xs text-slate-500">{filtered.length} shown</span>
+          <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{filtered.length} shown</span>
         </div>
 
         {/* Table */}
-        <div className="glass rounded-xl overflow-hidden">
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-slate-500 text-sm">Loading…</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>Loading…</div>
           ) : filtered.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-slate-500 text-sm">No scans match the current filter.</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>No scans match the current filter.</div>
           ) : (
-            <table className="w-full text-sm">
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-cyan-900/20 text-left">
-                  <th className="px-3 py-3 w-8" />
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Target</th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Project</th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-right">Findings</th>
-                  <th className="px-5 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Date</th>
+                <tr style={{ borderBottom: rule, textAlign: 'left' }}>
+                  <th style={{ padding: '12px 12px', width: 32 }} />
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Type</th>
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Target</th>
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Project</th>
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</th>
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'right' }}>Findings</th>
+                  <th style={{ padding: '12px 20px', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-cyan-900/10">
-                {filtered.map(s => {
+              <tbody>
+                {filtered.map((s, idx) => {
                   const isSelected = selected.includes(s.id)
                   const selIdx = selected.indexOf(s.id)
                   const isOpen = drawerScan?.id === s.id
@@ -324,37 +342,43 @@ export default function AllScans() {
                     <tr
                       key={s.id}
                       onClick={() => openDrawer(s)}
-                      className={`transition-colors cursor-pointer ${isOpen ? 'bg-cyan-950/25' : isSelected ? 'bg-cyan-950/20' : 'hover:bg-cyan-950/10'}`}
+                      style={{
+                        cursor: 'pointer',
+                        borderBottom: idx < filtered.length - 1 ? rule : 'none',
+                        background: isOpen ? 'rgba(240,168,58,0.06)' : isSelected ? 'rgba(240,168,58,0.04)' : 'none',
+                      }}
                     >
-                      <td className="px-3 py-3" onClick={e => toggleSelect(e, s.id)}>
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center text-[10px] font-bold transition-colors cursor-pointer hover:border-cyan-600 ${
-                          isSelected ? 'border-cyan-500 bg-cyan-500/20 text-cyan-300' : 'border-slate-700 text-transparent'
-                        }`}>
+                      <td style={{ padding: '12px' }} onClick={e => toggleSelect(e, s.id)}>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 4, border: isSelected ? '1px solid var(--accent)' : ruleStrong,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                          background: isSelected ? 'rgba(240,168,58,0.2)' : 'none',
+                          color: isSelected ? 'var(--accent)' : 'transparent',
+                        }}>
                           {isSelected ? selIdx + 1 : ''}
                         </div>
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS[s.status] || STATUS_COLORS.pending }} />
-                          <span className="font-mono text-xs text-slate-300">{s.scan_type}</span>
-                          {s.auto_probe && <Zap size={11} className="text-green-400 shrink-0" />}
+                      <td style={{ padding: '12px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 4, height: 20, borderRadius: 2, flexShrink: 0, backgroundColor: STATUS_COLORS[s.status] || STATUS_COLORS.pending }} />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{s.scan_type}</span>
+                          {s.auto_probe && <Zap size={11} style={{ color: 'var(--ok)', flexShrink: 0 }} />}
                         </div>
                       </td>
-                      <td className="px-5 py-3 font-mono text-xs text-slate-300">{s.target}</td>
-                      <td className="px-5 py-3 text-xs text-slate-400">{s.project}</td>
-                      <td className="px-5 py-3">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_STYLES[s.status] || STATUS_STYLES.pending}`}>
-                          {s.status}
-                        </span>
+                      <td style={{ padding: '12px 20px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{s.target}</td>
+                      <td style={{ padding: '12px 20px', fontSize: 11, color: 'var(--fg-3)' }}>{s.project}</td>
+                      <td style={{ padding: '12px 20px' }}>
+                        <span style={badgeStyle(s.status)}>{s.status}</span>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td style={{ padding: '12px 20px', textAlign: 'right' }}>
                         {s.finding_count > 0 ? (
-                          <span className="text-xs font-mono text-amber-400">{s.finding_count}</span>
+                          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{s.finding_count}</span>
                         ) : (
-                          <span className="text-xs text-slate-600">—</span>
+                          <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-500 font-mono">
+                      <td style={{ padding: '12px 20px', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
                         {s.started_at ? new Date(s.started_at).toLocaleDateString() : '—'}
                       </td>
                     </tr>
@@ -368,44 +392,42 @@ export default function AllScans() {
 
       {/* Log drawer */}
       {drawerScan && (
-        <div className="fixed top-0 right-0 h-full w-[480px] flex flex-col border-l border-cyan-900/30 z-30" style={{ background: '#070d17' }}>
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 480, display: 'flex', flexDirection: 'column', borderLeft: ruleStrong, zIndex: 30, background: 'var(--bg)' }}>
           {/* Drawer header */}
-          <div className="flex items-start gap-3 px-5 py-4 border-b border-cyan-900/20 shrink-0">
-            <TerminalIcon size={16} className="text-cyan-400 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-semibold text-cyan-300">{drawerScan.scan_type}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_STYLES[drawerScan.status] || STATUS_STYLES.pending}`}>
-                  {drawerScan.status}
-                </span>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', borderBottom: rule, flexShrink: 0 }}>
+            <TerminalIcon size={16} style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{drawerScan.scan_type}</span>
+                <span style={badgeStyle(drawerScan.status)}>{drawerScan.status}</span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5 truncate">{drawerScan.target} · {drawerScan.project}</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{drawerScan.target} · {drawerScan.project}</p>
               {drawerScan.started_at && (
-                <p className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                <p style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
                   {new Date(drawerScan.started_at).toLocaleString()}
                   {drawerScan.completed_at && ` → ${new Date(drawerScan.completed_at).toLocaleString()}`}
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {drawerScan.raw_output !== null && (
                 <button
                   onClick={() => parseFindings(drawerScan.id)}
                   disabled={parseLoading}
                   title="Re-parse output into findings"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-cyan-600/15 text-cyan-400 border border-cyan-600/25 hover:bg-cyan-600/25 transition-colors disabled:opacity-50"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 4, fontSize: 11, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', cursor: parseLoading ? 'not-allowed' : 'pointer', opacity: parseLoading ? 0.5 : 1 }}
                 >
                   {parseLoading ? <Loader size={11} className="animate-spin" /> : <Cpu size={11} />}
                   {parseLoading ? 'Parsing…' : 'Parse Findings'}
                 </button>
               )}
-              {parseMsg && <span className="text-xs text-green-400">{parseMsg}</span>}
+              {parseMsg && <span style={{ fontSize: 11, color: 'var(--ok)' }}>{parseMsg}</span>}
               {(drawerScan.status === 'running' || drawerScan.status === 'pending') && (
                 <button
                   onClick={() => cancelScan(drawerScan.id)}
                   disabled={cancelLoading}
                   title="Cancel this scan"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-amber-600/15 text-amber-400 border border-amber-600/25 hover:bg-amber-600/25 transition-colors disabled:opacity-50"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 4, fontSize: 11, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', cursor: cancelLoading ? 'not-allowed' : 'pointer', opacity: cancelLoading ? 0.5 : 1 }}
                 >
                   {cancelLoading ? <Loader size={11} className="animate-spin" /> : <Ban size={11} />}
                   {cancelLoading ? 'Cancelling…' : 'Cancel'}
@@ -415,30 +437,30 @@ export default function AllScans() {
                 onClick={() => deleteScan(drawerScan.id)}
                 disabled={deleteLoading}
                 title="Delete this scan and all its findings"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-red-600/15 text-red-400 border border-red-600/25 hover:bg-red-600/25 transition-colors disabled:opacity-50"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 4, fontSize: 11, background: 'rgba(232,64,64,0.08)', color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.25)', cursor: deleteLoading ? 'not-allowed' : 'pointer', opacity: deleteLoading ? 0.5 : 1 }}
               >
                 {deleteLoading ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
                 {deleteLoading ? 'Deleting…' : 'Delete'}
               </button>
-              <button onClick={() => setDrawerScan(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+              <button onClick={() => setDrawerScan(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}>
                 <X size={16} />
               </button>
             </div>
           </div>
 
           {/* Output */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
             {drawerLoading ? (
-              <div className="flex items-center gap-2 text-slate-500 text-sm">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg-3)', fontSize: 13 }}>
                 <Loader size={14} className="animate-spin" />
                 Loading output…
               </div>
             ) : drawerScan.raw_output ? (
-              <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{drawerScan.raw_output}</pre>
+              <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{drawerScan.raw_output}</pre>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-600">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--fg-4)' }}>
                 <TerminalIcon size={32} />
-                <p className="text-sm">No output recorded for this scan.</p>
+                <p style={{ fontSize: 13 }}>No output recorded for this scan.</p>
               </div>
             )}
           </div>
@@ -455,25 +477,24 @@ function DiffBucket({ label, icon, color, findings }: {
   findings: DiffFinding[]
 }) {
   return (
-    <div className="p-4">
-      <div className={`flex items-center gap-1.5 mb-3 ${color}`}>
+    <div style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, color }}>
         {icon}
-        <span className="text-[11px] font-bold uppercase tracking-wider">{label}</span>
-        <span className="ml-auto text-[11px] font-mono">{findings.length}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--font-mono)' }}>{findings.length}</span>
       </div>
       {findings.length === 0 ? (
-        <p className="text-[11px] text-slate-600 text-center py-4">None</p>
+        <p style={{ fontSize: 11, color: 'var(--fg-4)', textAlign: 'center', padding: '16px 0' }}>None</p>
       ) : (
-        <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '240px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 240 }}>
           {findings.map(f => (
-            <div key={f.id} className="flex items-start gap-2">
+            <div key={f.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <span
-                className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 mt-0.5"
-                style={{ background: SEV_BG[f.severity] ?? 'rgba(100,116,139,0.15)', color: SEV_COLOR[f.severity] ?? '#94a3b8' }}
+                style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase', flexShrink: 0, marginTop: 2, background: SEV_BG[f.severity] ?? 'rgba(100,116,139,0.15)', color: SEV_COLOR[f.severity] ?? 'var(--fg-3)' }}
               >
                 {f.severity}
               </span>
-              <p className="text-[11px] text-slate-300 leading-snug">{f.title}</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-2)', lineHeight: 1.4 }}>{f.title}</p>
             </div>
           ))}
         </div>

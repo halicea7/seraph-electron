@@ -4,6 +4,9 @@ import { useAuth } from '../contexts/AuthContext'
 import LoginBackground from '../components/LoginBackground'
 import { getApiBase } from '@/lib/config'
 
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
 type Mode = 'checking' | 'setup' | 'login'
 
 export default function Login() {
@@ -149,79 +152,88 @@ export default function Login() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg)',
+    border: ruleStrong,
+    borderRadius: 4,
+    color: 'var(--fg)',
+    fontFamily: 'var(--font-sans)',
+    fontSize: 13,
+    padding: '8px 12px',
+    width: '100%',
+    outline: 'none',
+    boxSizing: 'border-box',
+  }
+
   if (mode === 'checking') {
     return (
-      <div className="relative flex items-center justify-center h-screen overflow-hidden" style={{ background: '#0a0a0f' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
         <LoginBackground />
-        <Loader size={24} className="animate-spin text-cyan-500" style={{ position: 'relative', zIndex: 10 }} />
+        <Loader size={24} className="animate-spin" style={{ position: 'relative', zIndex: 10, color: 'var(--accent)' }} />
       </div>
     )
   }
 
   return (
     <div
-      className="relative flex items-center justify-center h-screen overflow-hidden"
-      style={{ background: '#0a0a0f', color: '#e2e8f0' }}
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', overflow: 'hidden', background: 'var(--bg)', color: 'var(--fg)' }}
     >
       <LoginBackground />
-      <div className="relative z-10 w-full max-w-sm space-y-8 px-4">
+      <div style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: 360, padding: '0 16px' }}>
         {/* Brand */}
-        <div className="text-center space-y-3">
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mx-auto"
-            style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 4, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.25)', marginBottom: 12 }}
           >
-            <Shield size={32} className="text-cyan-400" style={{ filter: 'drop-shadow(0 0 8px rgba(6,182,212,0.6))' }} />
+            <Shield size={32} style={{ color: 'var(--accent)', filter: 'drop-shadow(0 0 8px rgba(240,168,58,0.5))' }} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-widest gradient-text">SERAPH</h1>
-            <p className="text-xs text-slate-500 font-mono tracking-wide mt-1">Security Platform</p>
+            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--accent)', fontFamily: 'var(--font-mono)', margin: 0 }}>SERAPH</h1>
+            <p style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', marginTop: 4 }}>Security Platform</p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="glass rounded-2xl p-8 space-y-6 border border-cyan-900/20">
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 6, padding: 32 }}>
           {mode === 'setup' && (
-            <div className="text-center space-y-1">
-              <div className="flex items-center justify-center gap-2 text-cyan-400">
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--accent)', marginBottom: 4 }}>
                 <UserPlus size={16} />
-                <span className="text-sm font-semibold">First-Run Setup</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>First-Run Setup</span>
               </div>
-              <p className="text-xs text-slate-400">Create your administrator account to get started.</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-2)', margin: 0 }}>Create your administrator account to get started.</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {mode === 'setup' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-400">First Name</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 6 }}>First Name</label>
                   <input
                     type="text"
                     value={firstName}
                     onChange={e => setFirstName(e.target.value)}
                     placeholder="Jane"
                     required
-                    className="w-full rounded-lg px-4 py-2.5 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none transition-colors"
-                    style={{ background: '#090d14' }}
+                    style={inputStyle}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-400">Last Name</label>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 6 }}>Last Name</label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={e => setLastName(e.target.value)}
                     placeholder="Doe"
                     required
-                    className="w-full rounded-lg px-4 py-2.5 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none transition-colors"
-                    style={{ background: '#090d14' }}
+                    style={inputStyle}
                   />
                 </div>
               </div>
             )}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400">Username</label>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 6 }}>Username</label>
               <input
                 type="text"
                 value={username}
@@ -229,27 +241,25 @@ export default function Login() {
                 placeholder={mode === 'setup' ? 'Choose a username' : 'Enter your username'}
                 required
                 autoFocus
-                className="w-full rounded-lg px-4 py-2.5 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none transition-colors"
-                style={{ background: '#090d14' }}
+                style={inputStyle}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400">Password</label>
-              <div className="relative">
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', marginBottom: 6 }}>Password</label>
+              <div style={{ position: 'relative' }}>
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder={mode === 'setup' ? 'At least 8 characters' : 'Enter your password'}
                   required
-                  className="w-full rounded-lg px-4 py-2.5 pr-10 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none transition-colors"
-                  style={{ background: '#090d14' }}
+                  style={{ ...inputStyle, paddingRight: 36 }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}
                 >
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -258,8 +268,7 @@ export default function Login() {
 
             {error && (
               <div
-                className="rounded-lg px-4 py-2.5 text-xs text-red-300 border border-red-800/30"
-                style={{ background: 'rgba(127,29,29,0.2)' }}
+                style={{ borderRadius: 4, padding: '8px 12px', fontSize: 11, color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.08)' }}
               >
                 {error}
               </div>
@@ -268,10 +277,11 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-all"
               style={{
-                background: 'linear-gradient(135deg, #0891b2, #0e7490)',
-                boxShadow: '0 0 20px rgba(6,182,212,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 600,
+                background: 'var(--accent)', color: '#0d0c0a', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1, width: '100%', fontFamily: 'var(--font-sans)',
               }}
             >
               {loading ? (
@@ -285,20 +295,21 @@ export default function Login() {
 
             {mode === 'login' && (
               <>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.1)' }} />
-                  <span className="text-xs text-slate-600">or</span>
-                  <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.1)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>or</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
                 </div>
                 <button
                   type="button"
                   onClick={handlePasskeyLogin}
                   disabled={passkeyLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 transition-all"
                   style={{
-                    background: 'rgba(6,182,212,0.06)',
-                    border: '1px solid rgba(6,182,212,0.2)',
-                    color: '#67e8f9',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 500,
+                    background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.2)',
+                    color: 'var(--accent)', cursor: passkeyLoading ? 'not-allowed' : 'pointer',
+                    opacity: passkeyLoading ? 0.5 : 1, width: '100%', fontFamily: 'var(--font-sans)',
                   }}
                 >
                   {passkeyLoading ? (
@@ -312,7 +323,7 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-600">
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', marginTop: 20 }}>
           Self-hosted · All data stays local
         </p>
       </div>

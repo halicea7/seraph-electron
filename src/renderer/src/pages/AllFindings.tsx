@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronDown, Download, Tag, X, Trash2, EyeOff, RotateCcw, ShieldOff, Plus } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
 
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
 interface FindingRow {
   id: string
   severity: string
@@ -22,30 +25,23 @@ interface FindingRow {
 const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info']
 
 const SEV_COLOR: Record<string, string> = {
-  critical: '#ef4444',
-  high:     '#f97316',
-  medium:   '#f59e0b',
-  low:      '#22c55e',
-  info:     '#3b82f6',
+  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: '#60a5fa',
 }
 
 const SEV_BG: Record<string, string> = {
-  critical: 'rgba(239,68,68,0.15)',
-  high:     'rgba(249,115,22,0.15)',
-  medium:   'rgba(245,158,11,0.15)',
-  low:      'rgba(34,197,94,0.15)',
-  info:     'rgba(59,130,246,0.15)',
+  critical: 'rgba(232,64,64,0.1)', high: 'rgba(249,115,22,0.1)', medium: 'rgba(240,168,58,0.1)',
+  low: 'rgba(84,175,97,0.1)', info: 'rgba(96,165,250,0.1)',
 }
 
 const STATUS_OPTIONS = ['open', 'in-review', 'remediated', 'accepted', 'false_positive'] as const
 type FindingStatus = typeof STATUS_OPTIONS[number]
 
-const STATUS_STYLES: Record<string, string> = {
-  'open':            'bg-red-500/15 text-red-400 border border-red-500/25',
-  'in-review':       'bg-amber-500/15 text-amber-400 border border-amber-500/25',
-  'remediated':      'bg-green-500/15 text-green-400 border border-green-500/25',
-  'accepted':        'bg-slate-500/15 text-slate-400 border border-slate-500/25',
-  'false_positive':  'bg-purple-500/15 text-purple-400 border border-purple-500/25',
+const STATUS_STYLES: Record<string, { color: string; background: string; border: string }> = {
+  'open':           { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.25)' },
+  'in-review':      { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.25)' },
+  'remediated':     { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.25)' },
+  'accepted':       { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
+  'false_positive': { color: '#a78bfa',       background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)' },
 }
 
 export default function AllFindings() {
@@ -272,32 +268,43 @@ export default function AllFindings() {
     setFpRules(prev => prev.filter(r => r.id !== ruleId))
   }
 
+  const statusBadgeStyle = (status: string): React.CSSProperties => {
+    const ss = STATUS_STYLES[status] ?? STATUS_STYLES.open
+    return { fontSize: 9, fontWeight: 500, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', color: ss.color, background: ss.background, border: ss.border, cursor: 'pointer' }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg)', border: ruleStrong, borderRadius: 4,
+    color: 'var(--fg)', fontFamily: 'var(--font-sans)', fontSize: 13,
+    padding: '6px 12px', outline: 'none',
+  }
+
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-200 transition-colors">
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-2)', padding: 0 }}>
           <ArrowLeft size={18} />
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">All Findings</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{findings.length} findings across all projects</p>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>All Findings</h1>
+          <p style={{ color: 'var(--fg-2)', fontSize: 13, marginTop: 2 }}>{findings.length} findings across all projects</p>
         </div>
         {/* Export dropdown */}
-        <div className="relative" ref={exportRef}>
+        <div style={{ position: 'relative' }} ref={exportRef}>
           <button
             onClick={() => setExportOpen(o => !o)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 border border-cyan-900/30 hover:border-cyan-500/40 hover:text-white transition-colors glass"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', border: ruleStrong, background: 'var(--bg-2)', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export
-            <ChevronDown size={11} className="text-slate-500" style={{ transform: exportOpen ? 'rotate(180deg)' : 'none' }} />
+            <ChevronDown size={11} style={{ color: 'var(--fg-3)', transform: exportOpen ? 'rotate(180deg)' : 'none' }} />
           </button>
           {exportOpen && (
-            <div className="absolute right-0 mt-1 w-36 glass border border-cyan-900/30 rounded-lg shadow-xl z-10 overflow-hidden">
-              <button onClick={exportCSV} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-cyan-950/30 hover:text-white transition-colors">
+            <div style={{ position: 'absolute', right: 0, marginTop: 4, width: 144, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, zIndex: 10, overflow: 'hidden' }}>
+              <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer' }}>
                 Download CSV
               </button>
-              <button onClick={exportJSON} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-cyan-950/30 hover:text-white transition-colors">
+              <button onClick={exportJSON} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer', borderTop: rule }}>
                 Download JSON
               </button>
             </div>
@@ -306,54 +313,48 @@ export default function AllFindings() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* Search */}
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }} />
             <input
               type="text"
               placeholder="Search title, target, CVE…"
               value={search}
               onChange={e => { setSearch(e.target.value); updateFilter(sevFilter, e.target.value, statusFilter, tagFilter) }}
-              className="pl-8 pr-4 py-1.5 rounded-lg text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none w-64"
-              style={{ background: '#090d14' }}
+              style={{ ...inputStyle, paddingLeft: 30, width: 256 }}
             />
           </div>
 
           {/* Tag filter */}
-          <div className="relative">
-            <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <div style={{ position: 'relative' }}>
+            <Tag size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }} />
             <input
               type="text"
               placeholder="Filter by tag…"
               value={tagFilter}
               onChange={e => { setTagFilter(e.target.value); updateFilter(sevFilter, search, statusFilter, e.target.value) }}
-              className="pl-8 pr-4 py-1.5 rounded-lg text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none w-40"
-              style={{ background: '#090d14' }}
+              style={{ ...inputStyle, paddingLeft: 30, width: 160 }}
             />
           </div>
 
           <button
             onClick={() => setShowFp(p => !p)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
-              showFp
-                ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
-                : 'text-slate-400 border-slate-700 hover:border-slate-500'
-            }`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 4, fontSize: 11, border: showFp ? '1px solid rgba(167,139,250,0.3)' : ruleStrong, background: showFp ? 'rgba(167,139,250,0.08)' : 'none', color: showFp ? '#a78bfa' : 'var(--fg-3)', cursor: 'pointer' }}
           >
             <EyeOff size={12} />
             {showFp ? 'Hide' : 'Show'} false positives
           </button>
-          <span className="text-xs text-slate-500">{filtered.length} shown</span>
+          <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{filtered.length} shown</span>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* Severity chips */}
-          <div className="flex gap-1 glass rounded-lg p-1">
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
             <button
               onClick={() => { setSevFilter('all'); updateFilter('all', search, statusFilter, tagFilter) }}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${sevFilter === 'all' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: sevFilter === 'all' ? 'rgba(100,116,139,0.2)' : 'none', color: sevFilter === 'all' ? 'var(--fg)' : 'var(--fg-3)' }}
             >
               All ({findings.length})
             </button>
@@ -362,8 +363,7 @@ export default function AllFindings() {
                 <button
                   key={s}
                   onClick={() => { setSevFilter(s); updateFilter(s, search, statusFilter, tagFilter) }}
-                  className={`px-3 py-1 rounded text-xs font-medium capitalize transition-colors ${sevFilter === s ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                  style={sevFilter === s ? { background: SEV_BG[s], color: SEV_COLOR[s] } : {}}
+                  style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, textTransform: 'capitalize', border: 'none', cursor: 'pointer', background: sevFilter === s ? SEV_BG[s] : 'none', color: sevFilter === s ? SEV_COLOR[s] : 'var(--fg-3)' }}
                 >
                   {s} ({counts[s]})
                 </button>
@@ -372,144 +372,144 @@ export default function AllFindings() {
           </div>
 
           {/* Status chips */}
-          <div className="flex gap-1 glass rounded-lg p-1">
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
             <button
               onClick={() => { setStatusFilter('all'); updateFilter(sevFilter, search, 'all', tagFilter) }}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${statusFilter === 'all' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: statusFilter === 'all' ? 'rgba(100,116,139,0.2)' : 'none', color: statusFilter === 'all' ? 'var(--fg)' : 'var(--fg-3)' }}
             >
               Any status
             </button>
-            {STATUS_OPTIONS.map(s => (
-              statusCounts[s] ? (
+            {STATUS_OPTIONS.map(s => {
+              const ss = STATUS_STYLES[s]
+              return statusCounts[s] ? (
                 <button
                   key={s}
                   onClick={() => { setStatusFilter(s); updateFilter(sevFilter, search, s, tagFilter) }}
-                  className={`px-3 py-1 rounded text-xs font-medium capitalize transition-colors ${statusFilter === s ? STATUS_STYLES[s] : 'text-slate-400 hover:text-slate-200'}`}
+                  style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, textTransform: 'capitalize', border: statusFilter === s ? ss.border : 'none', cursor: 'pointer', background: statusFilter === s ? ss.background : 'none', color: statusFilter === s ? ss.color : 'var(--fg-3)' }}
                 >
                   {s} ({statusCounts[s]})
                 </button>
               ) : null
-            ))}
+            })}
           </div>
         </div>
       </div>
 
       {/* List */}
-      <div className="glass rounded-xl overflow-hidden">
+      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 text-sm">Loading…</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>Loading…</div>
         ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 text-sm">No findings match the current filter.</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>No findings match the current filter.</div>
         ) : (
-          <div className="divide-y divide-cyan-900/10">
-            {filtered.map(f => {
+          <div>
+            {filtered.map((f, idx) => {
               const fStatus = (f.status || 'open') as FindingStatus
               const fTags = (f.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
               return (
-                <div key={f.id}>
+                <div key={f.id} style={{ borderBottom: idx < filtered.length - 1 ? rule : 'none' }}>
                   <button
                     onClick={() => setExpanded(expanded === f.id ? null : f.id)}
-                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-cyan-950/10 transition-colors text-left"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                   >
                     <span
-                      className="text-[9px] font-bold px-2 py-0.5 rounded uppercase shrink-0 w-16 text-center"
-                      style={{ background: SEV_BG[f.severity] ?? 'rgba(100,116,139,0.15)', color: SEV_COLOR[f.severity] ?? '#94a3b8' }}
+                      style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 10, textTransform: 'uppercase', flexShrink: 0, width: 56, textAlign: 'center', background: SEV_BG[f.severity] ?? 'rgba(100,116,139,0.1)', color: SEV_COLOR[f.severity] ?? 'var(--fg-3)' }}
                     >
                       {f.severity}
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-200 truncate">{f.title}</p>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[11px] text-slate-500 font-mono truncate">{f.target}</span>
-                        <span className="text-[11px] text-slate-600 truncate">{f.project}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{f.title}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 2 }}>
+                        <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.target}</span>
+                        <span style={{ fontSize: 11, color: 'var(--fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.project}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       {f.cve_id && (
-                        <span className="text-[10px] text-blue-400 font-mono">{f.cve_id}</span>
+                        <span style={{ fontSize: 10, color: '#60a5fa', fontFamily: 'var(--font-mono)' }}>{f.cve_id}</span>
                       )}
                       {f.cvss_score && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700/40 text-slate-400">
+                        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4, border: ruleStrong, color: 'var(--fg-2)' }}>
                           CVSS {f.cvss_score}
                         </span>
                       )}
                       {/* Status badge — inline dropdown */}
                       <div
-                        className="relative"
+                        style={{ position: 'relative' }}
                         onClick={e => { e.stopPropagation(); setStatusDropdown(statusDropdown === f.id ? null : f.id) }}
                       >
-                        <span className={`text-[9px] font-medium px-2 py-0.5 rounded cursor-pointer ${STATUS_STYLES[fStatus]}`}>
-                          {fStatus}
-                        </span>
+                        <span style={statusBadgeStyle(fStatus)}>{fStatus}</span>
                         {statusDropdown === f.id && (
-                          <div className="absolute right-0 top-6 w-28 glass border border-cyan-900/30 rounded-lg shadow-xl z-20 overflow-hidden">
-                            {STATUS_OPTIONS.map(opt => (
-                              <button
-                                key={opt}
-                                onClick={e => { e.stopPropagation(); changeStatus(f.id, opt) }}
-                                className={`w-full px-3 py-2 text-left text-[10px] font-medium transition-colors hover:bg-cyan-950/30 ${opt === fStatus ? STATUS_STYLES[opt] : 'text-slate-400'}`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                          <div style={{ position: 'absolute', right: 0, top: 24, width: 112, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, zIndex: 20, overflow: 'hidden' }}>
+                            {STATUS_OPTIONS.map(opt => {
+                              const oss = STATUS_STYLES[opt]
+                              return (
+                                <button
+                                  key={opt}
+                                  onClick={e => { e.stopPropagation(); changeStatus(f.id, opt) }}
+                                  style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 500, background: opt === fStatus ? oss.background : 'none', color: opt === fStatus ? oss.color : 'var(--fg-3)', border: 'none', cursor: 'pointer' }}
+                                >
+                                  {opt}
+                                </button>
+                              )
+                            })}
                           </div>
                         )}
                       </div>
                       <ChevronDown
                         size={12}
-                        className="text-slate-600 transition-transform duration-150"
-                        style={{ transform: expanded === f.id ? 'rotate(180deg)' : 'none' }}
+                        style={{ color: 'var(--fg-4)', transition: 'transform 0.15s', transform: expanded === f.id ? 'rotate(180deg)' : 'none' }}
                       />
                     </div>
                   </button>
                   {expanded === f.id && (
-                    <div className="px-5 pb-4 pt-1 ml-[76px] space-y-3">
-                      <p className="text-xs text-slate-400 leading-relaxed">{f.description}</p>
+                    <div style={{ padding: '4px 20px 16px 96px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <p style={{ fontSize: 11, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0 }}>{f.description}</p>
                       {/* Tags */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {fTags.map(tag => (
-                          <span key={tag} className="flex items-center gap-1 text-[10px] bg-cyan-900/20 text-cyan-400 border border-cyan-900/30 rounded px-2 py-0.5">
+                          <span key={tag} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', borderRadius: 10, padding: '1px 8px' }}>
                             {tag}
-                            <button onClick={() => removeTag(f.id, tag)} className="text-cyan-600 hover:text-red-400 transition-colors">
+                            <button onClick={() => removeTag(f.id, tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, display: 'flex', alignItems: 'center' }}>
                               <X size={9} />
                             </button>
                           </span>
                         ))}
-                        <div className="flex items-center gap-1">
-                          <Tag size={10} className="text-slate-600" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Tag size={10} style={{ color: 'var(--fg-4)' }} />
                           <input
                             type="text"
                             placeholder="add tag…"
                             value={tagInput[f.id] ?? ''}
                             onChange={e => setTagInput(p => ({ ...p, [f.id]: e.target.value }))}
                             onKeyDown={e => { if (e.key === 'Enter') addTag(f.id) }}
-                            className="bg-transparent text-[10px] text-slate-400 placeholder-slate-600 outline-none w-20 border-b border-slate-700/40 focus:border-cyan-500/40"
+                            style={{ background: 'transparent', fontSize: 10, color: 'var(--fg-3)', outline: 'none', width: 80, border: 'none', borderBottom: rule }}
                           />
                         </div>
                         {/* False positive controls */}
                         {f.status === 'false_positive' ? (
                           <button
                             onClick={e => { e.stopPropagation(); restoreFinding(f.id) }}
-                            className="flex items-center gap-1 text-[10px] text-purple-400 border border-purple-900/40 rounded px-2 py-0.5 hover:bg-purple-900/20 transition-colors"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
                           >
                             <RotateCcw size={9} /> Restore
                           </button>
                         ) : (
                           <button
                             onClick={e => { e.stopPropagation(); setFpModal({ id: f.id, title: f.title }); setFpReason('') }}
-                            className="flex items-center gap-1 text-[10px] text-slate-400 border border-slate-700/40 rounded px-2 py-0.5 hover:bg-slate-700/20 transition-colors"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--fg-3)', border: ruleStrong, borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
                           >
                             <EyeOff size={9} /> False positive
                           </button>
                         )}
                         {f.fp_reason && (
-                          <div className="w-full mt-1 text-[10px] text-purple-400 bg-purple-900/10 border border-purple-900/20 rounded px-2 py-1">
+                          <div style={{ width: '100%', marginTop: 4, fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 4, padding: '4px 8px' }}>
                             FP reason: {f.fp_reason}
                           </div>
                         )}
                         <button
                           onClick={e => { e.stopPropagation(); deleteFinding(f.id) }}
-                          className="ml-auto flex items-center gap-1 text-[10px] text-red-400 border border-red-900/40 rounded px-2 py-0.5 hover:bg-red-900/20 transition-colors"
+                          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.25)', borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
                         >
                           <Trash2 size={9} /> Delete
                         </button>
@@ -524,26 +524,25 @@ export default function AllFindings() {
       </div>
 
       {/* Suppression Rules Panel */}
-      <div className="glass rounded-xl overflow-hidden">
+      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
         <button
           onClick={() => setRulesOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-5 py-3 hover:bg-cyan-950/10 transition-colors text-left"
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
         >
-          <ShieldOff size={14} className="text-purple-400" />
-          <span className="text-sm font-medium text-slate-300">Auto-suppression Rules</span>
-          <span className="text-xs text-slate-500 ml-1">— apply at parse time to auto-mark FPs</span>
-          <ChevronDown size={12} className="text-slate-600 ml-auto transition-transform" style={{ transform: rulesOpen ? 'rotate(180deg)' : 'none' }} />
+          <ShieldOff size={14} style={{ color: '#a78bfa' }} />
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-2)' }}>Auto-suppression Rules</span>
+          <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 4 }}>— apply at parse time to auto-mark FPs</span>
+          <ChevronDown size={12} style={{ color: 'var(--fg-4)', marginLeft: 'auto', transform: rulesOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
         </button>
         {rulesOpen && (
-          <div className="px-5 pb-5 pt-2 space-y-4 border-t border-cyan-900/10">
+          <div style={{ padding: '8px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16, borderTop: rule }}>
             {/* Project picker */}
-            <div className="flex items-center gap-3">
-              <label className="text-xs text-slate-400">Project:</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ fontSize: 11, color: 'var(--fg-2)' }}>Project:</label>
               <select
                 value={ruleProjectId}
                 onChange={e => setRuleProjectId(e.target.value)}
-                className="rounded px-2 py-1 text-xs text-slate-200 border border-cyan-900/20 focus:outline-none"
-                style={{ background: '#090d14' }}
+                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '4px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none' }}
               >
                 {ruleProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -551,18 +550,18 @@ export default function AllFindings() {
 
             {/* Rules list */}
             {fpRules.length === 0 ? (
-              <p className="text-xs text-slate-500">No rules yet. Rules added here will auto-suppress matching findings when scans are parsed.</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-3)' }}>No rules yet. Rules added here will auto-suppress matching findings when scans are parsed.</p>
             ) : (
-              <div className="space-y-1">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {fpRules.map(rule => (
-                  <div key={rule.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-900/10 border border-purple-900/20">
+                  <div key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 4, background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
                     {rule.tool && (
-                      <span className="text-[10px] bg-slate-700/40 text-slate-300 rounded px-1.5 py-0.5 font-mono">{rule.tool}</span>
+                      <span style={{ fontSize: 10, background: 'rgba(100,116,139,0.2)', color: 'var(--fg-2)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--font-mono)' }}>{rule.tool}</span>
                     )}
-                    <span className="text-xs text-slate-300 flex-1">title contains <span className="text-purple-300 font-medium">"{rule.title_contains}"</span></span>
+                    <span style={{ fontSize: 11, color: 'var(--fg-2)', flex: 1 }}>title contains <span style={{ color: '#a78bfa', fontWeight: 500 }}>"{rule.title_contains}"</span></span>
                     <button
                       onClick={() => deleteFpRule(rule.id)}
-                      className="text-slate-600 hover:text-red-400 transition-colors"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}
                     >
                       <X size={12} />
                     </button>
@@ -572,14 +571,13 @@ export default function AllFindings() {
             )}
 
             {/* Add rule form */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <input
                 type="text"
                 placeholder="Tool (optional, e.g. nikto)"
                 value={ruleTool}
                 onChange={e => setRuleTool(e.target.value)}
-                className="rounded px-2 py-1.5 text-xs text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none w-36"
-                style={{ background: '#090d14' }}
+                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '6px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 144 }}
               />
               <input
                 type="text"
@@ -587,13 +585,12 @@ export default function AllFindings() {
                 value={ruleTitleContains}
                 onChange={e => setRuleTitleContains(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') addFpRule() }}
-                className="rounded px-2 py-1.5 text-xs text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none w-56"
-                style={{ background: '#090d14' }}
+                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '6px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 224 }}
               />
               <button
                 onClick={addFpRule}
                 disabled={!ruleTitleContains.trim() || !ruleProjectId || ruleSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white transition-colors"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, fontSize: 11, background: '#a78bfa', color: '#0d0c0a', border: 'none', cursor: (!ruleTitleContains.trim() || !ruleProjectId || ruleSaving) ? 'not-allowed' : 'pointer', opacity: (!ruleTitleContains.trim() || !ruleProjectId || ruleSaving) ? 0.5 : 1, fontWeight: 600 }}
               >
                 <Plus size={11} /> Add Rule
               </button>
@@ -604,35 +601,33 @@ export default function AllFindings() {
 
       {/* False Positive Modal */}
       {fpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
           <div
-            className="w-full max-w-md rounded-xl border border-slate-700 shadow-2xl p-6 space-y-4"
-            style={{ background: '#0b1120' }}
+            style={{ width: '100%', maxWidth: 480, borderRadius: 4, border: ruleStrong, boxShadow: '0 8px 40px rgba(0,0,0,0.5)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, background: 'var(--bg-2)' }}
           >
-            <h2 className="text-base font-semibold text-white">Mark as False Positive</h2>
-            <p className="text-sm text-slate-400 truncate">{fpModal.title}</p>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', margin: 0 }}>Mark as False Positive</h2>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{fpModal.title}</p>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Reason <span className="text-red-400">*</span></label>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4 }}>Reason <span style={{ color: 'var(--crit)' }}>*</span></label>
               <textarea
                 value={fpReason}
                 onChange={e => setFpReason(e.target.value)}
                 placeholder="Explain why this is a false positive…"
                 rows={3}
-                className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 border border-slate-700 focus:border-purple-500/60 focus:outline-none resize-none"
-                style={{ background: '#080e1a' }}
+                style={{ width: '100%', background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '8px 12px', fontSize: 13, color: 'var(--fg)', outline: 'none', resize: 'none', fontFamily: 'var(--font-sans)', boxSizing: 'border-box' }}
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button
                 onClick={() => setFpModal(null)}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+                style={{ padding: '8px 16px', fontSize: 13, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 Cancel
               </button>
               <button
                 onClick={() => suppressFinding(fpModal.id, fpReason)}
                 disabled={!fpReason.trim() || fpSaving}
-                className="px-4 py-2 rounded-lg text-sm text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                style={{ padding: '8px 16px', borderRadius: 4, fontSize: 13, color: '#0d0c0a', background: '#a78bfa', border: 'none', cursor: (!fpReason.trim() || fpSaving) ? 'not-allowed' : 'pointer', opacity: (!fpReason.trim() || fpSaving) ? 0.5 : 1, fontWeight: 600 }}
               >
                 {fpSaving ? 'Saving…' : 'Suppress'}
               </button>

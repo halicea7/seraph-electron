@@ -6,6 +6,9 @@ import {
   Bell, Command, GitCompare,
 } from 'lucide-react'
 
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
 // ── Content types ──────────────────────────────────────────────────────────────
 
 interface Section {
@@ -25,34 +28,34 @@ interface Subsection {
 
 function Tip({ children }: { children: ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-lg px-4 py-3 my-3 border border-cyan-700/30" style={{ background: 'rgba(6,182,212,0.06)' }}>
-      <Lightbulb size={15} className="text-cyan-400 shrink-0 mt-0.5" />
-      <div className="text-sm text-slate-300">{children}</div>
+    <div style={{ display: 'flex', gap: 12, borderRadius: 4, padding: '12px 16px', margin: '12px 0', background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.2)' }}>
+      <Lightbulb size={15} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
+      <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{children}</div>
     </div>
   )
 }
 
 function Warning({ children }: { children: ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-lg px-4 py-3 my-3 border border-amber-700/30" style={{ background: 'rgba(120,53,15,0.12)' }}>
-      <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-      <div className="text-sm text-slate-300">{children}</div>
+    <div style={{ display: 'flex', gap: 12, borderRadius: 4, padding: '12px 16px', margin: '12px 0', background: 'rgba(232,64,64,0.06)', border: '1px solid rgba(232,64,64,0.2)' }}>
+      <AlertTriangle size={15} style={{ color: 'var(--crit)', flexShrink: 0, marginTop: 2 }} />
+      <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{children}</div>
     </div>
   )
 }
 
 function Note({ children }: { children: ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-lg px-4 py-3 my-3 border border-slate-700/30" style={{ background: 'rgba(71,85,105,0.12)' }}>
-      <Info size={15} className="text-slate-400 shrink-0 mt-0.5" />
-      <div className="text-sm text-slate-400">{children}</div>
+    <div style={{ display: 'flex', gap: 12, borderRadius: 4, padding: '12px 16px', margin: '12px 0', background: 'rgba(100,116,139,0.08)', border: ruleStrong }}>
+      <Info size={15} style={{ color: 'var(--fg-3)', flexShrink: 0, marginTop: 2 }} />
+      <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>{children}</div>
     </div>
   )
 }
 
 function Cmd({ children }: { children: ReactNode }) {
   return (
-    <code className="inline-block px-2 py-0.5 rounded text-xs font-mono text-cyan-300 border border-cyan-900/30" style={{ background: '#0a1018' }}>
+    <code style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 4, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', border: ruleStrong, background: 'var(--bg)' }}>
       {children}
     </code>
   )
@@ -60,7 +63,7 @@ function Cmd({ children }: { children: ReactNode }) {
 
 function Block({ children }: { children: ReactNode }) {
   return (
-    <pre className="rounded-lg px-4 py-3 my-3 text-xs font-mono text-slate-300 overflow-x-auto border border-cyan-900/20 leading-relaxed" style={{ background: '#05080d' }}>
+    <pre style={{ borderRadius: 4, padding: '12px 16px', margin: '12px 0', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', overflowX: 'auto', border: ruleStrong, background: 'var(--bg)', lineHeight: 1.6 }}>
       {children}
     </pre>
   )
@@ -68,13 +71,13 @@ function Block({ children }: { children: ReactNode }) {
 
 function Steps({ items }: { items: string[] }) {
   return (
-    <ol className="space-y-2 my-3">
+    <ol style={{ listStyle: 'none', padding: 0, margin: '12px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-3">
-          <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-cyan-400 border border-cyan-500/30 mt-0.5" style={{ background: 'rgba(6,182,212,0.08)' }}>
+        <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.08)', marginTop: 2 }}>
             {i + 1}
           </span>
-          <span className="text-sm text-slate-300">{item}</span>
+          <span style={{ fontSize: 13, color: 'var(--fg-2)' }}>{item}</span>
         </li>
       ))}
     </ol>
@@ -83,10 +86,10 @@ function Steps({ items }: { items: string[] }) {
 
 function Bullets({ items }: { items: (string | ReactNode)[] }) {
   return (
-    <ul className="space-y-1.5 my-3">
+    <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-          <ChevronRight size={13} className="text-cyan-600 shrink-0 mt-0.5" />
+        <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--fg-2)' }}>
+          <ChevronRight size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
           <span>{item}</span>
         </li>
       ))}
@@ -94,16 +97,18 @@ function Bullets({ items }: { items: (string | ReactNode)[] }) {
   )
 }
 
+const BADGE_STYLES: Record<string, { color: string; background: string; border: string }> = {
+  cyan:   { color: 'var(--accent)',  background: 'rgba(240,168,58,0.1)',   border: '1px solid rgba(240,168,58,0.3)' },
+  green:  { color: 'var(--ok)',      background: 'rgba(84,175,97,0.1)',    border: '1px solid rgba(84,175,97,0.3)' },
+  amber:  { color: 'var(--accent)',  background: 'rgba(240,168,58,0.1)',   border: '1px solid rgba(240,168,58,0.3)' },
+  red:    { color: 'var(--crit)',    background: 'rgba(232,64,64,0.1)',    border: '1px solid rgba(232,64,64,0.3)' },
+  purple: { color: '#a78bfa',        background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)' },
+}
+
 function Badge({ children, color = 'cyan' }: { children: ReactNode; color?: string }) {
-  const styles: Record<string, string> = {
-    cyan: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10',
-    green: 'text-green-300 border-green-500/30 bg-green-500/10',
-    amber: 'text-amber-300 border-amber-500/30 bg-amber-500/10',
-    red: 'text-red-300 border-red-500/30 bg-red-500/10',
-    purple: 'text-purple-300 border-purple-500/30 bg-purple-500/10',
-  }
+  const bs = BADGE_STYLES[color] || BADGE_STYLES.cyan
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${styles[color] || styles.cyan}`}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '1px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500, color: bs.color, background: bs.background, border: bs.border }}>
       {children}
     </span>
   )
@@ -122,10 +127,10 @@ const SECTIONS: Section[] = [
         title: 'What is Seraph?',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Seraph is a self-hosted, open-source cybersecurity platform designed for penetration testers, security engineers, and red teamers. It consolidates the most common security workflows — reconnaissance, auditing, exploitation, reporting — into a single interface that runs entirely on your machine.
             </p>
-            <p className="text-sm text-slate-300 leading-relaxed mt-3">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 12 }}>
               No data leaves your system. No API keys required (except for optional local LLM integration via Ollama or LMStudio). Everything is stored in a local SQLite database.
             </p>
             <Note>Seraph is a wrapper and orchestrator — it requires the underlying tools (nmap, nikto, hashcat, etc.) to be installed on your system. It doesn't bundle them.</Note>
@@ -137,7 +142,7 @@ const SECTIONS: Section[] = [
         title: 'First Login & Setup',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               On first launch, Seraph detects that no users exist and shows a setup wizard.
             </p>
             <Steps items={[
@@ -156,11 +161,11 @@ const SECTIONS: Section[] = [
         title: 'Projects & Targets',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Everything in Seraph is organized under <strong className="text-white">Projects</strong>. A project represents a single engagement, client, or assessment scope.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Everything in Seraph is organized under <strong style={{ color: 'var(--fg)' }}>Projects</strong>. A project represents a single engagement, client, or assessment scope.
             </p>
             <Bullets items={[
-              <>A project contains one or more <strong className="text-white">Targets</strong> — IP addresses or hostnames</>,
+              <>A project contains one or more <strong style={{ color: 'var(--fg)' }}>Targets</strong> — IP addresses or hostnames</>,
               'All scans, findings, credentials, and OSINT results are linked to a project',
               'Create a new project from the Dashboard using the "New Project" button',
               <>Target types: <Badge>linux_host</Badge> <Badge>windows_host</Badge> <Badge>web_app</Badge> <Badge color="amber">cloud_aws</Badge> <Badge color="purple">network</Badge></>,
@@ -181,7 +186,7 @@ const SECTIONS: Section[] = [
         title: 'Overview',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Dashboard is your at-a-glance view of the platform state. It shows four stat counters (projects, targets, scans, findings), a findings-by-severity donut chart, a 14-day trend chart, quick actions, and recent activity panels.
             </p>
             <Bullets items={[
@@ -206,7 +211,7 @@ const SECTIONS: Section[] = [
         title: 'What it does',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Audit Builder generates and runs compliance-oriented shell scripts based on configurable scan categories (CIS benchmarks, NIST controls, network scanning, web security, etc.).
             </p>
             <Bullets items={[
@@ -224,8 +229,8 @@ const SECTIONS: Section[] = [
         title: 'Remote Execution via SSH',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Host-based scan categories — <strong className="text-white">Host Hardening (Lynis)</strong>, <strong className="text-white">OpenSCAP</strong>, and <strong className="text-white">Log Monitoring</strong> — need to run on the target machine itself, not locally. Seraph supports this via SSH key authentication.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Host-based scan categories — <strong style={{ color: 'var(--fg)' }}>Host Hardening (Lynis)</strong>, <strong style={{ color: 'var(--fg)' }}>OpenSCAP</strong>, and <strong style={{ color: 'var(--fg)' }}>Log Monitoring</strong> — need to run on the target machine itself, not locally. Seraph supports this via SSH key authentication.
             </p>
             <Steps items={[
               'Go to Credential Vault and add a credential with type "key"',
@@ -246,8 +251,8 @@ const SECTIONS: Section[] = [
         title: 'Scan Profiles & Scheduling',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Save a category configuration as a <strong className="text-white">Profile</strong> for quick reuse. Profiles can also be scheduled to run automatically on a cron expression.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Save a category configuration as a <strong style={{ color: 'var(--fg)' }}>Profile</strong> for quick reuse. Profiles can also be scheduled to run automatically on a cron expression.
             </p>
             <Steps items={[
               'Configure your scan categories',
@@ -275,7 +280,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'How it works',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Pentest Workbench structures engagements by type (external network, web application, internal, cloud AWS) and phase (recon, enumeration, exploitation, post-exploitation, reporting). Each phase exposes the relevant tools for that stage.
             </p>
             <Steps items={[
@@ -293,8 +298,8 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Active Directory Engagements',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Select the <strong className="text-white">Active Directory</strong> engagement type for domain-focused assessments. The workflow walks through five phases using dedicated AD tools.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Select the <strong style={{ color: 'var(--fg)' }}>Active Directory</strong> engagement type for domain-focused assessments. The workflow walks through five phases using dedicated AD tools.
             </p>
             <Bullets items={[
               <><Badge color="amber">Phase 1 — Recon</Badge> Kerbrute user enumeration against the domain controller</>,
@@ -303,7 +308,7 @@ Every hour   →  0 * * * *`}</Block>
               <><Badge color="amber">Phase 4 — AS-REP Roasting</Badge> impacket-GetNPUsers — find accounts with pre-auth disabled</>,
               <><Badge color="red">Phase 5 — Post-Compromise</Badge> impacket-secretsdump / psexec / wmiexec for credential extraction and lateral movement</>,
             ]} />
-            <p className="text-sm text-slate-300 leading-relaxed mt-3">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 12 }}>
               Template variables auto-fill from your target: <Cmd>domain</Cmd>, <Cmd>dc_ip</Cmd>, <Cmd>username</Cmd>, <Cmd>password</Cmd>, <Cmd>hash</Cmd>. Edit them inline before running.
             </p>
             <Tip>Cracked Kerberos hashes (TGS-REP / AS-REP) can be sent directly to Password Auditing — select hashcat mode 13100 for TGS-REP or 18200 for AS-REP.</Tip>
@@ -315,7 +320,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'New Tools (RustScan, Nuclei, Feroxbuster)',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Several high-performance tools have been added to the pentest tool chains and auto-probe:
             </p>
             <Bullets items={[
@@ -340,7 +345,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Gathering intelligence',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The OSINT module runs passive and semi-passive reconnaissance tools against a domain — harvesting emails, subdomains, and IP addresses without directly touching the target.
             </p>
             <Bullets items={[
@@ -370,7 +375,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Topology visualization',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Network Map builds an interactive force-directed graph of all targets in a project, colored by their highest finding severity. Parent-child relationships between domains and subdomains are detected automatically.
             </p>
             <Bullets items={[
@@ -395,7 +400,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Auditing hashes',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Password Auditing module provides a GUI for <Cmd>hashcat</Cmd> and <Cmd>john</Cmd> (John the Ripper). You can paste hashes directly or load them from the Credential Vault.
             </p>
             <Bullets items={[
@@ -414,7 +419,7 @@ Every hour   →  0 * * * *`}</Block>
         id: 'cracking-vault',
         title: 'Loading from Vault',
         content: (
-          <p className="text-sm text-slate-300 leading-relaxed">
+          <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
             Use "Load from Vault" in the left panel to pull hash-type credentials from the Credential Vault into the hash input automatically. Select the project, check the credentials you want, and they're inserted ready to crack.
           </p>
         ),
@@ -431,7 +436,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Command & Control',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The C2 Console integrates with Metasploit Framework via its RPC API. It lets you generate payloads, start listeners, manage active sessions, and interact with sessions — all from the browser.
             </p>
             <Warning>The C2 module requires Metasploit Framework to be running with the msfrpc daemon active. Start it with: <Cmd>msfrpcd -P password -S -a 127.0.0.1</Cmd></Warning>
@@ -450,14 +455,14 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Post-Exploitation Tab',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Every active session has a <strong className="text-white">Post-Ex</strong> tab with automated and guided post-exploitation capabilities. Select a session and click the Post-Ex tab to access them.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Every active session has a <strong style={{ color: 'var(--fg)' }}>Post-Ex</strong> tab with automated and guided post-exploitation capabilities. Select a session and click the Post-Ex tab to access them.
             </p>
             <Bullets items={[
-              <><strong className="text-white">Auto-Probe</strong> — runs a platform-appropriate recon set (sysinfo, getuid, ipconfig/ifconfig, ps) and stores results as loot</>,
-              <><strong className="text-white">Harvest Creds</strong> — runs hashdump + kiwi on Windows Meterpreter, or reads /etc/shadow on Linux. Parsed credentials are saved to the Credential Vault automatically</>,
-              <><strong className="text-white">Screenshot</strong> — captures the current desktop of the compromised machine and displays it inline</>,
-              <><strong className="text-white">Upgrade Shell</strong> — upgrades a plain shell session to a Meterpreter session with streaming output</>,
+              <><strong style={{ color: 'var(--fg)' }}>Auto-Probe</strong> — runs a platform-appropriate recon set (sysinfo, getuid, ipconfig/ifconfig, ps) and stores results as loot</>,
+              <><strong style={{ color: 'var(--fg)' }}>Harvest Creds</strong> — runs hashdump + kiwi on Windows Meterpreter, or reads /etc/shadow on Linux. Parsed credentials are saved to the Credential Vault automatically</>,
+              <><strong style={{ color: 'var(--fg)' }}>Screenshot</strong> — captures the current desktop of the compromised machine and displays it inline</>,
+              <><strong style={{ color: 'var(--fg)' }}>Upgrade Shell</strong> — upgrades a plain shell session to a Meterpreter session with streaming output</>,
             ]} />
             <Tip>Auto-Probe also fires automatically when a new session is created (if enabled in Settings). By the time you open the session, initial recon is already waiting in the Loot tab.</Tip>
           </>
@@ -468,7 +473,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Post-Ex Checklist',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Each session has a persistent 12-item post-exploitation checklist organized into six categories. Check items off as you complete them — state is saved per session.
             </p>
             <Bullets items={[
@@ -488,7 +493,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Pivot Routes',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Pivot Routes table lets you manage MSF route entries for tunneling traffic through a compromised host to reach otherwise inaccessible network segments.
             </p>
             <Steps items={[
@@ -513,7 +518,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Managing credentials',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Credential Vault stores all discovered credentials in one place — whether harvested via C2 loot, brute-forced, found via OSINT, or added manually.
             </p>
             <Bullets items={[
@@ -539,7 +544,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Automated workflows',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Playbooks are pre-defined, multi-step tool chains that run sequentially against a target. Each step creates its own scan record and auto-parses findings.
             </p>
             <Bullets items={[
@@ -549,7 +554,7 @@ Every hour   →  0 * * * *`}</Block>
               <><Badge color="red">Vuln Assessment</Badge> — nmap (vuln scripts) → searchsploit → sqlmap</>,
               <><Badge color="purple">OSINT Deep Dive</Badge> — whois → theHarvester → amass → subfinder</>,
             ]} />
-            <p className="text-sm text-slate-300 leading-relaxed mt-3">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 12 }}>
               Conditional steps only run if their trigger conditions are met — for example, nikto only fires if nmap found an open port 80 or 443.
             </p>
           </>
@@ -561,8 +566,8 @@ Every hour   →  0 * * * *`}</Block>
         content: (
           <>
             <Bullets items={[
-              <><strong className="text-white">Auto</strong> — all steps run back-to-back without interruption. Best for unattended use.</>,
-              <><strong className="text-white">Step-through</strong> — pauses after each step and waits for you to click "Continue". Use this to review output before proceeding.</>,
+              <><strong style={{ color: 'var(--fg)' }}>Auto</strong> — all steps run back-to-back without interruption. Best for unattended use.</>,
+              <><strong style={{ color: 'var(--fg)' }}>Step-through</strong> — pauses after each step and waits for you to click "Continue". Use this to review output before proceeding.</>,
             ]} />
             <Steps items={[
               'Open the Library tab and click "Run Playbook"',
@@ -587,7 +592,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Background recon on target creation',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Auto-Probe fires automatically when you add a new target. It runs lightweight recon tools in the background so by the time you open the target, there's already data waiting.
             </p>
             <Bullets items={[
@@ -596,8 +601,8 @@ Every hour   →  0 * * * *`}</Block>
               <><Cmd>nikto</Cmd> — only if nmap found port 80, 443, 8080, or 8443 open</>,
               <><Cmd>testssl</Cmd> — only if nmap found port 443 or 8443 open</>,
             ]} />
-            <p className="text-sm text-slate-300 leading-relaxed mt-2">
-              Enable and configure it in <strong className="text-white">Settings → Auto-Probe</strong>. You can choose which tools run and set the intensity (Quick / Standard / Deep).
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 8 }}>
+              Enable and configure it in <strong style={{ color: 'var(--fg)' }}>Settings → Auto-Probe</strong>. You can choose which tools run and set the intensity (Quick / Standard / Deep).
             </p>
             <Tip>While a probe is running, the Dashboard shows a pulsing green "Auto-Probe running" banner. Each tool's scan appears in the target's scan history with a ⚡ badge.</Tip>
           </>
@@ -615,7 +620,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Generating reports',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The Reports page aggregates all findings from a project and lets you export them in multiple formats or generate an AI-written narrative.
             </p>
             <Bullets items={[
@@ -633,7 +638,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Report templates',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Choose between two report templates using the template picker at the top of the Reports page. The template controls which findings are shown in the preview and downloads.
             </p>
             <Bullets items={[
@@ -649,7 +654,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'AI Narrative',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Seraph can generate a written narrative for your report using a local LLM via Ollama or LMStudio. No internet connection or API key required.
             </p>
             <Steps items={[
@@ -676,8 +681,8 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Working with findings',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Findings are automatically parsed from tool output. The <strong className="text-white">All Findings</strong> page (Dashboard → "View All →" or sidebar) gives you a searchable, filterable list of every finding across all projects.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Findings are automatically parsed from tool output. The <strong style={{ color: 'var(--fg)' }}>All Findings</strong> page (Dashboard → "View All →" or sidebar) gives you a searchable, filterable list of every finding across all projects.
             </p>
             <Bullets items={[
               'Expand any row to see full description, remediation notes, and tags',
@@ -692,7 +697,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Status workflow',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Each finding has a status that tracks its remediation progress. Click the status badge on any row to change it inline — no separate form needed.
             </p>
             <Bullets items={[
@@ -701,7 +706,7 @@ Every hour   →  0 * * * *`}</Block>
               <><Badge color="green">remediated</Badge> — fix has been applied and verified</>,
               <><Badge>accepted</Badge> — risk formally accepted by the client or stakeholder</>,
             ]} />
-            <p className="text-sm text-slate-300 leading-relaxed mt-3">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 12 }}>
               The status filter chips at the top of All Findings let you focus on a specific stage — useful for tracking which findings still need attention.
             </p>
           </>
@@ -712,7 +717,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Tags',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Tags let you add freeform labels to findings for grouping, filtering, or tracking context that doesn't fit into severity or status.
             </p>
             <Steps items={[
@@ -731,8 +736,8 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Exporting findings',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              The <strong className="text-white">Export</strong> button on All Findings downloads the current filtered set — whatever severity, status, tag, and search filters are active.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>Export</strong> button on All Findings downloads the current filtered set — whatever severity, status, tag, and search filters are active.
             </p>
             <Bullets items={[
               <><Badge color="green">CSV</Badge> — comma-separated, opens in Excel / Google Sheets. Columns: severity, status, title, target, project, CVE ID, CVSS score, tags, date, description</>,
@@ -754,8 +759,8 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Viewing all scans',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              The <strong className="text-white">All Scans</strong> page (Dashboard → Recent Scans → "View All →") shows every scan across all projects with status, finding count, scan type, and date. Filter by status or search by target, project, or scan type.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>All Scans</strong> page (Dashboard → Recent Scans → "View All →") shows every scan across all projects with status, finding count, scan type, and date. Filter by status or search by target, project, or scan type.
             </p>
             <Bullets items={[
               <><Badge color="green">completed</Badge> <Badge color="cyan">running</Badge> <Badge>pending</Badge> <Badge color="red">failed</Badge> — filter chips narrow the list</>,
@@ -770,7 +775,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Scan Diff',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Compare two scans to see what changed between them — useful after a remediation cycle to verify fixes and spot regressions.
             </p>
             <Steps items={[
@@ -796,7 +801,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Bell & notification panel',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               The bell icon in the sidebar footer shows a count of unread notifications. Seraph generates notifications automatically for key background events.
             </p>
             <Bullets items={[
@@ -828,7 +833,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Keyboard navigation',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
               Press <Cmd>?</Cmd> anywhere in the app (outside a text field) to open the command palette — a searchable menu of all pages and actions.
             </p>
             <Bullets items={[
@@ -855,15 +860,15 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Tools',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              The Tools tab detects which security tools are installed on startup and shows their paths and versions. Missing tools show an install command and an <strong className="text-white">Install</strong> button.
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The Tools tab detects which security tools are installed on startup and shows their paths and versions. Missing tools show an install command and an <strong style={{ color: 'var(--fg)' }}>Install</strong> button.
             </p>
             <Bullets items={[
               'Green checkmark — tool detected, path and version shown',
               'Red X — tool not found; install command and Install button shown',
-              <>Click <strong className="text-white">Install</strong> on any missing tool to run the install command in a live terminal — no copy/paste needed</>,
+              <>Click <strong style={{ color: 'var(--fg)' }}>Install</strong> on any missing tool to run the install command in a live terminal — no copy/paste needed</>,
               'Tools install via the most appropriate method: apt, pip3, go install, snap, or direct binary download',
-              <>Click <strong className="text-white">Refresh</strong> after installing to re-detect all tools</>,
+              <>Click <strong style={{ color: 'var(--fg)' }}>Refresh</strong> after installing to re-detect all tools</>,
             ]} />
             <Tip>Use the "Quick Install" banner to copy a single command that installs all missing apt/pip-compatible tools at once. For tools requiring cargo, go, or snap, use the per-tool Install button.</Tip>
           </>
@@ -874,7 +879,7 @@ Every hour   →  0 * * * *`}</Block>
         title: 'Users',
         content: (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">Admins can manage platform users from the Users tab.</p>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>Admins can manage platform users from the Users tab.</p>
             <Bullets items={[
               'Change your own password at any time',
               'Create additional users with "analyst" or "admin" roles (admin only)',
@@ -890,7 +895,7 @@ Every hour   →  0 * * * *`}</Block>
         content: (
           <>
             <Bullets items={[
-              <>Supports any OpenAI-compatible endpoint — works with <strong className="text-white">Ollama</strong> and <strong className="text-white">LMStudio</strong></>,
+              <>Supports any OpenAI-compatible endpoint — works with <strong style={{ color: 'var(--fg)' }}>Ollama</strong> and <strong style={{ color: 'var(--fg)' }}>LMStudio</strong></>,
               'Presets auto-fill the endpoint URL for each provider',
               '"Test Connection" fetches available models and auto-selects the first one',
               'Settings are stored server-side — persist across restarts',
@@ -1016,44 +1021,46 @@ export default function Guide() {
   })).filter(s => s.subsections.length > 0)
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       {/* Sidebar nav */}
-      <aside className="w-56 shrink-0 border-r border-cyan-900/20 flex flex-col overflow-hidden" style={{ background: '#090d14' }}>
+      <aside style={{ width: 224, flexShrink: 0, borderRight: rule, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-2)' }}>
         {/* Search */}
-        <div className="p-3 border-b border-cyan-900/20">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-900/20" style={{ background: '#05080d' }}>
-            <Search size={13} className="text-slate-500 shrink-0" />
+        <div style={{ padding: 12, borderBottom: rule }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 4, border: ruleStrong, background: 'var(--bg)' }}>
+            <Search size={13} style={{ color: 'var(--fg-3)', flexShrink: 0 }} />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search guide..."
-              className="flex-1 bg-transparent text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none"
+              style={{ flex: 1, background: 'transparent', fontSize: 11, color: 'var(--fg-2)', outline: 'none', border: 'none', fontFamily: 'var(--font-sans)' }}
             />
           </div>
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '12px 8px' }}>
           {filteredSections.map(section => (
             <div key={section.id}>
               {/* Section header */}
-              <div className="flex items-center gap-2 px-2 py-1.5 mt-2 mb-0.5">
-                <span className="text-slate-600">{section.icon}</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{section.title}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', marginTop: 8, marginBottom: 2 }}>
+                <span style={{ color: 'var(--fg-4)' }}>{section.icon}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{section.title}</span>
               </div>
               {/* Subsection links */}
               {section.subsections.map(sub => (
                 <button
                   key={sub.id}
                   onClick={() => scrollTo(sub.id)}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
-                    activeId === sub.id
-                      ? 'text-cyan-300 bg-cyan-500/10'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                  }`}
+                  style={{
+                    width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 12px', borderRadius: 4, fontSize: 11, border: 'none', cursor: 'pointer',
+                    background: activeId === sub.id ? 'rgba(240,168,58,0.1)' : 'none',
+                    color: activeId === sub.id ? 'var(--accent)' : 'var(--fg-3)',
+                    fontFamily: 'var(--font-sans)',
+                  }}
                 >
-                  {activeId === sub.id && <span className="w-1 h-1 rounded-full bg-cyan-400 shrink-0" />}
-                  <span className={activeId === sub.id ? '' : 'pl-3'}>{sub.title}</span>
+                  {activeId === sub.id && <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />}
+                  <span style={{ paddingLeft: activeId === sub.id ? 0 : 12 }}>{sub.title}</span>
                 </button>
               ))}
             </div>
@@ -1062,38 +1069,38 @@ export default function Guide() {
       </aside>
 
       {/* Main content */}
-      <div ref={contentRef} className="flex-1 overflow-y-auto px-10 py-8" style={{ background: '#05080d' }}>
+      <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', background: 'var(--bg)' }}>
         {/* Page header */}
-        <div className="flex items-center gap-3 mb-8 pb-6 border-b border-cyan-900/20">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)' }}>
-            <BookOpen size={18} className="text-cyan-400" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32, paddingBottom: 24, borderBottom: rule }}>
+          <div style={{ width: 40, height: 40, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.2)' }}>
+            <BookOpen size={18} style={{ color: 'var(--accent)' }} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Seraph Guide</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Everything you need to use the platform effectively</p>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>Seraph Guide</h1>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 2 }}>Everything you need to use the platform effectively</p>
           </div>
         </div>
 
         {/* Sections */}
-        <div className="max-w-3xl space-y-16">
+        <div style={{ maxWidth: 768, display: 'flex', flexDirection: 'column', gap: 64 }}>
           {filteredSections.map(section => (
             <div key={section.id}>
               {/* Section title */}
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-cyan-400">{section.icon}</span>
-                <h2 className="text-lg font-bold text-white">{section.title}</h2>
-                <div className="flex-1 h-px ml-2" style={{ background: 'rgba(6,182,212,0.15)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+                <span style={{ color: 'var(--accent)' }}>{section.icon}</span>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>{section.title}</h2>
+                <div style={{ flex: 1, height: 1, marginLeft: 8, background: 'rgba(240,168,58,0.15)' }} />
               </div>
 
               {/* Subsections */}
-              <div className="space-y-10">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
                 {section.subsections.map(sub => (
-                  <div key={sub.id} id={sub.id} className="scroll-mt-6">
-                    <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-                      <ChevronRight size={13} className="text-cyan-600" />
+                  <div key={sub.id} id={sub.id} style={{ scrollMarginTop: 24 }}>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ChevronRight size={13} style={{ color: 'var(--accent)' }} />
                       {sub.title}
                     </h3>
-                    <div className="pl-4 border-l border-cyan-900/20">
+                    <div style={{ paddingLeft: 16, borderLeft: rule }}>
                       {sub.content}
                     </div>
                   </div>
@@ -1102,7 +1109,7 @@ export default function Guide() {
             </div>
           ))}
 
-          <div className="pb-16" />
+          <div style={{ paddingBottom: 64 }} />
         </div>
       </div>
     </div>
