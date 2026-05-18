@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FileText, Download, RefreshCw, Brain, Loader, FileDown, BookmarkCheck } from 'lucide-react'
+import { Brain, Loader, BookmarkCheck } from 'lucide-react'
+import Icon from '../components/Icon'
 import ReactMarkdown from 'react-markdown'
 import FindingsTable from '../components/FindingsTable'
 import type { Project, Finding } from '../types'
@@ -9,20 +10,23 @@ import { useAINarrative } from '../contexts/AINarrativeContext'
 import { getApiBase } from '@/lib/config'
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#f59e0b',
-  low: '#22c55e',
-  info: '#3b82f6',
+  critical: 'var(--crit)',
+  high:     '#f97316',
+  medium:   'var(--accent)',
+  low:      'var(--ok)',
+  info:     '#60a5fa',
 }
 
 const SEVERITY_BORDER_TOP: Record<string, string> = {
-  critical: 'rgba(239,68,68,0.6)',
-  high: 'rgba(249,115,22,0.6)',
-  medium: 'rgba(245,158,11,0.6)',
-  low: 'rgba(34,197,94,0.6)',
-  info: 'rgba(59,130,246,0.6)',
+  critical: 'rgba(232,64,64,0.6)',
+  high:     'rgba(249,115,22,0.6)',
+  medium:   'rgba(240,168,58,0.6)',
+  low:      'rgba(84,175,97,0.6)',
+  info:     'rgba(96,165,250,0.6)',
 }
+
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
 
 export default function Reports() {
   const { user } = useAuth()
@@ -67,18 +71,11 @@ export default function Reports() {
       const data = await getProjects()
       setProjects(data)
       if (data.length > 0) setSelectedProject(data[0].id)
-    } catch {
-      // backend may not be running
-    }
+    } catch { /* backend may not be running */ }
   }
 
   async function loadStats() {
-    try {
-      const data = await getStats()
-      setStats(data)
-    } catch {
-      // ignore
-    }
+    try { setStats(await getStats()) } catch { /* ignore */ }
   }
 
   async function loadSavedNarrative(projectId: string, style: string) {
@@ -87,26 +84,14 @@ export default function Reports() {
       if (!res.ok) return
       const data = await res.json()
       const saved = data[style]
-      if (saved) {
-        setNarrative(saved.content)
-        setNarrativeSavedAt(saved.generated_at)
-      } else {
-        setNarrative('')
-        setNarrativeSavedAt('')
-      }
+      if (saved) { setNarrative(saved.content); setNarrativeSavedAt(saved.generated_at) }
+      else { setNarrative(''); setNarrativeSavedAt('') }
     } catch { /* ignore */ }
   }
 
   async function loadFindings(_projectId: string) {
     setLoading(true)
-    try {
-      const data = await getFindings()
-      setFindings(data)
-    } catch {
-      setFindings([])
-    } finally {
-      setLoading(false)
-    }
+    try { setFindings(await getFindings()) } catch { setFindings([]) } finally { setLoading(false) }
   }
 
   async function handleGenerateNarrative() {
@@ -114,14 +99,8 @@ export default function Reports() {
     setNarrativeError('')
     try {
       const result = await generate(selectedProject, narrativeStyle)
-      if (result) {
-        setNarrative(result.narrative)
-        setNarrativeSavedAt(result.savedAt)
-        setActiveTab('narrative')
-      }
-    } catch (err: any) {
-      setNarrativeError(err.message || 'Unknown error')
-    }
+      if (result) { setNarrative(result.narrative); setNarrativeSavedAt(result.savedAt); setActiveTab('narrative') }
+    } catch (err: any) { setNarrativeError(err.message || 'Unknown error') }
   }
 
   async function handleExportPDF() {
@@ -129,55 +108,32 @@ export default function Reports() {
     setGenerating(true)
     try {
       const res = await fetch(`${getApiBase()}/audit/reports/pdf/${selectedProject}`)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
-      }
+      if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail || `HTTP ${res.status}`) }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `seraph_report_${selectedProject.slice(0, 8)}.pdf`
-      a.click()
+      const a = document.createElement('a'); a.href = url; a.download = `seraph_report_${selectedProject.slice(0, 8)}.pdf`; a.click()
       URL.revokeObjectURL(url)
-    } catch (err: any) {
-      alert(`PDF export failed: ${err.message}`)
-    } finally {
-      setGenerating(false)
-    }
+    } catch (err: any) { alert(`PDF export failed: ${err.message}`) } finally { setGenerating(false) }
   }
 
   async function handleGenerateReport(format: 'html' | 'markdown') {
     if (!selectedProject) return
     setGenerating(true)
     try {
-      // HTML-native templates go through generate+download; markdown-based go through direct download
       const isHtmlNative = template === 'executive_summary' || template === 'technical_detail' || template === 'compliance_mapped'
       let blob: Blob
       if (isHtmlNative && format === 'html') {
-        const res = await fetch(`${getApiBase()}/audit/reports/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: selectedProject, report_type: template, auditor: auditor || 'Seraph (Automated)' }),
-        })
+        const res = await fetch(`${getApiBase()}/audit/reports/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: selectedProject, report_type: template, auditor: auditor || 'Seraph (Automated)' }) })
         const data = await res.json()
         blob = new Blob([data.html || ''], { type: 'text/html' })
       } else {
         const params = new URLSearchParams({ format, auditor: auditor || 'Seraph (Automated)' })
-        const res = await fetch(`${getApiBase()}/audit/reports/download/${selectedProject}?${params}`)
-        blob = await res.blob()
+        blob = await (await fetch(`${getApiBase()}/audit/reports/download/${selectedProject}?${params}`)).blob()
       }
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `seraph_${template}_${selectedProject.slice(0, 8)}.${format === 'markdown' ? 'md' : 'html'}`
-      a.click()
+      const a = document.createElement('a'); a.href = url; a.download = `seraph_${template}_${selectedProject.slice(0, 8)}.${format === 'markdown' ? 'md' : 'html'}`; a.click()
       URL.revokeObjectURL(url)
-    } catch {
-      // ignore download errors
-    } finally {
-      setGenerating(false)
-    }
+    } catch { /* ignore */ } finally { setGenerating(false) }
   }
 
   async function handlePreviewReport() {
@@ -187,269 +143,209 @@ export default function Reports() {
       const data = await generateReport(selectedProject, template, auditor || 'Seraph (Automated)')
       setReportPreview(data.html || data.markdown || '')
       setActiveTab('report')
-    } catch {
-      // ignore
-    } finally {
-      setGenerating(false)
-    }
+    } catch { /* ignore */ } finally { setGenerating(false) }
   }
 
   const severityCounts = stats?.severity_counts || {}
-
-  const displayFindings = template === 'executive_summary'
-    ? findings.filter(f => f.severity === 'critical' || f.severity === 'high')
-    : findings
-
-  // Red dot: project has findings newer than the last saved narrative
+  const displayFindings = template === 'executive_summary' ? findings.filter(f => f.severity === 'critical' || f.severity === 'high') : findings
   const selectedProj = projects.find(p => p.id === selectedProject)
-  const hasNewFindings = !!(
-    selectedProj?.latest_finding_at &&
-    (!narrativeSavedAt || new Date(selectedProj.latest_finding_at) > new Date(narrativeSavedAt))
-  )
+  const hasNewFindings = !!(selectedProj?.latest_finding_at && (!narrativeSavedAt || new Date(selectedProj.latest_finding_at) > new Date(narrativeSavedAt)))
+
+  const selStyle: React.CSSProperties = {
+    background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3,
+    padding: '5px 10px', fontSize: 12, color: 'var(--fg)',
+    fontFamily: 'var(--font-sans)', outline: 'none',
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3,
+    padding: '5px 10px', fontSize: 12, color: 'var(--fg)',
+    fontFamily: 'var(--font-sans)', outline: 'none',
+  }
+
+  const TABS = [
+    { key: 'findings', label: `Findings (${displayFindings.length}${template === 'executive_summary' ? `/${findings.length}` : ''})` },
+    { key: 'report', label: 'Report Preview' },
+    { key: 'narrative', label: 'AI Narrative' },
+  ] as const
+
+  const TEMPLATES = [
+    { key: 'executive_summary', label: 'Executive Summary', color: '#60a5fa', title: 'Risk overview, key findings, no technical detail' },
+    { key: 'technical_detail', label: 'Technical Detail', color: '#22d3ee', title: 'All findings with evidence and remediation' },
+    { key: 'compliance_mapped', label: 'Compliance Mapped', color: '#a855f7', title: 'Findings organized by NIST/CIS/PCI control' },
+  ] as const
 
   return (
-    <div className="p-8 space-y-6">
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg)', color: 'var(--fg)' }}>
 
-      {/* AI Narrative progress bar — fixed top-right */}
+      {/* AI Narrative progress bar */}
       {narrativeProgress !== null && (
-        <div className="fixed top-4 right-4 z-50 w-72 rounded-xl overflow-hidden shadow-2xl border border-purple-500/30"
-          style={{ background: 'rgba(10,5,20,0.92)', backdropFilter: 'blur(8px)', boxShadow: '0 0 24px rgba(168,85,247,0.25)' }}>
-          <div className="flex items-center gap-2 px-3 py-2">
-            <Brain size={13} className="text-purple-400 shrink-0" />
-            <span className="text-xs text-purple-300 font-medium flex-1">Generating narrative…</span>
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, width: 280, borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(10,5,20,0.92)', boxShadow: '0 0 24px rgba(168,85,247,0.25)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+            <Brain size={12} style={{ color: '#a855f7', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: '#c084fc', fontWeight: 500, flex: 1, fontFamily: 'var(--font-sans)' }}>Generating narrative…</span>
             {narrativeProgress >= 0 && (
-              <span className="text-[10px] text-purple-400 font-mono">{Math.round(narrativeProgress)}%</span>
+              <span style={{ fontSize: 10, color: '#a855f7', fontFamily: 'var(--font-mono)' }}>{Math.round(narrativeProgress)}%</span>
             )}
           </div>
-          <div className="h-1.5 w-full" style={{ background: 'rgba(168,85,247,0.15)' }}>
+          <div style={{ height: 5, width: '100%', background: 'rgba(168,85,247,0.15)' }}>
             {narrativeProgress === -1 ? (
-              /* indeterminate shimmer */
-              <div className="h-full w-full relative overflow-hidden">
-                <div
-                  className="absolute h-full rounded-full"
-                  style={{
-                    width: '40%',
-                    background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.9), transparent)',
-                    boxShadow: '0 0 10px rgba(168,85,247,0.6)',
-                    animation: 'seraph-shimmer 1.4s ease-in-out infinite',
-                  }}
-                />
+              <div style={{ height: '100%', width: '100%', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', height: '100%', width: '40%', background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.9), transparent)', animation: 'seraph-shimmer 1.4s ease-in-out infinite' }} />
               </div>
             ) : (
-              <div
-                className="h-full rounded-full transition-all duration-200"
-                style={{
-                  width: `${narrativeProgress}%`,
-                  background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
-                  boxShadow: narrativeProgress > 0 ? '0 0 8px rgba(168,85,247,0.7)' : 'none',
-                }}
-              />
+              <div style={{ height: '100%', width: `${narrativeProgress}%`, background: 'linear-gradient(90deg, #7c3aed, #a855f7)', transition: 'width 0.2s' }} />
             )}
           </div>
         </div>
       )}
 
-      {/* Page header */}
-      <div className="mb-2">
-        <div className="flex items-center gap-3">
-          <FileText size={24} className="text-blue-400" />
-          <h1 className="text-2xl font-semibold text-white">Reports</h1>
-        </div>
-        <p className="text-sm text-slate-400 mt-1">
+      {/* Header */}
+      <div>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-sans)' }}>
+          <Icon name="file" size={20} color="#60a5fa" /> Reports
+        </h1>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
           Generate and export audit and pentest findings reports
         </p>
       </div>
 
       {/* Stats Row */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
           {(['critical', 'high', 'medium', 'low', 'info'] as const).map(sev => (
-            <div
-              key={sev}
-              className="glass glass-hover rounded-xl p-4 border-t-2 transition-all"
-              style={{ borderTopColor: SEVERITY_BORDER_TOP[sev] }}
-            >
-              <div className="text-2xl font-bold font-mono" style={{ color: SEVERITY_COLORS[sev] }}>
-                {severityCounts[sev] || 0}
-              </div>
-              <div className="text-xs text-slate-400 mt-1 capitalize">{sev}</div>
+            <div key={sev} style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '12px 14px', borderTop: `2px solid ${SEVERITY_BORDER_TOP[sev]}` }}>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: SEVERITY_COLORS[sev] }}>{severityCounts[sev] || 0}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 3, textTransform: 'capitalize', fontFamily: 'var(--font-sans)' }}>{sev}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Project selector + actions */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <select
-          value={selectedProject}
-          onChange={e => setSelectedProject(e.target.value)}
-          className="rounded px-3 py-2 text-sm text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50"
-          style={{ background: '#090d14' }}
-        >
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={selStyle}>
           <option value="">Select project...</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
 
-        <input
-          type="text"
-          value={auditor}
-          onChange={e => setAuditor(e.target.value)}
-          placeholder="Auditor name"
-          className="rounded px-3 py-2 text-sm text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50 w-44"
-          style={{ background: '#090d14' }}
-        />
+        <input type="text" value={auditor} onChange={e => setAuditor(e.target.value)} placeholder="Auditor name" style={{ ...inputStyle, width: 160 }} />
 
         {/* Template picker */}
-        <div className="flex gap-1 glass rounded-lg p-1">
-          <button
-            onClick={() => setTemplate('executive_summary')}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${template === 'executive_summary' ? 'bg-blue-600/30 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-            title="Risk overview, key findings, no technical detail"
-          >
-            Executive Summary
-          </button>
-          <button
-            onClick={() => setTemplate('technical_detail')}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${template === 'technical_detail' ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-            title="All findings with evidence and remediation"
-          >
-            Technical Detail
-          </button>
-          <button
-            onClick={() => setTemplate('compliance_mapped')}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${template === 'compliance_mapped' ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-            title="Findings organized by NIST/CIS/PCI control"
-          >
-            Compliance Mapped
-          </button>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
+          {TEMPLATES.map(t => {
+            const isActive = template === t.key
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTemplate(t.key)}
+                title={t.title}
+                style={{ padding: '4px 10px', borderRadius: 3, fontSize: 11, fontWeight: isActive ? 600 : 400, cursor: 'pointer', background: isActive ? `${t.color}22` : 'none', color: isActive ? t.color : 'var(--fg-3)', border: isActive ? `1px solid ${t.color}40` : 'none', fontFamily: 'var(--font-sans)' }}
+              >
+                {t.label}
+              </button>
+            )
+          })}
         </div>
 
-        <div className="flex gap-2 ml-auto flex-wrap">
-          {/* AI Narrative */}
-          <div className="flex items-center gap-1 glass rounded-lg px-1">
-            <select
-              value={narrativeStyle}
-              onChange={e => setNarrativeStyle(e.target.value as 'executive' | 'technical')}
-              className="bg-transparent text-xs text-slate-400 focus:outline-none py-1 px-1 cursor-pointer"
-            >
+        {/* Action buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+          {/* AI Narrative controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '2px 6px' }}>
+            <select value={narrativeStyle} onChange={e => setNarrativeStyle(e.target.value as 'executive' | 'technical')} style={{ background: 'transparent', fontSize: 11, color: 'var(--fg-3)', border: 'none', outline: 'none', padding: '3px 4px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
               <option value="executive">Executive</option>
               <option value="technical">Technical</option>
             </select>
             <button
               onClick={handleGenerateNarrative}
               disabled={generatingNarrative || !selectedProject}
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-purple-300 hover:text-purple-200 disabled:opacity-50 transition-colors"
               title={hasNewFindings ? 'New findings since last narrative — regenerate' : 'Generate AI narrative using local LLM'}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: 'none', border: 'none', fontSize: 12, color: '#a855f7', cursor: generatingNarrative || !selectedProject ? 'not-allowed' : 'pointer', opacity: generatingNarrative || !selectedProject ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
             >
-              {generatingNarrative ? <Loader size={13} className="animate-spin" /> : <Brain size={13} />}
+              {generatingNarrative ? <Loader size={12} style={{ display: 'block' }} /> : <Brain size={12} />}
               AI Narrative
               {hasNewFindings && !generatingNarrative && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
-                </span>
+                <span style={{ position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: '50%', background: 'var(--crit)', boxShadow: '0 0 6px rgba(232,64,64,0.8)' }} />
               )}
             </button>
           </div>
 
-          <button
-            onClick={handlePreviewReport}
-            disabled={generating || !selectedProject}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50 transition-all"
-          >
-            {generating ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
-            Preview
+          <button onClick={handlePreviewReport} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+            <Icon name={generating ? 'refresh' : 'file'} size={13} color="currentColor" /> Preview
           </button>
-          <button
-            onClick={() => handleGenerateReport('html')}
-            disabled={generating || !selectedProject}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white transition-all hover:shadow-glow-blue"
-          >
-            <Download size={14} /> HTML
+          <button onClick={() => handleGenerateReport('html')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: '#60a5fa', color: 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+            <Icon name="download" size={13} color="currentColor" /> HTML
           </button>
-          <button
-            onClick={() => handleGenerateReport('markdown')}
-            disabled={generating || !selectedProject}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50 transition-all"
-          >
-            <Download size={14} /> Markdown
+          <button onClick={() => handleGenerateReport('markdown')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+            <Icon name="download" size={13} color="currentColor" /> Markdown
           </button>
-          <button
-            onClick={handleExportPDF}
-            disabled={generating || !selectedProject}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-red-300 hover:text-red-200 disabled:opacity-50 transition-all"
-            title="Export PDF (requires WeasyPrint)"
-          >
-            <FileDown size={14} /> PDF
+          <button onClick={handleExportPDF} disabled={generating || !selectedProject} title="Export PDF (requires WeasyPrint)" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--crit)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+            <Icon name="download" size={13} color="currentColor" /> PDF
           </button>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 glass rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('findings')}
-          className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'findings' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          Findings ({displayFindings.length}{template === 'executive_summary' ? `/${findings.length}` : ''})
-        </button>
-        <button
-          onClick={() => setActiveTab('report')}
-          className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'report' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          Report Preview
-        </button>
-        <button
-          onClick={() => setActiveTab('narrative')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'narrative' ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Brain size={13} /> AI Narrative
-        </button>
+      <div style={{ display: 'flex', gap: 0, borderBottom: rule }}>
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key
+          const tabColor = tab.key === 'narrative' ? '#a855f7' : 'var(--accent)'
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', fontSize: 12, fontWeight: isActive ? 600 : 400, background: 'none', border: 'none', cursor: 'pointer', color: isActive ? tabColor : 'var(--fg-3)', borderBottom: isActive ? `2px solid ${tabColor}` : '2px solid transparent', fontFamily: 'var(--font-sans)' }}
+            >
+              {tab.key === 'narrative' && <Brain size={11} />}
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Content */}
       {activeTab === 'findings' && (
-        <>
+        <div>
           {template === 'executive_summary' && findings.length > 0 && (
-            <div className="rounded-lg px-4 py-2.5 text-xs text-blue-300 border border-blue-700/30 flex items-center gap-2" style={{ background: 'rgba(37,99,235,0.08)' }}>
+            <div style={{ fontSize: 12, color: '#60a5fa', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 3, padding: '8px 12px', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
               Executive template active — showing {displayFindings.length} of {findings.length} findings (critical & high only)
             </div>
           )}
           <FindingsTable findings={displayFindings} loading={loading} />
-        </>
+        </div>
       )}
 
       {activeTab === 'report' && (
-        <div className="glass rounded-xl p-6">
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 20 }}>
           {reportPreview ? (
             <>
               {template === 'executive_summary' && (
-                <div className="mb-4 p-4 rounded-lg border border-blue-700/20" style={{ background: 'rgba(37,99,235,0.06)' }}>
-                  <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Executive Summary</p>
-                  <p className="text-xs text-slate-400">
-                    This report highlights <strong className="text-white">{displayFindings.length}</strong> critical and high severity findings
-                    out of <strong className="text-white">{findings.length}</strong> total. Immediate remediation is recommended for all items below.
+                <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 3, background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.15)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Executive Summary</p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}>
+                    This report highlights <strong style={{ color: 'var(--fg)' }}>{displayFindings.length}</strong> critical and high severity findings
+                    out of <strong style={{ color: 'var(--fg)' }}>{findings.length}</strong> total. Immediate remediation is recommended for all items below.
                   </p>
                 </div>
               )}
-              <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{reportPreview}</pre>
+              <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{reportPreview}</pre>
             </>
           ) : (
-            <div className="text-center text-slate-400 py-12">
-              <FileText size={40} className="mx-auto mb-3 opacity-30 text-cyan-600" />
-              <p>Click "Preview" to generate a report preview</p>
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--fg-3)' }}>
+              <Icon name="file" size={40} color="var(--rule-strong)" />
+              <p style={{ margin: '12px 0 0', fontSize: 13, fontFamily: 'var(--font-sans)' }}>Click "Preview" to generate a report preview</p>
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'narrative' && (
-        <div className="glass rounded-xl p-6 space-y-4">
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {narrativeError && (
-            <div className="rounded-lg px-4 py-3 text-sm text-red-300 border border-red-700/30" style={{ background: 'rgba(127,29,29,0.2)' }}>
+            <div style={{ fontSize: 12, color: 'var(--crit)', background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', borderRadius: 3, padding: '8px 12px', fontFamily: 'var(--font-sans)' }}>
               {narrativeError}
               {narrativeError.includes('model configured') && (
-                <span className="ml-2 text-red-400 underline cursor-pointer" onClick={() => window.location.hash = '#settings'}>
+                <span style={{ marginLeft: 8, color: 'var(--crit)', textDecoration: 'underline', cursor: 'pointer' }} onClick={() => window.location.hash = '#settings'}>
                   → Go to Settings → AI
                 </span>
               )}
@@ -457,42 +353,32 @@ export default function Reports() {
           )}
           {narrative ? (
             <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-purple-400">
-                  <Brain size={16} />
-                  <span className="text-sm font-medium capitalize">{narrativeStyle} Narrative</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#a855f7' }}>
+                  <Brain size={15} />
+                  <span style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize', fontFamily: 'var(--font-sans)' }}>{narrativeStyle} Narrative</span>
                   {narrativeSavedAt && (
-                    <span className="flex items-center gap-1 text-[11px] text-green-400 font-normal">
-                      <BookmarkCheck size={11} />
-                      Saved {new Date(narrativeSavedAt).toLocaleDateString()}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--ok)', fontFamily: 'var(--font-sans)' }}>
+                      <BookmarkCheck size={10} /> Saved {new Date(narrativeSavedAt).toLocaleDateString()}
                     </span>
                   )}
                 </div>
                 <button
                   onClick={() => navigator.clipboard.writeText(narrative)}
-                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2 py-1 glass rounded"
+                  style={{ fontSize: 11, color: 'var(--fg-3)', background: 'none', border: ruleStrong, borderRadius: 3, padding: '3px 10px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
                 >
                   Copy
                 </button>
               </div>
-              <div className="border-l-2 border-purple-700/40 pl-4 prose prose-invert prose-sm max-w-none
-                prose-headings:text-purple-200 prose-headings:font-semibold
-                prose-p:text-slate-300 prose-p:leading-relaxed
-                prose-strong:text-slate-100 prose-strong:font-semibold
-                prose-em:text-slate-300
-                prose-ul:text-slate-300 prose-ol:text-slate-300
-                prose-li:marker:text-purple-500
-                prose-code:text-purple-300 prose-code:bg-purple-950/40 prose-code:px-1 prose-code:rounded prose-code:text-xs
-                prose-blockquote:border-purple-600/50 prose-blockquote:text-slate-400
-                prose-hr:border-purple-900/40">
+              <div style={{ borderLeft: '2px solid rgba(168,85,247,0.4)', paddingLeft: 16 }} className="prose prose-invert prose-sm max-w-none prose-headings:text-purple-200 prose-headings:font-semibold prose-p:text-slate-300 prose-p:leading-relaxed prose-strong:text-slate-100 prose-ul:text-slate-300 prose-ol:text-slate-300 prose-li:marker:text-purple-500 prose-code:text-purple-300 prose-code:bg-purple-950/40 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-blockquote:border-purple-600/50 prose-blockquote:text-slate-400 prose-hr:border-purple-900/40">
                 <ReactMarkdown>{narrative}</ReactMarkdown>
               </div>
             </>
           ) : (
-            <div className="text-center text-slate-400 py-12">
-              <Brain size={40} className="mx-auto mb-3 opacity-30 text-purple-500" />
-              <p className="text-sm">Select a project and click "AI Narrative" to generate a narrative using your local LLM.</p>
-              <p className="text-xs mt-2 text-slate-500">Configure your LLM endpoint in Settings → AI</p>
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--fg-3)' }}>
+              <Brain size={40} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.3, color: '#a855f7' }} />
+              <p style={{ margin: '0 0 6px', fontSize: 13, fontFamily: 'var(--font-sans)' }}>Select a project and click "AI Narrative" to generate a narrative using your local LLM.</p>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Configure your LLM endpoint in Settings → AI</p>
             </div>
           )}
         </div>

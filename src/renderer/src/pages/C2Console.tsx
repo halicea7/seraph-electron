@@ -152,7 +152,7 @@ function SliverPanel() {
   const [protoIn, setProtoIn] = useState('mtls')
   const [startingListener, setStartingListener] = useState(false)
 
-  const inputCls = "bg-[#05080d] border border-cyan-900/30 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500/50 w-full"
+  const inputCls = "border border-[var(--rule-strong)] rounded px-2 py-1.5 text-xs focus:outline-none w-full"
 
   useEffect(() => {
     fetch(`${getApiBase()}/c2/sliver/status`).then(r => r.ok ? r.json() : null).then(d => d && setStatus(d))
@@ -1004,7 +1004,7 @@ export default function C2Console() {
     system_info: 'text-cyan-400 border-cyan-500/30 bg-cyan-950/20',
   }
 
-  const inputClass = "bg-[#05080d] border border-cyan-900/30 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 w-full"
+  const inputClass = "border border-[var(--rule-strong)] rounded px-3 py-2 text-sm focus:outline-none w-full"
 
   return (
     <div className="flex h-full gap-4 overflow-hidden">
@@ -1026,11 +1026,11 @@ export default function C2Console() {
 
           {msfStatus.connected ? (
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-[#05080d] rounded-lg p-2 text-center border border-cyan-900/20">
+              <div className="rounded p-2 text-center border border-[var(--rule-strong)]">
                 <div className="text-xl font-bold font-mono text-cyan-400">{msfStatus.sessions}</div>
                 <div className="text-[10px] text-slate-500">Sessions</div>
               </div>
-              <div className="bg-[#05080d] rounded-lg p-2 text-center border border-cyan-900/20">
+              <div className="rounded p-2 text-center border border-[var(--rule-strong)]">
                 <div className="text-xl font-bold font-mono text-amber-400">{msfStatus.jobs}</div>
                 <div className="text-[10px] text-slate-500">Jobs</div>
               </div>
@@ -1055,7 +1055,8 @@ export default function C2Console() {
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-sm text-white font-medium transition-all hover:shadow-glow-cyan"
+                className="w-full py-2 rounded disabled:opacity-50 text-sm font-medium transition-all"
+                style={{ background: 'var(--accent)', color: 'var(--bg)' }}
               >
                 {connecting ? 'Connecting...' : 'Connect to MSF'}
               </button>
@@ -1092,9 +1093,10 @@ export default function C2Console() {
               <div
                 key={s.id}
                 onClick={() => setActiveSession(s)}
-                className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-cyan-900/10 transition-colors ${
-                  activeSession?.id === s.id ? 'bg-cyan-900/10 border-l-2 border-l-cyan-500' : 'hover:bg-cyan-950/10'
+                className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b transition-colors ${
+                  activeSession?.id === s.id ? 'border-l-2' : 'hover:bg-[var(--bg-2)]'
                 }`}
+                style={activeSession?.id === s.id ? { borderLeftColor: 'var(--accent)', background: 'rgba(240,168,58,0.05)', borderBottomColor: 'var(--rule)' } : { borderBottomColor: 'var(--rule)' }}
               >
                 <TerminalIcon size={14} className={`mt-0.5 flex-shrink-0 ${s.status === 'active' && s.live ? 'text-green-400' : s.status === 'lost' ? 'text-red-400' : 'text-slate-600'}`} />
                 <div className="flex-1 min-w-0">

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  RefreshCw, CheckCircle, XCircle, Copy, Check,
-  Trash2, Package, Terminal, Brain, Wifi, WifiOff, Save, Loader,
-  Users, ShieldCheck, UserPlus, Eye, EyeOff, KeyRound,
-  Zap, Gauge, Palette, Monitor, FlaskConical, Download, X, Info, ExternalLink, Fingerprint,
+  CheckCircle, XCircle, Package, Brain, WifiOff, Save, Loader,
+  Users, ShieldCheck, UserPlus, Gauge, Palette, Monitor, FlaskConical, Info, ExternalLink,
 } from 'lucide-react'
+import Icon from '../components/Icon'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { getApiBase, getWsBase } from '@/lib/config'
@@ -341,6 +340,22 @@ interface AIStatus {
   endpoint: string
   model_count?: number
   error?: string
+}
+
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
+const FEATURE_STYLES: Record<string, { color: string; background: string; border: string }> = {
+  'Auto-Probe':         { color: 'var(--ok)',     background: 'rgba(84,175,97,0.1)',    border: '1px solid rgba(84,175,97,0.25)' },
+  'Tool Chains':        { color: '#60a5fa',       background: 'rgba(96,165,250,0.1)',   border: '1px solid rgba(96,165,250,0.25)' },
+  'Playbooks':          { color: '#a855f7',       background: 'rgba(168,85,247,0.1)',   border: '1px solid rgba(168,85,247,0.25)' },
+  'Hardening Module':   { color: '#f97316',       background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.25)' },
+  'Cracking Module':    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.1)',    border: '1px solid rgba(232,64,64,0.25)' },
+  'OSINT Module':       { color: '#22d3ee',       background: 'rgba(34,211,238,0.1)',   border: '1px solid rgba(34,211,238,0.25)' },
+  'Scan Templates':     { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.1)',  border: '1px solid rgba(100,116,139,0.2)' },
+  'Database':           { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.1)',  border: '1px solid rgba(100,116,139,0.2)' },
+  'Runtime Dependency': { color: 'var(--accent)', background: 'rgba(240,168,58,0.1)',   border: '1px solid rgba(240,168,58,0.25)' },
+  'Pentest Workbench':  { color: '#a855f7',       background: 'rgba(168,85,247,0.1)',   border: '1px solid rgba(168,85,247,0.25)' },
 }
 
 export default function Settings() {
@@ -945,221 +960,164 @@ export default function Settings() {
   })
   const bulkInstallCmd = getBulkInstallCmd(pkgMgrMissing, hostInfo)
 
+  const tabBtn = (value: typeof activeTab, label: string, icon?: JSX.Element, dot?: boolean) => (
+    <button
+      key={value}
+      onClick={() => setActiveTab(value)}
+      style={{
+        padding: '8px 14px', fontSize: 12, fontFamily: 'var(--font-sans)', background: 'none', border: 'none',
+        borderBottom: `2px solid ${activeTab === value ? 'var(--accent)' : 'transparent'}`,
+        marginBottom: -1, color: activeTab === value ? 'var(--accent)' : 'var(--fg-3)',
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+      }}
+    >
+      {icon}{label}
+      {dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ok)', boxShadow: '0 0 4px rgba(84,175,97,0.8)' }} />}
+    </button>
+  )
+
   return (
-    <div className="p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">Tool detection, scan profiles, and platform configuration</p>
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 0, background: 'var(--bg)', color: 'var(--fg)', minHeight: '100%' }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Settings</h1>
+        <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+          Tool detection, scan profiles, and platform configuration
+        </p>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 glass rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('tools')}
-          className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'tools' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          Tools ({available.length}/{Object.keys(toolStatus).length})
-        </button>
-        <button
-          onClick={() => setActiveTab('profiles')}
-          className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'profiles' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          Profiles ({profiles.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'ai' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Brain size={13} /> AI
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Users size={13} /> Users
-        </button>
-        <button
-          onClick={() => setActiveTab('autoprobe')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'autoprobe' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Zap size={13} /> Auto-Probe
-          {probeEnabled && <span className="w-1.5 h-1.5 rounded-full bg-green-400 ml-0.5" style={{ boxShadow: '0 0 4px rgba(34,197,94,0.8)' }} />}
-        </button>
-        <button
-          onClick={() => setActiveTab('appearance')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'appearance' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Palette size={13} /> Appearance
-        </button>
-        <button
-          onClick={() => setActiveTab('webhooks')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium transition-colors ${activeTab === 'webhooks' ? 'bg-blue-600 text-white shadow-glow-blue' : 'text-slate-400 hover:text-slate-200'}`}
-        >
-          <Zap size={13} /> Webhooks
-        </button>
+      <div style={{ display: 'flex', borderBottom: rule, marginBottom: 24 }}>
+        {tabBtn('tools',      `Tools (${available.length}/${Object.keys(toolStatus).length})`)}
+        {tabBtn('profiles',   `Profiles (${profiles.length})`)}
+        {tabBtn('ai',         'AI',          <Brain size={12} />)}
+        {tabBtn('users',      'Users',        <Users size={12} />)}
+        {tabBtn('autoprobe',  'Auto-Probe',   <Icon name="zap" size={12} color="currentColor" />, probeEnabled)}
+        {tabBtn('appearance', 'Appearance',   <Palette size={12} />)}
+        {tabBtn('webhooks',   'Webhooks',     <Icon name="zap" size={12} color="currentColor" />)}
       </div>
 
       {activeTab === 'tools' && (
-        <div className="space-y-6">
-          {/* Refresh */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <button
             onClick={loadTools}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 transition-all"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: loading ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', width: 'fit-content' }}
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin text-cyan-400' : ''} />
+            <Icon name="refresh" size={13} color={loading ? 'var(--accent)' : 'currentColor'} />
             {loading ? 'Detecting...' : 'Refresh Tool Detection'}
           </button>
 
-          {/* Quick Install Banner */}
           {missing.length > 0 && (
-            <div className="rounded-xl p-5 space-y-4 border border-amber-700/30" style={{ background: 'rgba(120,53,15,0.15)' }}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Package size={16} className="text-amber-400" />
-                <h3 className="text-sm font-semibold text-amber-300">{missing.length} tools not installed</h3>
+            <div style={{ background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.25)', borderRadius: 4, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Package size={14} color="var(--accent)" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>{missing.length} tools not installed</span>
                 {hostInfo && (
-                  <span className="ml-auto text-xs text-slate-500 font-mono px-2 py-0.5 rounded border border-slate-700/40" style={{ background: '#0d1520' }}>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 3, background: 'var(--bg-2)', border: ruleStrong }}>
                     {hostInfo.distro_name} · {PKG_MANAGER_LABELS[mgr] || mgr}
                   </span>
                 )}
               </div>
-
               {bulkInstallCmd && (
                 <div>
-                  <div className="text-xs text-slate-400 mb-2">
+                  <div style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', marginBottom: 6 }}>
                     Install all {pkgMgrMissing.length} missing tools at once:
                   </div>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 rounded px-3 py-2 text-xs font-mono text-slate-300 overflow-x-auto border border-cyan-900/20" style={{ background: '#05080d' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <code style={{ flex: 1, background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {bulkInstallCmd}
                     </code>
                     <button
                       onClick={() => copyText(bulkInstallCmd, 'bulk-all')}
-                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded text-xs text-amber-300 transition-colors border border-amber-700/30 hover:border-amber-600/50"
-                      style={{ background: 'rgba(120,53,15,0.3)' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', color: 'var(--accent)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer', flexShrink: 0 }}
                     >
-                      {copied === 'bulk-all' ? <Check size={12} /> : <Copy size={12} />}
+                      <Icon name={copied === 'bulk-all' ? 'check' : 'copy'} size={11} color="currentColor" />
                       {copied === 'bulk-all' ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
                 </div>
               )}
-
               {goRuntimeMissing && blockedByGo.length > 0 && (
-                <div className="rounded-lg p-3 space-y-2 border border-amber-700/40" style={{ background: 'rgba(120,53,15,0.2)' }}>
-                  <div className="text-xs text-amber-300 font-medium">
+                <div style={{ background: 'rgba(240,168,58,0.05)', border: '1px solid rgba(240,168,58,0.2)', borderRadius: 3, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
                     Go Runtime required for: {blockedByGo.map(([n]) => toolStatus[n]?.label || n).join(', ')}
                   </div>
                   <button
                     onClick={() => startInstall('go')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-amber-600/20 text-amber-300 border border-amber-600/30 hover:bg-amber-600/30 transition-colors"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', color: 'var(--accent)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer', width: 'fit-content' }}
                   >
-                    <Download size={11} /> Install Go Runtime
+                    <Icon name="download" size={11} color="currentColor" /> Install Go Runtime
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Tool Grid */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-300 mb-3">
+            <div style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', marginBottom: 10 }}>
               All Tools — {available.length} available, {missing.length} missing
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {Object.entries(toolStatus).map(([name, info]) => {
                 const isGoRuntime = name === 'go'
                 const needsGo = !isGoRuntime && !info.available && info.install_hint?.startsWith('go install')
                 const goMissing = needsGo && toolStatus['go'] && !toolStatus['go'].available
+                const leftBorder = info.available ? '3px solid var(--ok)' : isGoRuntime ? '3px solid var(--accent)' : '3px solid var(--crit)'
                 return (
-                <div
-                  key={name}
-                  className={`glass glass-hover rounded-xl p-4 border-l-4 transition-all ${
-                    info.available ? 'border-l-green-500' : isGoRuntime ? 'border-l-amber-400' : 'border-l-red-500'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    {info.available
-                      ? <CheckCircle size={16} className="text-green-500 flex-shrink-0" style={{ filter: 'drop-shadow(0 0 4px rgba(34,197,94,0.5))' }} />
-                      : <XCircle size={16} className={`flex-shrink-0 ${isGoRuntime ? 'text-amber-400' : 'text-red-500'}`} style={{ filter: isGoRuntime ? 'drop-shadow(0 0 4px rgba(251,191,36,0.5))' : 'drop-shadow(0 0 4px rgba(239,68,68,0.5))' }} />
-                    }
-                    <span className="font-mono text-sm font-semibold text-slate-200">{info.label || name}</span>
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {isGoRuntime && !info.available && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400 border border-amber-700/30">runtime</span>
-                      )}
-                      {TOOL_INFO[name] && (
-                        <button
-                          onClick={() => setInfoTool(name)}
-                          className="text-slate-500 hover:text-cyan-400 transition-colors"
-                          title="About this tool"
-                        >
-                          <Info size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {info.available ? (
-                    <div className="space-y-1">
-                      {isGoRuntime && (
-                        <div className="text-xs text-slate-500">Required by subfinder, ffuf, gobuster</div>
-                      )}
-                      {info.path && (
-                        <div className="text-xs font-mono text-slate-400 truncate">{info.path}</div>
-                      )}
-                      {info.version && (
-                        <div className="text-xs text-slate-500 truncate">{info.version.slice(0, 60)}</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {isGoRuntime
-                        ? <div className="text-xs text-amber-400">Required by subfinder, ffuf, gobuster</div>
-                        : <div className="text-xs text-red-400">Not installed</div>
+                  <div key={name} style={{ background: 'var(--bg-2)', border: ruleStrong, borderLeft: leftBorder, borderRadius: 4, padding: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      {info.available
+                        ? <CheckCircle size={14} color="var(--ok)" style={{ flexShrink: 0 }} />
+                        : <XCircle size={14} color={isGoRuntime ? 'var(--accent)' : 'var(--crit)'} style={{ flexShrink: 0 }} />
                       }
-                      {goMissing && (
-                        <div className="text-xs text-amber-400/80">⚠ Install Go Runtime first</div>
-                      )}
-                      {info.install_hint && !goMissing && (
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 text-xs font-mono text-slate-400 truncate" title={info.install_hint}>
-                            {info.install_hint}
-                          </code>
-                          <button
-                            onClick={() => copyText(info.install_hint!, `tool-${name}`)}
-                            className="flex-shrink-0 text-slate-500 hover:text-slate-300"
-                          >
-                            {copied === `tool-${name}` ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                          </button>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {!goMissing && (
-                          <button
-                            onClick={() => startInstall(name)}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs border transition-colors ${
-                              isGoRuntime
-                                ? 'bg-amber-600/15 text-amber-400 border-amber-600/25 hover:bg-amber-600/25'
-                                : 'bg-cyan-600/15 text-cyan-400 border-cyan-600/25 hover:bg-cyan-600/25'
-                            }`}
-                          >
-                            <Download size={11} /> Install
-                          </button>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--fg)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label || name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        {isGoRuntime && !info.available && (
+                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', fontFamily: 'var(--font-sans)' }}>runtime</span>
                         )}
-                        {info.url && (
-                          <a
-                            href={info.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-slate-500 hover:text-cyan-400 underline transition-colors"
-                          >
-                            Instructions ↗
-                          </a>
+                        {TOOL_INFO[name] && (
+                          <button onClick={() => setInfoTool(name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }} title="About this tool">
+                            <Info size={13} />
+                          </button>
                         )}
                       </div>
                     </div>
-                  )}
-                </div>
+                    {info.available ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {isGoRuntime && <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Required by subfinder, ffuf, gobuster</div>}
+                        {info.path && <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.path}</div>}
+                        {info.version && <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.version.slice(0, 60)}</div>}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {isGoRuntime
+                          ? <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>Required by subfinder, ffuf, gobuster</div>
+                          : <div style={{ fontSize: 10, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>Not installed</div>
+                        }
+                        {goMissing && <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>⚠ Install Go Runtime first</div>}
+                        {info.install_hint && !goMissing && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <code style={{ flex: 1, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={info.install_hint}>{info.install_hint}</code>
+                            <button onClick={() => copyText(info.install_hint!, `tool-${name}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied === `tool-${name}` ? 'var(--ok)' : 'var(--fg-3)', padding: 0, flexShrink: 0, display: 'flex' }}>
+                              <Icon name={copied === `tool-${name}` ? 'check' : 'copy'} size={11} color="currentColor" />
+                            </button>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {!goMissing && (
+                            <button onClick={() => startInstall(name)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 3, background: isGoRuntime ? 'rgba(240,168,58,0.1)' : 'rgba(96,165,250,0.1)', color: isGoRuntime ? 'var(--accent)' : '#60a5fa', border: isGoRuntime ? '1px solid rgba(240,168,58,0.3)' : '1px solid rgba(96,165,250,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}>
+                              <Icon name="download" size={10} color="currentColor" /> Install
+                            </button>
+                          )}
+                          {info.url && (
+                            <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textDecoration: 'underline' }}>
+                              Instructions ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -1168,98 +1126,90 @@ export default function Settings() {
       )}
 
       {activeTab === 'autoprobe' && (
-        <div className="space-y-6 max-w-2xl">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
           {probeLoading ? (
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg-3)', fontSize: 13, fontFamily: 'var(--font-sans)' }}>
               <Loader size={14} className="animate-spin" /> Loading...
             </div>
           ) : (
             <>
-              <p className="text-sm text-slate-400">
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
                 When enabled, Seraph automatically runs a lightweight recon against any newly added target.
                 Results appear in the target's scan history within minutes.
               </p>
 
-              {/* Master toggle */}
-              <div className="glass rounded-xl p-5 flex items-center justify-between">
+              <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <Zap size={15} className={probeEnabled ? 'text-green-400' : 'text-slate-500'} />
-                    <span className="text-sm font-semibold text-slate-200">Auto-Probe</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${probeEnabled ? 'text-green-300 border border-green-700/40' : 'text-slate-500 border border-slate-700/40'}`}
-                      style={{ background: probeEnabled ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.1)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Icon name="zap" size={14} color={probeEnabled ? 'var(--ok)' : 'var(--fg-3)'} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Auto-Probe</span>
+                    <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', color: probeEnabled ? 'var(--ok)' : 'var(--fg-3)', background: probeEnabled ? 'rgba(84,175,97,0.1)' : 'rgba(100,116,139,0.1)', border: probeEnabled ? '1px solid rgba(84,175,97,0.3)' : '1px solid rgba(100,116,139,0.2)' }}>
                       {probeEnabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Fires automatically on every new target</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Fires automatically on every new target</p>
                 </div>
                 <button
                   onClick={() => setProbeEnabled(v => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${probeEnabled ? 'bg-green-500' : 'bg-slate-700'}`}
+                  style={{ position: 'relative', width: 44, height: 24, borderRadius: 12, background: probeEnabled ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer', flexShrink: 0 }}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${probeEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  <span style={{ position: 'absolute', top: 3, left: probeEnabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
                 </button>
               </div>
 
-              {/* Tool selection */}
-              <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tools to Run</label>
-                <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 8 }}>Tools to Run</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
-                    { name: 'whois',        label: 'whois',        desc: 'Domain registration & ASN info',                          always: true  },
-                    { name: 'rustscan',     label: 'rustscan',     desc: 'Full 65k port scan — feeds open ports to nmap (faster)',   always: false },
-                    { name: 'nmap',         label: 'nmap',         desc: 'Service & version detection',                             always: true  },
-                    { name: 'nikto',        label: 'nikto',        desc: 'Web server scan (port 80/443)',                           always: false },
-                    { name: 'testssl',      label: 'testssl',      desc: 'TLS/SSL audit (port 443)',                                always: false },
-                    { name: 'nuclei',       label: 'nuclei',       desc: 'Template-based vuln scan (port 80/443/8080)',             always: false },
-                    { name: 'feroxbuster',  label: 'feroxbuster',  desc: 'Directory fuzzing (port 80/8080)',                        always: false },
-                    { name: 'searchsploit', label: 'searchsploit', desc: 'Exploit-DB lookup (runs last)',                          always: false },
+                    { name: 'whois',        label: 'whois',        desc: 'Domain registration & ASN info',                         always: true  },
+                    { name: 'rustscan',     label: 'rustscan',     desc: 'Full 65k port scan — feeds open ports to nmap (faster)', always: false },
+                    { name: 'nmap',         label: 'nmap',         desc: 'Service & version detection',                            always: true  },
+                    { name: 'nikto',        label: 'nikto',        desc: 'Web server scan (port 80/443)',                          always: false },
+                    { name: 'testssl',      label: 'testssl',      desc: 'TLS/SSL audit (port 443)',                               always: false },
+                    { name: 'nuclei',       label: 'nuclei',       desc: 'Template-based vuln scan (port 80/443/8080)',            always: false },
+                    { name: 'feroxbuster',  label: 'feroxbuster',  desc: 'Directory fuzzing (port 80/8080)',                       always: false },
+                    { name: 'searchsploit', label: 'searchsploit', desc: 'Exploit-DB lookup (runs last)',                         always: false },
                   ].map(tool => {
                     const checked = probeTools.includes(tool.name)
-                    const available = Object.keys(toolStatus).includes(tool.name) ? toolStatus[tool.name]?.available : null
+                    const toolAvail = Object.keys(toolStatus).includes(tool.name) ? toolStatus[tool.name]?.available : null
                     return (
                       <button
                         key={tool.name}
                         onClick={() => toggleProbeTool(tool.name)}
-                        className={`text-left rounded-xl p-4 border transition-all ${checked ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-cyan-900/20 glass'}`}
+                        style={{ textAlign: 'left', borderRadius: 4, padding: 10, border: checked ? '1px solid rgba(240,168,58,0.35)' : ruleStrong, background: checked ? 'rgba(240,168,58,0.06)' : 'var(--bg-2)', cursor: 'pointer' }}
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${checked ? 'bg-cyan-500 border-cyan-500' : 'border-slate-600'}`}>
-                            {checked && <Check size={10} className="text-white" />}
-                          </div>
-                          <span className="font-mono text-sm font-semibold text-slate-200">{tool.label}</span>
-                          {available === false && (
-                            <span className="text-[10px] text-red-400">not installed</span>
-                          )}
-                          {!tool.always && (
-                            <span className="text-[10px] text-slate-500 ml-auto">conditional</span>
-                          )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                          <span style={{ width: 14, height: 14, borderRadius: 3, border: checked ? 'none' : ruleStrong, background: checked ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {checked && <Icon name="check" size={9} color="var(--bg)" />}
+                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--fg)' }}>{tool.label}</span>
+                          {toolAvail === false && <span style={{ fontSize: 10, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>not installed</span>}
+                          {!tool.always && <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', marginLeft: 'auto' }}>conditional</span>}
                         </div>
-                        <p className="text-xs text-slate-500 pl-6">{tool.desc}</p>
+                        <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', paddingLeft: 20 }}>{tool.desc}</p>
                       </button>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Intensity */}
-              <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Gauge size={12} /> Intensity
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                  <Gauge size={11} /> Intensity
                 </label>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: 8 }}>
                   {([
-                    { value: 'quick', label: 'Quick', desc: '2 min · serial (low noise)' },
+                    { value: 'quick',    label: 'Quick',    desc: '2 min · serial (low noise)' },
                     { value: 'standard', label: 'Standard', desc: '5 min · 2 tools parallel' },
-                    { value: 'deep', label: 'Deep', desc: '10 min · fully parallel' },
+                    { value: 'deep',     label: 'Deep',     desc: '10 min · fully parallel' },
                   ] as const).map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => setProbeIntensity(opt.value)}
-                      className={`flex-1 rounded-xl px-3 py-3 text-center border transition-all ${probeIntensity === opt.value ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-cyan-900/20 glass'}`}
+                      style={{ flex: 1, borderRadius: 4, padding: '10px 12px', textAlign: 'center', border: probeIntensity === opt.value ? '1px solid rgba(240,168,58,0.35)' : ruleStrong, background: probeIntensity === opt.value ? 'rgba(240,168,58,0.08)' : 'var(--bg-2)', cursor: 'pointer' }}
                     >
-                      <div className={`text-sm font-semibold ${probeIntensity === opt.value ? 'text-cyan-300' : 'text-slate-300'}`}>{opt.label}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: probeIntensity === opt.value ? 'var(--accent)' : 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', marginTop: 2 }}>{opt.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -1268,9 +1218,9 @@ export default function Settings() {
               <button
                 onClick={saveProbeConfig}
                 disabled={probeSaving}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-all hover:shadow-glow-blue"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: probeSaving ? 'default' : 'pointer', opacity: probeSaving ? 0.7 : 1, width: 'fit-content' }}
               >
-                {probeSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+                {probeSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
                 Save Auto-Probe Settings
               </button>
             </>
@@ -1279,245 +1229,185 @@ export default function Settings() {
       )}
 
       {activeTab === 'ai' && (
-        <div className="space-y-6 max-w-2xl">
-          <p className="text-sm text-slate-400">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
             Connect Seraph to a local LLM (Ollama or LMStudio) for AI-generated report narratives.
             Both expose an OpenAI-compatible API — no internet or API key required.
           </p>
 
-          {/* Provider presets */}
-          <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Provider Preset</label>
-            <div className="flex gap-2">
+          <div>
+            <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Provider Preset</label>
+            <div style={{ display: 'flex', gap: 6 }}>
               {[
-                { label: 'Ollama', value: 'ollama', url: 'http://localhost:11434' },
+                { label: 'Ollama',   value: 'ollama',   url: 'http://localhost:11434' },
                 { label: 'LMStudio', value: 'lmstudio', url: 'http://localhost:1234' },
-                { label: 'Custom', value: 'custom', url: '' },
+                { label: 'Custom',   value: 'custom',   url: '' },
               ].map(p => (
-                <button
-                  key={p.value}
+                <button key={p.value}
                   onClick={() => setAiConfig(c => ({ ...c, provider: p.value, ...(p.url ? { endpoint: p.url } : {}) }))}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    aiConfig.provider === p.value
-                      ? 'border-cyan-500/60 text-cyan-300 bg-cyan-500/10'
-                      : 'border-cyan-900/20 text-slate-400 hover:text-slate-200 glass'
-                  }`}
-                >
-                  {p.label}
-                </button>
+                  style={{ padding: '5px 14px', borderRadius: 3, fontSize: 12, fontFamily: 'var(--font-sans)', cursor: 'pointer', background: aiConfig.provider === p.value ? 'rgba(240,168,58,0.1)' : 'none', color: aiConfig.provider === p.value ? 'var(--accent)' : 'var(--fg-3)', border: aiConfig.provider === p.value ? '1px solid rgba(240,168,58,0.35)' : ruleStrong }}
+                >{p.label}</button>
               ))}
             </div>
           </div>
 
-          {/* Endpoint URL */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">API Endpoint</label>
-            <input
-              type="text"
-              value={aiConfig.endpoint}
+          <div>
+            <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>API Endpoint</label>
+            <input type="text" value={aiConfig.endpoint}
               onChange={e => setAiConfig(c => ({ ...c, endpoint: e.target.value, provider: 'custom' }))}
               placeholder="http://localhost:11434"
-              className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
-              style={{ background: '#090d14' }}
+              style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
             />
-            <p className="text-xs text-slate-500">Ollama: port 11434 · LMStudio: port 1234 · Both expose /v1/models and /v1/chat/completions</p>
+            <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Ollama: port 11434 · LMStudio: port 1234 · Both expose /v1/models and /v1/chat/completions</p>
           </div>
 
-          {/* Connection test + status */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={testAiConnection}
-              disabled={aiTesting}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50 transition-all"
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={testAiConnection} disabled={aiTesting}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: aiTesting ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', opacity: aiTesting ? 0.7 : 1 }}
             >
-              {aiTesting ? <Loader size={14} className="animate-spin text-cyan-400" /> : <Wifi size={14} />}
+              {aiTesting ? <Loader size={13} className="animate-spin" color="var(--accent)" /> : <Icon name="wifi" size={13} color="currentColor" />}
               Test Connection
             </button>
             {aiStatus && (
-              <div className={`flex items-center gap-2 text-sm ${aiStatus.online ? 'text-green-400' : 'text-red-400'}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: aiStatus.online ? 'var(--ok)' : 'var(--crit)', fontFamily: 'var(--font-sans)' }}>
                 {aiStatus.online
-                  ? <><CheckCircle size={14} /> Connected · {aiStatus.model_count} model{aiStatus.model_count !== 1 ? 's' : ''} available</>
-                  : <><WifiOff size={14} /> Offline — {aiStatus.error}</>
+                  ? <><CheckCircle size={13} /> Connected · {aiStatus.model_count} model{aiStatus.model_count !== 1 ? 's' : ''} available</>
+                  : <><WifiOff size={13} /> Offline — {aiStatus.error}</>
                 }
               </div>
             )}
           </div>
 
-          {/* Model selector */}
-          {aiModels.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model</label>
-              <select
-                value={aiConfig.model}
-                onChange={e => setAiConfig(c => ({ ...c, model: e.target.value }))}
-                className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                style={{ background: '#090d14' }}
+          {aiModels.length > 0 ? (
+            <div>
+              <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Model</label>
+              <select value={aiConfig.model} onChange={e => setAiConfig(c => ({ ...c, model: e.target.value }))}
+                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%' }}
               >
                 <option value="">Select a model...</option>
                 {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-          )}
-
-          {/* Manual model input (when models not loaded yet) */}
-          {aiModels.length === 0 && (
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Name</label>
-              <input
-                type="text"
-                value={aiConfig.model}
-                onChange={e => setAiConfig(c => ({ ...c, model: e.target.value }))}
+          ) : (
+            <div>
+              <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Model Name</label>
+              <input type="text" value={aiConfig.model} onChange={e => setAiConfig(c => ({ ...c, model: e.target.value }))}
                 placeholder="e.g. llama3.2, mistral, deepseek-r1:8b"
-                className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
-                style={{ background: '#090d14' }}
+                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
               />
-              <p className="text-xs text-slate-500">Click "Test Connection" to auto-populate models from the endpoint.</p>
+              <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Click "Test Connection" to auto-populate models from the endpoint.</p>
             </div>
           )}
 
-          {/* Generation parameters */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Generation Parameters</label>
-              <span className="text-xs text-slate-500">Leave blank to use model defaults</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Generation Parameters</label>
+              <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Leave blank to use model defaults</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {([
-                { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.01, placeholder: 'e.g. 1.0' },
-                { key: 'top_p', label: 'Top P', min: 0, max: 1, step: 0.01, placeholder: 'e.g. 0.95' },
-                { key: 'top_k', label: 'Top K', min: 0, max: 200, step: 1, placeholder: 'e.g. 20' },
-                { key: 'min_p', label: 'Min P', min: 0, max: 1, step: 0.01, placeholder: 'e.g. 0.0' },
-                { key: 'presence_penalty', label: 'Presence Penalty', min: -2, max: 2, step: 0.1, placeholder: 'e.g. 1.5' },
-                { key: 'repetition_penalty', label: 'Repetition Penalty', min: 0.1, max: 2, step: 0.01, placeholder: 'e.g. 1.0' },
-                { key: 'timeout', label: 'Timeout (seconds)', min: 30, max: 1800, step: 30, placeholder: 'default: 300' },
+                { key: 'temperature',        label: 'Temperature',          min: 0,   max: 2,    step: 0.01, placeholder: 'e.g. 1.0' },
+                { key: 'top_p',              label: 'Top P',                min: 0,   max: 1,    step: 0.01, placeholder: 'e.g. 0.95' },
+                { key: 'top_k',              label: 'Top K',                min: 0,   max: 200,  step: 1,    placeholder: 'e.g. 20' },
+                { key: 'min_p',              label: 'Min P',                min: 0,   max: 1,    step: 0.01, placeholder: 'e.g. 0.0' },
+                { key: 'presence_penalty',   label: 'Presence Penalty',     min: -2,  max: 2,    step: 0.1,  placeholder: 'e.g. 1.5' },
+                { key: 'repetition_penalty', label: 'Repetition Penalty',   min: 0.1, max: 2,    step: 0.01, placeholder: 'e.g. 1.0' },
+                { key: 'timeout',            label: 'Timeout (seconds)',    min: 30,  max: 1800,  step: 30,   placeholder: 'default: 300' },
               ] as { key: keyof AIConfig; label: string; min: number; max: number; step: number; placeholder: string }[]).map(({ key, label, min, max, step, placeholder }) => (
-                <div key={key} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-400">{label}</label>
+                <div key={key}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{label}</label>
                     {aiConfig[key] !== null && (
-                      <button
-                        onClick={() => setAiConfig(c => ({ ...c, [key]: null }))}
-                        className="text-[10px] text-slate-500 hover:text-red-400 transition-colors"
-                      >reset</button>
+                      <button onClick={() => setAiConfig(c => ({ ...c, [key]: null }))} style={{ fontSize: 10, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>reset</button>
                     )}
                   </div>
-                  <input
-                    type="number"
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={aiConfig[key] ?? ''}
+                  <input type="number" min={min} max={max} step={step} value={aiConfig[key] ?? ''} placeholder={placeholder}
                     onChange={e => setAiConfig(c => ({ ...c, [key]: e.target.value === '' ? null : Number(e.target.value) }))}
-                    placeholder={placeholder}
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
-                    style={{ background: '#090d14' }}
+                    style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Save */}
-          <button
-            onClick={saveAiConfig}
-            disabled={aiSaving}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-all hover:shadow-glow-blue"
+          <button onClick={saveAiConfig} disabled={aiSaving}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: aiSaving ? 'default' : 'pointer', opacity: aiSaving ? 0.7 : 1, width: 'fit-content' }}
           >
-            {aiSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+            {aiSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
             Save AI Settings
           </button>
 
-          {/* ── Local Ollama ─────────────────────────────────────────────────── */}
-          <div className="border-t border-cyan-900/20 pt-6 space-y-5">
-            <div className="flex items-center justify-between">
+          <div style={{ borderTop: rule, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
               <div>
-                <h3 className="text-sm font-semibold text-slate-200">Local Ollama (this machine)</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Use Ollama running on your laptop instead of the server. Narratives are generated
-                  locally — no data leaves your machine.
+                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Local Ollama (this machine)</h3>
+                <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                  Use Ollama running on your laptop instead of the server. Narratives are generated locally — no data leaves your machine.
                 </p>
               </div>
-              {/* Toggle */}
               <button
                 onClick={() => setLocalOllamaSettings(s => ({ ...s, useLocalOllama: !s.useLocalOllama }))}
-                className={`relative w-11 h-6 rounded-full transition-colors ${localOllamaSettings.useLocalOllama ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                style={{ position: 'relative', width: 44, height: 24, borderRadius: 12, background: localOllamaSettings.useLocalOllama ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer', flexShrink: 0 }}
               >
-                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${localOllamaSettings.useLocalOllama ? 'translate-x-5' : 'translate-x-0'}`} />
+                <span style={{ position: 'absolute', top: 3, left: localOllamaSettings.useLocalOllama ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
               </button>
             </div>
 
             {localOllamaSettings.useLocalOllama && (
-              <div className="space-y-4 pl-0">
-                {/* URL */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ollama URL</label>
-                  <input
-                    type="text"
-                    value={localOllamaSettings.localOllamaUrl}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Ollama URL</label>
+                  <input type="text" value={localOllamaSettings.localOllamaUrl}
                     onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaUrl: e.target.value }))}
                     placeholder="http://localhost:11434"
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
-                    style={{ background: '#090d14' }}
+                    style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
-
-                {/* Test + status */}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={testLocalOllama}
-                    disabled={localOllamaTesting}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50 transition-all"
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={testLocalOllama} disabled={localOllamaTesting}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: localOllamaTesting ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', opacity: localOllamaTesting ? 0.7 : 1 }}
                   >
-                    {localOllamaTesting ? <Loader size={14} className="animate-spin text-cyan-400" /> : <Wifi size={14} />}
+                    {localOllamaTesting ? <Loader size={13} className="animate-spin" /> : <Icon name="wifi" size={13} color="currentColor" />}
                     Test Connection
                   </button>
                   {localOllamaStatus && (
-                    <div className={`flex items-center gap-2 text-sm ${localOllamaStatus.online ? 'text-green-400' : 'text-red-400'}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: localOllamaStatus.online ? 'var(--ok)' : 'var(--crit)', fontFamily: 'var(--font-sans)' }}>
                       {localOllamaStatus.online
-                        ? <><CheckCircle size={14} /> Connected · {localOllamaModels.length} model{localOllamaModels.length !== 1 ? 's' : ''} available</>
-                        : <><WifiOff size={14} /> Offline — {localOllamaStatus.error}</>
+                        ? <><CheckCircle size={13} /> Connected · {localOllamaModels.length} model{localOllamaModels.length !== 1 ? 's' : ''} available</>
+                        : <><WifiOff size={13} /> Offline — {localOllamaStatus.error}</>
                       }
                     </div>
                   )}
                 </div>
-
-                {/* Model selector */}
                 {localOllamaModels.length > 0 ? (
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model</label>
-                    <select
-                      value={localOllamaSettings.localOllamaModel}
+                  <div>
+                    <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Model</label>
+                    <select value={localOllamaSettings.localOllamaModel}
                       onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaModel: e.target.value }))}
-                      className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                      style={{ background: '#090d14' }}
+                      style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%' }}
                     >
                       <option value="">Select a model...</option>
                       {localOllamaModels.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Name</label>
-                    <input
-                      type="text"
-                      value={localOllamaSettings.localOllamaModel}
+                  <div>
+                    <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Model Name</label>
+                    <input type="text" value={localOllamaSettings.localOllamaModel}
                       onChange={e => setLocalOllamaSettings(s => ({ ...s, localOllamaModel: e.target.value }))}
                       placeholder="e.g. llama3.2, mistral, deepseek-r1:8b"
-                      className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none font-mono"
-                      style={{ background: '#090d14' }}
+                      style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                     />
-                    <p className="text-xs text-slate-500">Click "Test Connection" to auto-populate from your local Ollama instance.</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Click "Test Connection" to auto-populate from your local Ollama instance.</p>
                   </div>
                 )}
               </div>
             )}
 
-            <button
-              onClick={saveLocalOllamaSettings}
-              disabled={localOllamaSaving}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-all hover:shadow-glow-blue"
+            <button onClick={saveLocalOllamaSettings} disabled={localOllamaSaving}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: localOllamaSaving ? 'default' : 'pointer', opacity: localOllamaSaving ? 0.7 : 1, width: 'fit-content' }}
             >
-              {localOllamaSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              {localOllamaSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
               Save Local Ollama Settings
             </button>
           </div>
@@ -1525,369 +1415,212 @@ export default function Settings() {
       )}
 
       {activeTab === 'users' && (
-        <div className="space-y-8 max-w-2xl">
-          {/* Edit own profile */}
-          <div className="glass rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-slate-300">
-              <UserPlus size={15} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold">My Profile</h3>
-              <span className="text-xs text-slate-500 font-mono ml-1">@{currentUser?.username}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+          {/* My Profile */}
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <UserPlus size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>My Profile</span>
+              <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>@{currentUser?.username}</span>
             </div>
-            <form onSubmit={handleUpdateProfile} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">First Name</label>
-                  <input
-                    type="text"
-                    value={profileFirstName}
-                    onChange={e => setProfileFirstName(e.target.value)}
-                    placeholder="Jane"
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                    style={{ background: '#090d14' }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Last Name</label>
-                  <input
-                    type="text"
-                    value={profileLastName}
-                    onChange={e => setProfileLastName(e.target.value)}
-                    placeholder="Doe"
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                    style={{ background: '#090d14' }}
-                  />
-                </div>
+            <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>First Name</label>
+                  <input type="text" value={profileFirstName} onChange={e => setProfileFirstName(e.target.value)} placeholder="Jane" style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Last Name</label>
+                  <input type="text" value={profileLastName} onChange={e => setProfileLastName(e.target.value)} placeholder="Doe" style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
               </div>
-              {profileError && <p className="text-xs text-red-400">{profileError}</p>}
-              {profileOk && <p className="text-xs text-green-400">Profile updated.</p>}
-              <button
-                type="submit"
-                disabled={profileSaving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50"
-              >
-                {profileSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
-                Save Profile
+              {profileError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{profileError}</p>}
+              {profileOk && <p style={{ margin: 0, fontSize: 11, color: 'var(--ok)', fontFamily: 'var(--font-sans)' }}>Profile updated.</p>}
+              <button type="submit" disabled={profileSaving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: profileSaving ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', opacity: profileSaving ? 0.7 : 1, width: 'fit-content' }}>
+                {profileSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save Profile
               </button>
             </form>
           </div>
 
-          {/* Change own password */}
-          <div className="glass rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-slate-300">
-              <KeyRound size={15} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold">Change Password</h3>
+          {/* Change Password */}
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Icon name="key" size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Change Password</span>
             </div>
-            <form onSubmit={handleChangePassword} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Current password</label>
-                  <input
-                    type="password"
-                    value={curPw}
-                    onChange={e => setCurPw(e.target.value)}
-                    required
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                    style={{ background: '#090d14' }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">New password (min 8)</label>
-                  <input
-                    type="password"
-                    value={newPw}
-                    onChange={e => setNewPw(e.target.value)}
-                    required
-                    className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                    style={{ background: '#090d14' }}
-                  />
-                </div>
+            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Current password</label>
+                  <input type="password" value={curPw} onChange={e => setCurPw(e.target.value)} required style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>New password (min 8)</label>
+                  <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
               </div>
-              {pwError && <p className="text-xs text-red-400">{pwError}</p>}
-              {pwOk && <p className="text-xs text-green-400">Password changed successfully.</p>}
-              <button
-                type="submit"
-                disabled={pwSaving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50"
-              >
-                {pwSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />}
-                Update Password
+              {pwError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{pwError}</p>}
+              {pwOk && <p style={{ margin: 0, fontSize: 11, color: 'var(--ok)', fontFamily: 'var(--font-sans)' }}>Password changed successfully.</p>}
+              <button type="submit" disabled={pwSaving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: pwSaving ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', opacity: pwSaving ? 0.7 : 1, width: 'fit-content' }}>
+                {pwSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Update Password
               </button>
             </form>
           </div>
 
           {/* Passkeys */}
-          <div className="glass rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-slate-300">
-              <Fingerprint size={15} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold">Passkeys</h3>
-              <span className="text-xs text-slate-500 ml-auto">iCloud Keychain, Touch ID, Face ID, YubiKey…</span>
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Icon name="fingerprint" size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Passkeys</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>iCloud Keychain, Touch ID, Face ID, YubiKey…</span>
             </div>
-
-            {/* Registered passkeys list */}
             {passkeys.length > 0 && (
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                 {passkeys.map(pk => (
-                  <div key={pk.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-cyan-900/15" style={{ background: '#0d1520' }}>
-                    <Fingerprint size={14} className="text-cyan-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm text-slate-200">{pk.name}</span>
-                      <span className="ml-2 text-xs text-slate-500">added {new Date(pk.created_at).toLocaleDateString()}</span>
+                  <div key={pk.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--bg)', border: ruleStrong, borderRadius: 3 }}>
+                    <Icon name="fingerprint" size={13} color="var(--accent)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{pk.name}</span>
+                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>added {new Date(pk.created_at).toLocaleDateString()}</span>
                     </div>
-                    <button
-                      onClick={() => handleDeletePasskey(pk.id)}
-                      className="text-slate-600 hover:text-red-400 transition-colors"
-                      title="Remove passkey"
-                    >
-                      <Trash2 size={13} />
+                    <button onClick={() => handleDeletePasskey(pk.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }} title="Remove passkey">
+                      <Icon name="trash" size={13} color="currentColor" />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-
-            {/* Register new passkey */}
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400">Passkey name (optional)</label>
-                <input
-                  type="text"
-                  value={newPasskeyName}
-                  onChange={e => setNewPasskeyName(e.target.value)}
-                  placeholder="iCloud Keychain"
-                  className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                  style={{ background: '#090d14' }}
-                />
-              </div>
-              {passkeyError && <p className="text-xs text-red-400">{passkeyError}</p>}
-              <button
-                type="button"
-                onClick={handleRegisterPasskey}
-                disabled={passkeyRegLoading}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg glass glass-hover text-sm text-slate-300 disabled:opacity-50"
-              >
-                {passkeyRegLoading ? <Loader size={13} className="animate-spin" /> : <Fingerprint size={13} />}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Passkey name (optional)</label>
+                <input type="text" value={newPasskeyName} onChange={e => setNewPasskeyName(e.target.value)} placeholder="iCloud Keychain" style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+              {passkeyError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{passkeyError}</p>}
+              <button type="button" onClick={handleRegisterPasskey} disabled={passkeyRegLoading} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: passkeyRegLoading ? 'default' : 'pointer', fontFamily: 'var(--font-sans)', opacity: passkeyRegLoading ? 0.7 : 1, width: 'fit-content' }}>
+                {passkeyRegLoading ? <Loader size={13} className="animate-spin" /> : <Icon name="fingerprint" size={13} color="currentColor" />}
                 {passkeys.length > 0 ? 'Add Another Passkey' : 'Register Passkey'}
               </button>
             </div>
           </div>
 
           {/* API Tokens */}
-          <div className="glass rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-slate-300">
-              <KeyRound size={15} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold">API Tokens</h3>
-              <span className="ml-auto text-xs text-slate-500">For Chronos and other clients</span>
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Icon name="key" size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>API Tokens</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>For Chronos and other clients</span>
             </div>
-
-            {/* Revealed token — shown once after generation */}
             {revealedToken && (
-              <div className="rounded-lg p-3 space-y-2 border border-amber-700/40" style={{ background: 'rgba(120,53,15,0.2)' }}>
-                <p className="text-xs text-amber-400 font-medium">Copy this token now — it won't be shown again.</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs text-slate-200 font-mono break-all select-all">{revealedToken}</code>
-                  <button
-                    onClick={handleCopyToken}
-                    className="shrink-0 p-1.5 rounded text-slate-400 hover:text-cyan-400 transition-colors"
-                    title="Copy"
-                  >
-                    {tokenCopied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+              <div style={{ background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.3)', borderRadius: 3, padding: 10, marginBottom: 10 }}>
+                <p style={{ margin: '0 0 6px', fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-sans)', fontWeight: 600 }}>Copy this token now — it won't be shown again.</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <code style={{ flex: 1, fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{revealedToken}</code>
+                  <button onClick={handleCopyToken} style={{ background: 'none', border: 'none', cursor: 'pointer', color: tokenCopied ? 'var(--ok)' : 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }} title="Copy">
+                    <Icon name={tokenCopied ? 'check' : 'copy'} size={13} color="currentColor" />
                   </button>
-                  <button
-                    onClick={() => setRevealedToken(null)}
-                    className="shrink-0 p-1.5 rounded text-slate-400 hover:text-slate-200 transition-colors"
-                    title="Dismiss"
-                  >
-                    <X size={13} />
+                  <button onClick={() => setRevealedToken(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }} title="Dismiss">
+                    <Icon name="x" size={13} color="currentColor" />
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Existing tokens */}
             {apiTokens.length > 0 && (
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
                 {apiTokens.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-200 font-medium truncate">{t.name}</p>
-                      <p className="text-xs text-slate-500 font-mono">
-                        srph_{t.prefix}…
-                        {t.last_used_at
-                          ? <span className="ml-2 not-italic">last used {new Date(t.last_used_at).toLocaleDateString()}</span>
-                          : <span className="ml-2 not-italic">never used</span>
-                        }
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: 'var(--bg)', border: ruleStrong, borderRadius: 3 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                        srph_{t.prefix}… {t.last_used_at ? `· last used ${new Date(t.last_used_at).toLocaleDateString()}` : '· never used'}
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleRevokeToken(t.id)}
-                      className="shrink-0 text-slate-600 hover:text-red-400 transition-colors"
-                      title="Revoke token"
-                    >
-                      <Trash2 size={13} />
+                    <button onClick={() => handleRevokeToken(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }} title="Revoke token">
+                      <Icon name="trash" size={13} color="currentColor" />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-
-            {/* Generate new token */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTokenName}
-                onChange={e => setNewTokenName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleGenerateToken()}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" value={newTokenName} onChange={e => setNewTokenName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGenerateToken()}
                 placeholder='Token name (e.g. "Chronos — Laptop")'
-                className="flex-1 rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                style={{ background: '#090d14' }}
+                style={{ flex: 1, background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none' }}
               />
-              <button
-                onClick={handleGenerateToken}
-                disabled={tokenGenerating || !newTokenName.trim()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-all"
-                style={{ background: 'linear-gradient(135deg,#0891b2,#0e7490)', boxShadow: '0 0 12px rgba(6,182,212,0.2)' }}
+              <button onClick={handleGenerateToken} disabled={tokenGenerating || !newTokenName.trim()}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: (tokenGenerating || !newTokenName.trim()) ? 'default' : 'pointer', opacity: (tokenGenerating || !newTokenName.trim()) ? 0.5 : 1, flexShrink: 0 }}
               >
-                {tokenGenerating ? <Loader size={13} className="animate-spin" /> : <KeyRound size={13} />}
-                Generate
+                {tokenGenerating ? <Loader size={13} className="animate-spin" /> : <Icon name="key" size={13} color="currentColor" />} Generate
               </button>
             </div>
-
             {apiTokens.length === 0 && !revealedToken && (
-              <p className="text-xs text-slate-600 text-center">No tokens yet. Generate one to connect Chronos.</p>
+              <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textAlign: 'center' }}>No tokens yet. Generate one to connect Chronos.</p>
             )}
           </div>
 
           {/* User management (admin only) */}
           {currentUser?.role === 'admin' ? (
             <>
-              {/* Create user */}
-              <div className="glass rounded-xl p-5 space-y-4">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <UserPlus size={15} className="text-cyan-400" />
-                  <h3 className="text-sm font-semibold">Create User</h3>
+              <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <UserPlus size={14} color="var(--accent)" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Create User</span>
                 </div>
-                <form onSubmit={handleCreateUser} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400">First Name</label>
-                      <input
-                        type="text"
-                        value={newFirstName}
-                        onChange={e => setNewFirstName(e.target.value)}
-                        required
-                        placeholder="Jane"
-                        className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                        style={{ background: '#090d14' }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Last Name</label>
-                      <input
-                        type="text"
-                        value={newLastName}
-                        onChange={e => setNewLastName(e.target.value)}
-                        required
-                        placeholder="Doe"
-                        className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                        style={{ background: '#090d14' }}
-                      />
-                    </div>
+                <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>First Name</label>
+                      <input type="text" value={newFirstName} onChange={e => setNewFirstName(e.target.value)} required placeholder="Jane" style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+                    <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Last Name</label>
+                      <input type="text" value={newLastName} onChange={e => setNewLastName(e.target.value)} required placeholder="Doe" style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Username</label>
-                      <input
-                        type="text"
-                        value={newUsername}
-                        onChange={e => setNewUsername(e.target.value)}
-                        required
-                        className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                        style={{ background: '#090d14' }}
-                      />
-                    </div>
-                    <div className="space-y-1 relative">
-                      <label className="text-xs text-slate-400">Password</label>
-                      <input
-                        type={showNewPw ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        required
-                        className="w-full rounded-lg px-3 py-2 pr-8 text-sm text-slate-200 border border-cyan-900/20 focus:border-cyan-500/50 focus:outline-none"
-                        style={{ background: '#090d14' }}
-                      />
-                      <button type="button" onClick={() => setShowNewPw(v => !v)}
-                        className="absolute right-2 top-7 text-slate-500 hover:text-slate-300">
-                        {showNewPw ? <EyeOff size={12} /> : <Eye size={12} />}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Username</label>
+                      <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} required style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Password</label>
+                      <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} required style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 28px 6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                      <button type="button" onClick={() => setShowNewPw(v => !v)} style={{ position: 'absolute', right: 6, top: 26, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
+                        <Icon name={showNewPw ? 'eye_off' : 'eye'} size={12} color="currentColor" />
                       </button>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Role</label>
-                      <select
-                        value={newRole}
-                        onChange={e => setNewRole(e.target.value as 'admin' | 'analyst')}
-                        className="w-full rounded-lg px-3 py-2 text-sm text-slate-200 border border-cyan-900/20 focus:outline-none"
-                        style={{ background: '#090d14' }}
-                      >
+                    <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Role</label>
+                      <select value={newRole} onChange={e => setNewRole(e.target.value as 'admin' | 'analyst')} style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%' }}>
                         <option value="analyst">Analyst</option>
                         <option value="admin">Admin</option>
-                      </select>
-                    </div>
+                      </select></div>
                   </div>
-                  {userError && <p className="text-xs text-red-400">{userError}</p>}
-                  <button
-                    type="submit"
-                    disabled={userSaving}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white transition-all"
-                  >
-                    {userSaving ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                    Create User
+                  {userError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{userError}</p>}
+                  <button type="submit" disabled={userSaving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: userSaving ? 'default' : 'pointer', opacity: userSaving ? 0.7 : 1, width: 'fit-content' }}>
+                    {userSaving ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />} Create User
                   </button>
                 </form>
               </div>
 
-              {/* User list */}
-              <div className="glass rounded-xl p-5 space-y-3">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Users size={15} className="text-cyan-400" />
-                  <h3 className="text-sm font-semibold">All Users ({userList.length})</h3>
+              <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Users size={14} color="var(--accent)" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>All Users ({userList.length})</span>
                 </div>
-                {userList.map(u => (
-                  <div key={u.id} className="flex items-center gap-3 px-4 py-3 rounded-lg border border-cyan-900/10" style={{ background: '#0d1520' }}>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)' }}>
-                      <span className="text-xs font-bold text-cyan-400">{(u.full_name || u.username)[0].toUpperCase()}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-200">{u.full_name || u.username}</span>
-                        {u.full_name && <span className="text-xs text-slate-500 font-mono">@{u.username}</span>}
-                        {u.id === currentUser?.id && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded text-cyan-400 border border-cyan-500/30" style={{ background: 'rgba(6,182,212,0.1)' }}>you</span>
-                        )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {userList.map(u => (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg)', border: ruleStrong, borderRadius: 3 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.2)' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{(u.full_name || u.username)[0].toUpperCase()}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize ${u.role === 'admin' ? 'text-amber-400 border border-amber-500/30' : 'text-slate-400 border border-slate-600/30'}`}
-                          style={{ background: u.role === 'admin' ? 'rgba(245,158,11,0.1)' : 'rgba(100,116,139,0.1)' }}>
-                          <ShieldCheck size={9} className="inline mr-0.5" />{u.role}
-                        </span>
-                        <span className="text-[10px] text-slate-500">joined {new Date(u.created_at).toLocaleDateString()}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{u.full_name || u.username}</span>
+                          {u.full_name && <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>@{u.username}</span>}
+                          {u.id === currentUser?.id && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, color: 'var(--accent)', background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.25)', fontFamily: 'var(--font-sans)' }}>you</span>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, textTransform: 'capitalize', fontFamily: 'var(--font-sans)', color: u.role === 'admin' ? 'var(--accent)' : 'var(--fg-3)', background: u.role === 'admin' ? 'rgba(240,168,58,0.1)' : 'rgba(100,116,139,0.1)', border: u.role === 'admin' ? '1px solid rgba(240,168,58,0.25)' : '1px solid rgba(100,116,139,0.2)' }}>
+                            <ShieldCheck size={9} style={{ display: 'inline', marginRight: 2 }} />{u.role}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>joined {new Date(u.created_at).toLocaleDateString()}</span>
+                        </div>
                       </div>
+                      {u.id !== currentUser?.id && (
+                        <button onClick={() => handleDeleteUser(u.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }} title="Delete user">
+                          <Icon name="trash" size={14} color="currentColor" />
+                        </button>
+                      )}
                     </div>
-                    {u.id !== currentUser?.id && (
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </>
           ) : (
-            <div className="text-sm text-slate-400 glass rounded-xl p-5">
+            <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16, fontSize: 13, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
               User management is only available to administrators.
             </div>
           )}
@@ -1895,42 +1628,36 @@ export default function Settings() {
       )}
 
       {activeTab === 'profiles' && (
-        <div className="space-y-4">
-          <p className="text-sm text-slate-400">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
             Scan profiles save your preferred audit configurations for quick reuse in the Audit Builder.
           </p>
           {profiles.length === 0 ? (
-            <div className="text-center text-slate-400 py-12 glass rounded-xl">
-              <Terminal size={36} className="mx-auto mb-3 opacity-30 text-cyan-500" />
-              <p className="text-sm">No saved profiles yet.</p>
-              <p className="text-xs mt-1 text-slate-500">Generate a script in Audit Builder and save the configuration as a profile.</p>
+            <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '48px 24px', textAlign: 'center' }}>
+              <Icon name="terminal" size={36} color="var(--rule-strong)" />
+              <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>No saved profiles yet.</p>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Generate a script in Audit Builder and save the configuration as a profile.</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {profiles.map(profile => {
                 let cats: any[] = []
                 try { cats = JSON.parse(profile.scan_categories) } catch {}
                 return (
-                  <div key={profile.id} className="glass glass-hover rounded-xl p-4 flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-slate-200">{profile.name}</div>
-                      {profile.description && (
-                        <div className="text-xs text-slate-400 mt-0.5">{profile.description}</div>
-                      )}
-                      <div className="flex gap-1 mt-2 flex-wrap">
+                  <div key={profile.id} style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{profile.name}</div>
+                      {profile.description && <div style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', marginTop: 2 }}>{profile.description}</div>}
+                      <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
                         {cats.map((c: any) => (
-                          <span key={c.category_id} className="text-xs px-2 py-0.5 rounded text-slate-400 border border-cyan-900/20" style={{ background: '#0d1520' }}>
+                          <span key={c.category_id} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 3, color: 'var(--fg-3)', border: ruleStrong, background: 'var(--bg)', fontFamily: 'var(--font-sans)' }}>
                             {c.category_id?.replace(/_/g, ' ')}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <button
-                      onClick={() => deleteProfile(profile.id)}
-                      className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
-                      title="Delete profile"
-                    >
-                      <Trash2 size={16} />
+                    <button onClick={() => deleteProfile(profile.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }} title="Delete profile">
+                      <Icon name="trash" size={15} color="currentColor" />
                     </button>
                   </div>
                 )
@@ -1939,169 +1666,112 @@ export default function Settings() {
           )}
         </div>
       )}
-      {/* ── Appearance ─────────────────────────────────────────────────── */}
       {activeTab === 'appearance' && (
-        <div className="space-y-6 max-w-2xl">
-          <div className="glass rounded-xl p-6 space-y-5">
-            <div className="flex items-center gap-2">
-              <Monitor size={16} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold text-white">Color Theme</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Monitor size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Color Theme</span>
             </div>
-            <p className="text-xs text-slate-400">
-              Choose a visual theme for the platform. Functional colors (severity indicators, status badges, terminal output) are preserved in both themes.
+            <p style={{ margin: '0 0 14px', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+              Choose a visual theme. Functional colors (severity, status, terminal) are preserved in all themes.
             </p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {/* Cyber Blue */}
-              <button
-                onClick={() => setTheme('blue')}
-                className={`rounded-xl border-2 overflow-hidden text-left transition-all ${
-                  theme === 'blue'
-                    ? 'border-cyan-500/70 shadow-glow-cyan'
-                    : 'border-slate-700/40 hover:border-slate-600/60'
-                }`}
-              >
-                {/* Mini preview */}
-                <div className="h-28 relative" style={{ background: '#05080d' }}>
-                  {/* Dot grid */}
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: 'radial-gradient(rgba(6,182,212,0.06) 1px, transparent 1px)',
-                    backgroundSize: '12px 12px',
-                  }} />
-                  {/* Sidebar strip */}
-                  <div className="absolute left-0 top-0 bottom-0 w-10" style={{ background: '#090d14', borderRight: '1px solid rgba(6,182,212,0.15)' }}>
-                    {[0,1,2,3].map(i => (
-                      <div key={i} className="mx-1.5 my-1 h-1.5 rounded" style={{ background: i === 0 ? 'rgba(6,182,212,0.4)' : 'rgba(148,163,184,0.15)' }} />
-                    ))}
+              <button onClick={() => setTheme('blue')} style={{ borderRadius: 4, border: theme === 'blue' ? '2px solid var(--accent)' : ruleStrong, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', background: 'none', padding: 0 }}>
+                <div style={{ height: 96, position: 'relative', background: '#05080d' }}>
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(6,182,212,0.06) 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 36, background: '#090d14', borderRight: '1px solid rgba(6,182,212,0.15)' }}>
+                    {[0,1,2,3].map(i => <div key={i} style={{ margin: '5px 5px', height: 5, borderRadius: 2, background: i === 0 ? 'rgba(6,182,212,0.4)' : 'rgba(148,163,184,0.15)' }} />)}
                   </div>
-                  {/* Cards */}
-                  <div className="absolute left-12 top-2 right-2 space-y-1.5">
-                    <div className="h-5 rounded" style={{ background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)' }} />
-                    <div className="flex gap-1">
-                      <div className="flex-1 h-12 rounded" style={{ background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)' }}>
-                        <div className="h-1.5 w-1/2 m-1.5 rounded" style={{ background: '#06b6d4', opacity: 0.5 }} />
+                  <div style={{ position: 'absolute', left: 44, top: 6, right: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <div style={{ height: 16, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)' }} />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)', padding: 5 }}>
+                        <div style={{ height: 5, width: '50%', borderRadius: 2, background: '#06b6d4', opacity: 0.5 }} />
                       </div>
-                      <div className="flex-1 h-12 rounded" style={{ background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)' }}>
-                        <div className="h-1.5 w-1/3 m-1.5 rounded" style={{ background: '#3b82f6', opacity: 0.5 }} />
+                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)', padding: 5 }}>
+                        <div style={{ height: 5, width: '33%', borderRadius: 2, background: '#3b82f6', opacity: 0.5 }} />
                       </div>
                     </div>
                   </div>
                 </div>
-                {/* Label */}
-                <div className={`px-4 py-3 flex items-center justify-between ${theme === 'blue' ? 'bg-cyan-950/30' : ''}`} style={{ background: '#090d14' }}>
+                <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090d14' }}>
                   <div>
-                    <div className="text-sm font-semibold text-white">Cyber Blue</div>
-                    <div className="text-[10px] text-slate-400">Cyan + dark blue accents</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', fontFamily: 'var(--font-sans)' }}>Cyber Blue</div>
+                    <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'var(--font-sans)' }}>Cyan + dark blue accents</div>
                   </div>
-                  {theme === 'blue' && <CheckCircle size={16} className="text-cyan-400 shrink-0" />}
+                  {theme === 'blue' && <CheckCircle size={14} color="#22d3ee" />}
                 </div>
               </button>
 
               {/* Monochrome */}
-              <button
-                onClick={() => setTheme('mono')}
-                className={`rounded-xl border-2 overflow-hidden text-left transition-all ${
-                  theme === 'mono'
-                    ? 'border-white/30 shadow-[0_0_12px_rgba(255,255,255,0.08)]'
-                    : 'border-slate-700/40 hover:border-slate-600/60'
-                }`}
-              >
-                {/* Mini preview */}
-                <div className="h-28 relative" style={{ background: '#080808' }}>
-                  {/* Dot grid */}
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: 'radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)',
-                    backgroundSize: '12px 12px',
-                  }} />
-                  {/* Sidebar strip */}
-                  <div className="absolute left-0 top-0 bottom-0 w-10" style={{ background: '#111', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-                    {[0,1,2,3].map(i => (
-                      <div key={i} className="mx-1.5 my-1 h-1.5 rounded" style={{ background: i === 0 ? 'rgba(212,212,216,0.6)' : 'rgba(148,163,184,0.12)' }} />
-                    ))}
+              <button onClick={() => setTheme('mono')} style={{ borderRadius: 4, border: theme === 'mono' ? '2px solid rgba(255,255,255,0.4)' : ruleStrong, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', background: 'none', padding: 0 }}>
+                <div style={{ height: 96, position: 'relative', background: '#080808' }}>
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 36, background: '#111', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+                    {[0,1,2,3].map(i => <div key={i} style={{ margin: '5px 5px', height: 5, borderRadius: 2, background: i === 0 ? 'rgba(212,212,216,0.6)' : 'rgba(148,163,184,0.12)' }} />)}
                   </div>
-                  {/* Cards */}
-                  <div className="absolute left-12 top-2 right-2 space-y-1.5">
-                    <div className="h-5 rounded" style={{ background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)' }} />
-                    <div className="flex gap-1">
-                      <div className="flex-1 h-12 rounded" style={{ background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                        <div className="h-1.5 w-1/2 m-1.5 rounded" style={{ background: '#d4d4d8', opacity: 0.4 }} />
+                  <div style={{ position: 'absolute', left: 44, top: 6, right: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <div style={{ height: 16, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)' }} />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)', padding: 5 }}>
+                        <div style={{ height: 5, width: '50%', borderRadius: 2, background: '#d4d4d8', opacity: 0.4 }} />
                       </div>
-                      <div className="flex-1 h-12 rounded" style={{ background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                        <div className="h-1.5 w-1/3 m-1.5 rounded" style={{ background: '#a1a1aa', opacity: 0.4 }} />
+                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)', padding: 5 }}>
+                        <div style={{ height: 5, width: '33%', borderRadius: 2, background: '#a1a1aa', opacity: 0.4 }} />
                       </div>
                     </div>
                   </div>
-                  {/* Functional color dots (kept in mono) */}
-                  <div className="absolute bottom-2 right-2 flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                    <div className="w-2 h-2 rounded-full bg-amber-400" />
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
+                  <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} />
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fbbf24' }} />
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />
                   </div>
                 </div>
-                {/* Label */}
-                <div className={`px-4 py-3 flex items-center justify-between`} style={{ background: '#111' }}>
+                <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111' }}>
                   <div>
-                    <div className="text-sm font-semibold text-white">Monochrome</div>
-                    <div className="text-[10px] text-slate-400">Black, white, and gray — status colors preserved</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', fontFamily: 'var(--font-sans)' }}>Monochrome</div>
+                    <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'var(--font-sans)' }}>Black, white, gray — status colors preserved</div>
                   </div>
-                  {theme === 'mono' && <CheckCircle size={16} className="text-white shrink-0" />}
+                  {theme === 'mono' && <CheckCircle size={14} color="#d4d4d8" />}
                 </div>
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-500">
-              Theme preference is saved locally. Green, amber, red, and orange are always kept — they indicate severity and status across the platform.
+            <p style={{ margin: '10px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+              Theme saved locally. Green, amber, red, and orange always indicate severity and status.
             </p>
           </div>
 
-          {/* Demo Mode — admin only */}
           {currentUser?.role === 'admin' && (
-            <div className="glass rounded-xl p-6 space-y-4 border border-amber-700/20">
-              <div className="flex items-center gap-2">
-                <FlaskConical size={16} className="text-amber-400" />
-                <h3 className="text-sm font-semibold text-white">Demo Data</h3>
-                <span className="text-[10px] px-1.5 py-0.5 rounded text-amber-400 border border-amber-500/30 ml-1" style={{ background: 'rgba(245,158,11,0.1)' }}>
-                  Admin only
-                </span>
+            <div style={{ background: 'var(--bg-2)', border: '1px solid rgba(240,168,58,0.2)', borderRadius: 4, padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <FlaskConical size={14} color="var(--accent)" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Demo Data</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, color: 'var(--accent)', background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.25)', fontFamily: 'var(--font-sans)' }}>Admin only</span>
               </div>
-              <p className="text-xs text-slate-400">
-                Populate the platform with three realistic demo projects — an external pentest, a web application audit, and an internal network assessment — complete with targets, scan findings, credentials, and vulnerability records. Turning this off removes all demo data cleanly.
+              <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                Populate the platform with three realistic demo projects — external pentest, web app audit, and internal network assessment — with targets, findings, credentials, and vulnerabilities. Turning off removes all demo data cleanly.
               </p>
-
-              {demoError && (
-                <p className="text-xs text-red-400">{demoError}</p>
-              )}
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              {demoError && <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{demoError}</p>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
                   {demoActive ? (
-                    <span className="flex items-center gap-1.5 text-xs text-amber-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" style={{ boxShadow: '0 0 6px rgba(245,158,11,0.8)' }} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px rgba(240,168,58,0.8)' }} />
                       Demo mode active — 3 projects seeded
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-500">Demo mode off</span>
+                    <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Demo mode off</span>
                   )}
                 </div>
-
-                <button
-                  onClick={handleDemoToggle}
-                  disabled={demoLoading}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                    demoActive
-                      ? 'border border-red-700/40 text-red-400 hover:bg-red-900/20'
-                      : 'border border-amber-700/40 text-amber-400 hover:bg-amber-900/20'
-                  }`}
-                  style={{ background: demoActive ? 'rgba(127,29,29,0.15)' : 'rgba(120,53,15,0.15)' }}
+                <button onClick={handleDemoToggle} disabled={demoLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 3, fontSize: 12, fontFamily: 'var(--font-sans)', cursor: demoLoading ? 'default' : 'pointer', opacity: demoLoading ? 0.7 : 1, background: demoActive ? 'rgba(232,64,64,0.08)' : 'rgba(240,168,58,0.08)', color: demoActive ? 'var(--crit)' : 'var(--accent)', border: demoActive ? '1px solid rgba(232,64,64,0.3)' : '1px solid rgba(240,168,58,0.3)' }}
                 >
-                  {demoLoading
-                    ? <Loader size={13} className="animate-spin" />
-                    : <FlaskConical size={13} />
-                  }
-                  {demoLoading
-                    ? demoActive ? 'Clearing...' : 'Seeding...'
-                    : demoActive ? 'Clear Demo Data' : 'Load Demo Data'
-                  }
+                  {demoLoading ? <Loader size={13} className="animate-spin" /> : <FlaskConical size={13} />}
+                  {demoLoading ? (demoActive ? 'Clearing...' : 'Seeding...') : (demoActive ? 'Clear Demo Data' : 'Load Demo Data')}
                 </button>
               </div>
             </div>
@@ -2109,113 +1779,74 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ── Webhooks ────────────────────────────────────────────────────── */}
       {activeTab === 'webhooks' && (
-        <div className="space-y-6 max-w-2xl">
-          {/* Add webhook form */}
-          <div className="glass rounded-xl p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Zap size={15} className="text-cyan-400" /> Add Webhook
-            </h3>
-            <p className="text-xs text-slate-400">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <Icon name="zap" size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Add Webhook</span>
+            </div>
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
               Send HTTP POST notifications to Slack, Discord, or any custom endpoint when events occur.
             </p>
-            {webhookError && <p className="text-xs text-red-400">{webhookError}</p>}
-            <form onSubmit={handleCreateWebhook} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Name</label>
-                  <input
-                    className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
-                    placeholder="Slack alerts"
-                    value={webhookForm.name}
-                    onChange={e => setWebhookForm(f => ({ ...f, name: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">URL</label>
-                  <input
-                    className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
-                    placeholder="https://hooks.slack.com/..."
-                    value={webhookForm.url}
-                    onChange={e => setWebhookForm(f => ({ ...f, url: e.target.value }))}
-                  />
-                </div>
+            {webhookError && <p style={{ margin: '0 0 8px', fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{webhookError}</p>}
+            <form onSubmit={handleCreateWebhook} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>Name</label>
+                  <input placeholder="Slack alerts" value={webhookForm.name} onChange={e => setWebhookForm(f => ({ ...f, name: e.target.value }))} style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
+                <div><label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 4 }}>URL</label>
+                  <input placeholder="https://hooks.slack.com/..." value={webhookForm.url} onChange={e => setWebhookForm(f => ({ ...f, url: e.target.value }))} style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none', width: '100%', boxSizing: 'border-box' }} /></div>
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-2">Events</label>
-                <div className="flex gap-2">
-                  {(['critical', 'warning', 'info', 'all'] as const).map(ev => (
-                    <button
-                      key={ev}
-                      type="button"
-                      onClick={() => toggleWebhookEvent(ev)}
-                      className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
-                        webhookForm.events.includes(ev)
-                          ? ev === 'critical' ? 'bg-red-900/40 border-red-500/50 text-red-300'
-                          : ev === 'warning'  ? 'bg-amber-900/40 border-amber-500/50 text-amber-300'
-                          : ev === 'info'     ? 'bg-blue-900/40 border-blue-500/50 text-blue-300'
-                          : 'bg-cyan-900/40 border-cyan-500/50 text-cyan-300'
-                          : 'bg-transparent border-slate-700/40 text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      {ev}
-                    </button>
-                  ))}
+                <label style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'block', marginBottom: 6 }}>Events</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['critical', 'warning', 'info', 'all'] as const).map(ev => {
+                    const on = webhookForm.events.includes(ev)
+                    const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? '#60a5fa' : '#22d3ee'
+                    return (
+                      <button key={ev} type="button" onClick={() => toggleWebhookEvent(ev)}
+                        style={{ padding: '3px 10px', borderRadius: 3, fontSize: 11, fontFamily: 'var(--font-sans)', textTransform: 'capitalize', cursor: 'pointer', background: on ? `${col}18` : 'none', color: on ? col : 'var(--fg-3)', border: on ? `1px solid ${col}55` : ruleStrong }}
+                      >{ev}</button>
+                    )
+                  })}
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={webhookSaving}
-                className="px-4 py-2 rounded-lg bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 text-sm hover:bg-cyan-600/30 transition-colors disabled:opacity-50"
+              <button type="submit" disabled={webhookSaving}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: webhookSaving ? 'default' : 'pointer', opacity: webhookSaving ? 0.7 : 1, width: 'fit-content' }}
               >
                 {webhookSaving ? 'Saving...' : 'Add Webhook'}
               </button>
             </form>
           </div>
 
-          {/* Existing webhooks */}
           {webhooks.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">No webhooks configured.</p>
+            <p style={{ textAlign: 'center', padding: '24px 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>No webhooks configured.</p>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {webhooks.map(wh => (
-                <div key={wh.id} className="glass rounded-xl p-4 flex items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-white truncate">{wh.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${wh.active ? 'text-green-400 border-green-500/30 bg-green-900/20' : 'text-slate-500 border-slate-600/30'}`}>
-                        {wh.active ? 'active' : 'paused'}
-                      </span>
+                <div key={wh.id} style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wh.name}</span>
+                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-sans)', color: wh.active ? 'var(--ok)' : 'var(--fg-3)', background: wh.active ? 'rgba(84,175,97,0.08)' : 'rgba(100,116,139,0.08)', border: wh.active ? '1px solid rgba(84,175,97,0.3)' : '1px solid rgba(100,116,139,0.2)' }}>{wh.active ? 'active' : 'paused'}</span>
                     </div>
-                    <p className="text-xs text-slate-500 truncate font-mono">{wh.url}</p>
-                    <div className="flex gap-1 mt-1.5">
-                      {wh.events.map(ev => (
-                        <span key={ev} className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                          ev === 'critical' ? 'text-red-400 border-red-500/30 bg-red-900/20'
-                          : ev === 'warning' ? 'text-amber-400 border-amber-500/30 bg-amber-900/20'
-                          : ev === 'info'    ? 'text-blue-400 border-blue-500/30 bg-blue-900/20'
-                          : 'text-cyan-400 border-cyan-500/30 bg-cyan-900/20'
-                        }`}>{ev}</span>
-                      ))}
+                    <p style={{ margin: '0 0 6px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wh.url}</p>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {wh.events.map(ev => {
+                        const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? '#60a5fa' : '#22d3ee'
+                        return <span key={ev} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-sans)', color: col, background: `${col}18`, border: `1px solid ${col}55` }}>{ev}</span>
+                      })}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleTestWebhook(wh.id)}
-                      disabled={webhookTestId === wh.id}
-                      className="px-2 py-1 rounded text-xs border border-slate-700/40 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-colors disabled:opacity-50"
-                    >
-                      {webhookTestId === wh.id ? '✓ Sent' : 'Test'}
-                    </button>
-                    <button
-                      onClick={() => handleToggleWebhook(wh.id, !wh.active)}
-                      className="px-2 py-1 rounded text-xs border border-slate-700/40 text-slate-400 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
-                    >
-                      {wh.active ? 'Pause' : 'Resume'}
-                    </button>
-                    <button onClick={() => handleDeleteWebhook(wh.id)} className="text-slate-600 hover:text-red-400 transition-colors p-1">
-                      <Trash2 size={14} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => handleTestWebhook(wh.id)} disabled={webhookTestId === wh.id}
+                      style={{ padding: '4px 8px', borderRadius: 3, fontSize: 11, fontFamily: 'var(--font-sans)', border: ruleStrong, background: 'none', color: webhookTestId === wh.id ? 'var(--ok)' : 'var(--fg-3)', cursor: webhookTestId === wh.id ? 'default' : 'pointer' }}
+                    >{webhookTestId === wh.id ? '✓ Sent' : 'Test'}</button>
+                    <button onClick={() => handleToggleWebhook(wh.id, !wh.active)}
+                      style={{ padding: '4px 8px', borderRadius: 3, fontSize: 11, fontFamily: 'var(--font-sans)', border: ruleStrong, background: 'none', color: 'var(--fg-3)', cursor: 'pointer' }}
+                    >{wh.active ? 'Pause' : 'Resume'}</button>
+                    <button onClick={() => handleDeleteWebhook(wh.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
+                      <Icon name="trash" size={14} color="currentColor" />
                     </button>
                   </div>
                 </div>
@@ -2228,109 +1859,72 @@ export default function Settings() {
       {/* Tool info modal */}
       {infoTool && (() => {
         const data = TOOL_INFO[infoTool]
-        const toolStatus_entry = toolStatus[infoTool]
+        const entry = toolStatus[infoTool]
         if (!data) return null
-        const featureColors: Record<string, string> = {
-          'Auto-Probe':         'bg-green-900/30 text-green-300 border-green-700/30',
-          'Tool Chains':        'bg-blue-900/30 text-blue-300 border-blue-700/30',
-          'Playbooks':          'bg-purple-900/30 text-purple-300 border-purple-700/30',
-          'Hardening Module':   'bg-orange-900/30 text-orange-300 border-orange-700/30',
-          'Cracking Module':    'bg-red-900/30 text-red-300 border-red-700/30',
-          'OSINT Module':       'bg-cyan-900/30 text-cyan-300 border-cyan-700/30',
-          'Scan Templates':     'bg-slate-700/40 text-slate-300 border-slate-600/30',
-          'Database':           'bg-slate-700/40 text-slate-300 border-slate-600/30',
-          'Runtime Dependency': 'bg-amber-900/30 text-amber-300 border-amber-700/30',
-        }
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setInfoTool(null)}>
-            <div
-              className="w-[520px] max-h-[80vh] flex flex-col rounded-xl border border-cyan-900/30 shadow-2xl overflow-hidden"
-              style={{ background: '#070d17' }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-cyan-900/20 shrink-0">
-                <Info size={16} className="text-cyan-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-white">{toolStatus_entry?.label || infoTool}</span>
-                    {toolStatus_entry?.available
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-700/30">installed</span>
-                      : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-700/30">not installed</span>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)' }} onClick={() => setInfoTool(null)}>
+            <div style={{ width: 520, maxHeight: '80vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', border: ruleStrong, borderRadius: 6, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: rule, flexShrink: 0 }}>
+                <Info size={15} color="var(--accent)" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{entry?.label || infoTool}</span>
+                    {entry?.available
+                      ? <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, color: 'var(--ok)', background: 'rgba(84,175,97,0.1)', border: '1px solid rgba(84,175,97,0.3)', fontFamily: 'var(--font-sans)' }}>installed</span>
+                      : <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, color: 'var(--crit)', background: 'rgba(232,64,64,0.1)', border: '1px solid rgba(232,64,64,0.3)', fontFamily: 'var(--font-sans)' }}>not installed</span>
                     }
                   </div>
-                  {toolStatus_entry?.version && (
-                    <div className="text-xs text-slate-500 mt-0.5 truncate">{toolStatus_entry.version}</div>
-                  )}
+                  {entry?.version && <div style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.version}</div>}
                 </div>
-                {data.usedIn.length > 0 && toolStatus_entry?.url && (
-                  <a href={toolStatus_entry.url} target="_blank" rel="noopener noreferrer"
-                    className="text-slate-500 hover:text-cyan-400 transition-colors"
-                    title="Official website">
-                    <ExternalLink size={14} />
-                  </a>
-                )}
-                <button onClick={() => setInfoTool(null)} className="text-slate-500 hover:text-slate-200 transition-colors ml-1">
-                  <X size={16} />
+                {entry?.url && <a href={entry.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fg-3)', display: 'flex' }} title="Official website"><ExternalLink size={13} /></a>}
+                <button onClick={() => setInfoTool(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
+                  <Icon name="x" size={15} color="currentColor" />
                 </button>
               </div>
 
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-                {/* Description */}
-                <p className="text-sm text-slate-300 leading-relaxed">{data.description}</p>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--fg)', fontFamily: 'var(--font-sans)', lineHeight: 1.6 }}>{data.description}</p>
 
-                {/* Used in Seraph */}
                 {data.usedIn.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Used in Seraph</h4>
-                    <div className="space-y-2">
-                      {data.usedIn.map((u, i) => (
-                        <div key={i} className="flex gap-3 items-start">
-                          <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded border ${featureColors[u.feature] ?? 'bg-slate-700/40 text-slate-300 border-slate-600/30'}`}>
-                            {u.feature}
-                          </span>
-                          <span className="text-xs text-slate-400 leading-relaxed">{u.detail}</span>
-                        </div>
-                      ))}
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Used in Seraph</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {data.usedIn.map((u, i) => {
+                        const fs = FEATURE_STYLES[u.feature] ?? { color: 'var(--fg-3)', background: 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.2)' }
+                        return (
+                          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                            <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 3, fontFamily: 'var(--font-sans)', color: fs.color, background: fs.background, border: fs.border }}>{u.feature}</span>
+                            <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>{u.detail}</span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* Install hint when not installed */}
-                {!toolStatus_entry?.available && toolStatus_entry?.install_hint && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Install</h4>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 rounded px-3 py-2 text-xs font-mono text-slate-300 border border-cyan-900/20 break-all" style={{ background: '#05080d' }}>
-                        {toolStatus_entry.install_hint}
-                      </code>
-                      <button
-                        onClick={() => copyText(toolStatus_entry.install_hint!, `info-${infoTool}`)}
-                        className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        {copied === `info-${infoTool}` ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                {!entry?.available && entry?.install_hint && (
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Install</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <code style={{ flex: 1, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)', wordBreak: 'break-all' }}>{entry.install_hint}</code>
+                      <button onClick={() => copyText(entry.install_hint!, `info-${infoTool}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied === `info-${infoTool}` ? 'var(--ok)' : 'var(--fg-3)', padding: 0, flexShrink: 0, display: 'flex' }}>
+                        <Icon name={copied === `info-${infoTool}` ? 'check' : 'copy'} size={13} color="currentColor" />
                       </button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="px-5 py-3 border-t border-cyan-900/20 flex items-center justify-between shrink-0">
-                {toolStatus_entry?.url ? (
-                  <a href={toolStatus_entry.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-cyan-400 transition-colors">
-                    <ExternalLink size={12} /> Official website
+              <div style={{ padding: '10px 18px', borderTop: rule, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                {entry?.url ? (
+                  <a href={entry.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', textDecoration: 'none' }}>
+                    <ExternalLink size={11} /> Official website
                   </a>
                 ) : <div />}
-                {!toolStatus_entry?.available && (
-                  <button
-                    onClick={() => { setInfoTool(null); startInstall(infoTool) }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-cyan-600/15 text-cyan-400 border border-cyan-600/25 hover:bg-cyan-600/25 transition-colors"
-                  >
-                    <Download size={11} /> Install now
-                  </button>
+                {!entry?.available && (
+                  <button onClick={() => { setInfoTool(null); startInstall(infoTool) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}
+                  ><Icon name="download" size={11} color="currentColor" /> Install now</button>
                 )}
               </div>
             </div>
@@ -2340,41 +1934,34 @@ export default function Settings() {
 
       {/* Install modal */}
       {installTool && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-[640px] max-h-[80vh] flex flex-col rounded-xl border border-cyan-900/30 shadow-2xl" style={{ background: '#070d17' }}>
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-cyan-900/20 shrink-0">
-              <Terminal size={16} className="text-cyan-400" />
-              <span className="text-sm font-semibold text-white">Installing <span className="font-mono text-cyan-300">{toolStatus[installTool]?.label || installTool}</span></span>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)' }}>
+          <div style={{ width: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', border: ruleStrong, borderRadius: 6, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: rule, flexShrink: 0 }}>
+              <Icon name="terminal" size={15} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>
+                Installing <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{toolStatus[installTool]?.label || installTool}</span>
+              </span>
               {installDone && (
-                <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/25">Done</span>
+                <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 3, color: 'var(--ok)', background: 'rgba(84,175,97,0.1)', border: '1px solid rgba(84,175,97,0.3)', fontFamily: 'var(--font-sans)' }}>Done</span>
               )}
-              <button
-                onClick={() => setInstallTool(null)}
-                className="ml-auto text-slate-500 hover:text-slate-200 transition-colors"
-              >
-                <X size={16} />
+              <button onClick={() => setInstallTool(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
+                <Icon name="x" size={15} color="currentColor" />
               </button>
             </div>
-            {/* Terminal output */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 min-h-[200px]" style={{ background: '#05080d' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', minHeight: 200, background: 'var(--bg-2)' }}>
               {installLines.length === 0 ? (
-                <div className="flex items-center gap-2 text-slate-500 text-sm">
-                  <Loader size={14} className="animate-spin" /> Connecting…
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg-3)', fontSize: 13, fontFamily: 'var(--font-sans)' }}>
+                  <Loader size={13} className="animate-spin" /> Connecting…
                 </div>
               ) : (
-                <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{installLines.join('')}</pre>
+                <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{installLines.join('')}</pre>
               )}
             </div>
-            {/* Footer */}
             {installDone && (
-              <div className="px-5 py-3 border-t border-cyan-900/20 flex justify-end shrink-0">
-                <button
-                  onClick={() => setInstallTool(null)}
-                  className="px-4 py-1.5 rounded text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-colors"
-                >
-                  Close
-                </button>
+              <div style={{ padding: '10px 18px', borderTop: rule, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                <button onClick={() => setInstallTool(null)}
+                  style={{ padding: '6px 16px', borderRadius: 3, background: 'var(--accent)', color: '#0d0c0a', border: 'none', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, cursor: 'pointer' }}
+                >Close</button>
               </div>
             )}
           </div>

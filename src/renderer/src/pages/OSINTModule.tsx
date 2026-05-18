@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, Mail, Globe, Network, Plus, AlertCircle } from 'lucide-react'
 import ToolCard, { ToolStatus } from '../components/ToolCard'
 import Terminal, { TerminalHandle } from '../components/Terminal'
+import Icon from '@/components/Icon'
 import type { Project, Target } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
 
@@ -27,6 +27,8 @@ function renderTemplate(template: string, domain: string): string {
   return template.replace(/\{domain\}/g, domain || '{domain}')
 }
 
+const rule = '1px solid var(--rule)'
+
 export default function OSINTModule() {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState('')
@@ -35,7 +37,7 @@ export default function OSINTModule() {
   const [domain, setDomain] = useState('')
   const [tools, setTools] = useState<Record<string, OSINTTool>>({})
   const [toolStates, setToolStates] = useState<Record<string, ToolState>>({})
-  const [activeTerminalTool, setActiveTerminalTool] = useState<string | null>(null)
+  const [activeTool, setActiveTool] = useState<string>(TOOL_KEYS[0])
   const terminalRef = useRef<TerminalHandle>(null)
 
   useEffect(() => {
@@ -47,13 +49,7 @@ export default function OSINTModule() {
       setTools(data)
       const states: Record<string, ToolState> = {}
       Object.values(data).forEach((t: any) => {
-        states[t.tool] = {
-          status: 'idle',
-          output: '',
-          scanId: null,
-          renderedCommand: t.command_template,
-          results: null,
-        }
+        states[t.tool] = { status: 'idle', output: '', scanId: null, renderedCommand: t.command_template, results: null }
       })
       setToolStates(states)
     })
@@ -65,14 +61,10 @@ export default function OSINTModule() {
       .then(r => r.json())
       .then(data => {
         setTargets(data)
-        if (data.length > 0) {
-          setSelectedTarget(data[0].id)
-          setDomain(data[0].hostname_or_ip)
-        }
+        if (data.length > 0) { setSelectedTarget(data[0].id); setDomain(data[0].hostname_or_ip) }
       })
   }, [selectedProject])
 
-  // Update rendered commands when domain changes
   useEffect(() => {
     setToolStates(prev => {
       const next = { ...prev }
@@ -90,34 +82,19 @@ export default function OSINTModule() {
   }
 
   async function handleRun(toolName: string, command: string) {
-    if (!selectedProject || !selectedTarget) {
-      alert('Select a project and target first.')
-      return
-    }
-    if (!domain) {
-      alert('Enter a domain to recon.')
-      return
-    }
+    if (!selectedProject || !selectedTarget) { alert('Select a project and target first.'); return }
+    if (!domain) { alert('Enter a domain to recon.'); return }
 
     updateTool(toolName, { status: 'running', output: '', scanId: null, results: null })
-    setActiveTerminalTool(toolName)
+    setActiveTool(toolName)
 
     const res = await fetch(`${getApiBase()}/osint/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: selectedProject,
-        target_id: selectedTarget,
-        domain,
-        tool_name: toolName,
-        command,
-      }),
+      body: JSON.stringify({ project_id: selectedProject, target_id: selectedTarget, domain, tool_name: toolName, command }),
     })
 
-    if (!res.ok) {
-      updateTool(toolName, { status: 'failed', output: 'Failed to create scan record' })
-      return
-    }
+    if (!res.ok) { updateTool(toolName, { status: 'failed', output: 'Failed to create scan record' }); return }
 
     const { scan_id } = await res.json()
     updateTool(toolName, { scanId: scan_id })
@@ -125,9 +102,7 @@ export default function OSINTModule() {
     const ws = new WebSocket(`${getWsBase()}/ws/osint/${scan_id}`)
     let outputBuffer = ''
 
-    ws.onopen = () => {
-      terminalRef.current?.writeln(`\x1b[33m[*] Running: ${command}\x1b[0m`)
-    }
+    ws.onopen = () => { terminalRef.current?.writeln(`\x1b[33m[*] Running: ${command}\x1b[0m`) }
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
@@ -140,201 +115,207 @@ export default function OSINTModule() {
       } else if (msg.type === 'exit') {
         const status: ToolStatus = msg.code === 0 ? 'completed' : 'failed'
         updateTool(toolName, { status, output: outputBuffer })
-        if (msg.code === 0) {
-          terminalRef.current?.writeln('\x1b[32m\r\n[+] Completed (exit 0)\x1b[0m')
-        } else {
-          terminalRef.current?.writeln(`\x1b[31m\r\n[!] Exited with code ${msg.code}\x1b[0m`)
-        }
+        if (msg.code === 0) terminalRef.current?.writeln('\x1b[32m\r\n[+] Completed (exit 0)\x1b[0m')
+        else terminalRef.current?.writeln(`\x1b[31m\r\n[!] Exited with code ${msg.code}\x1b[0m`)
       } else if (msg.type === 'results') {
-        updateTool(toolName, {
-          results: {
-            emails: msg.emails,
-            subdomains: msg.subdomains,
-            ips: msg.ips,
-            new_targets: msg.new_targets,
-          },
-        })
-        terminalRef.current?.writeln(
-          `\x1b[36m\r\n[*] Results: ${msg.emails} emails · ${msg.subdomains} subdomains · ${msg.ips} IPs · ${msg.new_targets} new targets added\x1b[0m`
-        )
+        updateTool(toolName, { results: { emails: msg.emails, subdomains: msg.subdomains, ips: msg.ips, new_targets: msg.new_targets } })
+        terminalRef.current?.writeln(`\x1b[36m\r\n[*] Results: ${msg.emails} emails · ${msg.subdomains} subdomains · ${msg.ips} IPs · ${msg.new_targets} new targets added\x1b[0m`)
       } else if (msg.type === 'error') {
         terminalRef.current?.writeln(`\x1b[31m[ERROR] ${msg.data}\x1b[0m`)
         updateTool(toolName, { status: 'failed', output: msg.data })
       }
     }
 
-    ws.onerror = () => {
-      updateTool(toolName, { status: 'failed', output: 'WebSocket error' })
-    }
+    ws.onerror = () => { updateTool(toolName, { status: 'failed', output: 'WebSocket error' }) }
   }
 
-  const selectClass = "w-full rounded px-3 py-2 text-xs text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50"
+  const selectStyle: React.CSSProperties = {
+    width: '100%', background: 'var(--bg)', border: '1px solid var(--rule-strong)',
+    borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)',
+    fontFamily: 'var(--font-sans)', outline: 'none',
+  }
+
+  const totalDiscoveries = {
+    emails:      TOOL_KEYS.reduce((s, k) => s + (toolStates[k]?.results?.emails      || 0), 0),
+    subdomains:  TOOL_KEYS.reduce((s, k) => s + (toolStates[k]?.results?.subdomains  || 0), 0),
+    ips:         TOOL_KEYS.reduce((s, k) => s + (toolStates[k]?.results?.ips         || 0), 0),
+    new_targets: TOOL_KEYS.reduce((s, k) => s + (toolStates[k]?.results?.new_targets || 0), 0),
+  }
+
+  const hasDiscoveries = TOOL_KEYS.some(k => toolStates[k]?.results)
+
+  const activeToolData = tools[activeTool]
+  const activeState = toolStates[activeTool] || { status: 'idle' as ToolStatus, output: '', scanId: null, renderedCommand: '', results: null }
 
   return (
-    <div className="flex h-full gap-4 min-h-0">
-      {/* Left: Config panel */}
-      <div className="w-64 flex-shrink-0 flex flex-col gap-4 overflow-y-auto min-h-0">
-        <div className="glass glass-hover rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Target</h3>
-          <div className="space-y-2">
-            <select
-              className={selectClass}
-              style={{ background: '#05080d' }}
-              value={selectedProject}
-              onChange={e => setSelectedProject(e.target.value)}
-            >
-              <option value="">Select project...</option>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Left sidebar ── */}
+      <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: rule, overflowY: 'auto' }}>
+
+        {/* Header */}
+        <div style={{ padding: '14px 16px', borderBottom: rule }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Icon name="search" size={14} color="var(--accent)" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>OSINT Module</span>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Passive recon — no active probing</p>
+        </div>
+
+        {/* Project / Target / Domain */}
+        <div style={{ padding: '12px 16px', borderBottom: rule, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'block', marginBottom: 4 }}>Project</label>
+            <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={selectStyle}>
+              <option value="">Select project…</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            <select
-              className={selectClass}
-              style={{ background: '#05080d' }}
-              value={selectedTarget}
-              onChange={e => {
-                setSelectedTarget(e.target.value)
-                const t = targets.find(t => t.id === e.target.value)
-                if (t) setDomain(t.hostname_or_ip)
-              }}
-              disabled={targets.length === 0}
-            >
-              <option value="">Select target...</option>
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'block', marginBottom: 4 }}>Target</label>
+            <select value={selectedTarget} onChange={e => { setSelectedTarget(e.target.value); const t = targets.find(t => t.id === e.target.value); if (t) setDomain(t.hostname_or_ip) }} disabled={targets.length === 0} style={{ ...selectStyle, opacity: targets.length === 0 ? 0.5 : 1 }}>
+              <option value="">Select target…</option>
               {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
             </select>
           </div>
-        </div>
-
-        <div className="glass glass-hover rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Domain</h3>
-          <input
-            value={domain}
-            onChange={e => setDomain(e.target.value)}
-            className={selectClass}
-            style={{ background: '#05080d' }}
-            placeholder="example.com"
-          />
-          {domain && (
-            <div className="mt-2 text-xs font-mono text-cyan-400 px-1 glow-cyan" style={{ textShadow: '0 0 8px rgba(6,182,212,0.5)' }}>
-              ▶ {domain}
-            </div>
-          )}
-        </div>
-
-        {/* Tool availability */}
-        <div className="glass rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Tool Status</h3>
-          <div className="space-y-2">
-            {TOOL_KEYS.map(key => {
-              const t = tools[key]
-              if (!t) return null
-              return (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-slate-300">{key}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${t.available ? 'bg-green-950/50 text-green-400 border-green-700/30' : 'bg-red-950/50 text-red-400 border-red-700/30'}`}>
-                    {t.available ? 'ready' : 'missing'}
-                  </span>
-                </div>
-              )
-            })}
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'block', marginBottom: 4 }}>Domain</label>
+            <input
+              value={domain}
+              onChange={e => setDomain(e.target.value)}
+              placeholder="example.com"
+              style={{ ...selectStyle, fontFamily: 'var(--font-mono)' }}
+            />
           </div>
         </div>
 
-        {/* Discovery summary */}
-        {TOOL_KEYS.some(k => toolStates[k]?.results) && (
-          <div className="glass rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Discoveries</h3>
-            <div className="space-y-2">
-              {[
-                { icon: <Mail size={11} />, label: 'Emails', key: 'emails' as const },
-                { icon: <Globe size={11} />, label: 'Subdomains', key: 'subdomains' as const },
-                { icon: <Network size={11} />, label: 'IPs', key: 'ips' as const },
-                { icon: <Plus size={11} />, label: 'New Targets', key: 'new_targets' as const },
-              ].map(({ icon, label, key }) => {
-                const total = TOOL_KEYS.reduce((sum, k) => sum + (toolStates[k]?.results?.[key] || 0), 0)
-                return (
-                  <div key={key} className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                      <span className="text-cyan-500">{icon}</span>
-                      {label}
-                    </div>
-                    <span className="text-xs font-mono text-cyan-400">{total}</span>
-                  </div>
-                )
-              })}
-            </div>
+        {/* Tool list */}
+        <div style={{ borderBottom: rule }}>
+          <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Sources</div>
+          {TOOL_KEYS.map(key => {
+            const tool = tools[key]
+            const state = toolStates[key]
+            const isActive = activeTool === key
+            const available = tool?.available ?? false
+            const status = state?.status ?? 'idle'
+            const resultCount = (state?.results?.emails || 0) + (state?.results?.subdomains || 0) + (state?.results?.ips || 0)
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTool(key)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '10px 16px',
+                  background: isActive ? 'var(--accent-2)' : 'transparent',
+                  borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderBottom: rule, cursor: 'pointer', border: 'none',
+                  borderLeftWidth: 2, borderLeftStyle: 'solid',
+                  borderLeftColor: isActive ? 'var(--accent)' : 'transparent',
+                  borderBottomWidth: 1, borderBottomStyle: 'solid',
+                  borderBottomColor: 'var(--rule)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isActive ? 'var(--accent)' : available ? 'var(--fg-2)' : 'var(--fg-3)' }}>{key}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: status === 'running' ? 'var(--accent)' : status === 'completed' ? 'var(--ok)' : status === 'failed' ? 'var(--crit)' : resultCount > 0 ? 'var(--fg-2)' : 'var(--fg-3)' }}>
+                    {status === 'running' ? '…' : resultCount > 0 ? resultCount : available ? '—' : '✗'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' }}>
+                  {tool?.description || key}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Discoveries */}
+        {hasDiscoveries && (
+          <div style={{ padding: '12px 16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', marginBottom: 8 }}>Discoveries</div>
+            {[
+              { label: 'Emails',      icon: 'send',    val: totalDiscoveries.emails },
+              { label: 'Subdomains',  icon: 'globe',   val: totalDiscoveries.subdomains },
+              { label: 'IPs',         icon: 'network', val: totalDiscoveries.ips },
+              { label: 'New Targets', icon: 'plus',    val: totalDiscoveries.new_targets },
+            ].map(({ label, icon, val }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-3)' }}>
+                  <Icon name={icon} size={11} color="var(--accent)" /> {label}
+                </div>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{val}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Center: Tool cards */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-            <Search size={18} className="text-cyan-400" /> OSINT Module
-          </h2>
-          <p className="text-sm text-slate-400">Passive reconnaissance — no active probing of the target</p>
+      {/* ── Main area ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {/* Tool area header */}
+        <div style={{ padding: '10px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--fg)', fontWeight: 600 }}>{activeTool}</span>
+          {activeToolData && (
+            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{activeToolData.description}</span>
+          )}
+          {!domain && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="flag" size={11} /> Enter a domain to begin
+            </span>
+          )}
         </div>
 
-        {!domain && (
-          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg border border-amber-700/30 bg-amber-950/20 text-xs text-amber-400">
-            <AlertCircle size={13} /> Enter a domain in the left panel to begin
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {TOOL_KEYS.map(key => {
-            const tool = tools[key]
-            if (!tool) return null
-            const state = toolStates[key] || { status: 'idle' as ToolStatus, output: '', scanId: null, renderedCommand: '', results: null }
-            return (
-              <div key={key}>
+        {/* 2-pane: ToolCard + Terminal */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 380px', minHeight: 0, overflow: 'hidden' }}>
+          {/* ToolCard area */}
+          <div style={{ overflowY: 'auto', padding: 16, borderRight: rule }}>
+            {activeToolData ? (
+              <>
                 <ToolCard
-                  tool={tool.tool}
-                  description={tool.description}
-                  commandTemplate={tool.command_template}
-                  install={tool.install}
-                  renderedCommand={state.renderedCommand}
-                  status={state.status}
-                  output={state.output}
-                  isToolAvailable={tool.available}
-                  onRun={(cmd) => handleRun(key, cmd)}
-                  onCommandChange={(cmd) => updateTool(key, { renderedCommand: cmd })}
+                  tool={activeToolData.tool}
+                  description={activeToolData.description}
+                  commandTemplate={activeToolData.command_template}
+                  install={activeToolData.install}
+                  renderedCommand={activeState.renderedCommand}
+                  status={activeState.status}
+                  output={activeState.output}
+                  isToolAvailable={activeToolData.available}
+                  onRun={(cmd) => handleRun(activeTool, cmd)}
+                  onCommandChange={(cmd) => updateTool(activeTool, { renderedCommand: cmd })}
                 />
-                {/* Results badge */}
-                {state.results && (
-                  <div className="flex gap-3 mt-1.5 px-2">
+                {activeState.results && (
+                  <div style={{ display: 'flex', gap: 14, marginTop: 10, paddingLeft: 4 }}>
                     {[
-                      { icon: <Mail size={10} />, val: state.results.emails, label: 'emails' },
-                      { icon: <Globe size={10} />, val: state.results.subdomains, label: 'subdomains' },
-                      { icon: <Network size={10} />, val: state.results.ips, label: 'IPs' },
-                      { icon: <Plus size={10} />, val: state.results.new_targets, label: 'new targets' },
-                    ].map(({ icon, val, label }) => (
-                      <div key={label} className="flex items-center gap-1 text-[10px] text-slate-400">
-                        <span className="text-cyan-500">{icon}</span>
-                        <span className="font-mono text-cyan-400">{val}</span> {label}
+                      { val: activeState.results.emails,      label: 'emails' },
+                      { val: activeState.results.subdomains,  label: 'subdomains' },
+                      { val: activeState.results.ips,         label: 'IPs' },
+                      { val: activeState.results.new_targets, label: 'new targets' },
+                    ].map(({ val, label }) => (
+                      <div key={label} style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                        <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{val}</span> {label}
                       </div>
                     ))}
                   </div>
                 )}
+              </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+                <p style={{ fontSize: 13, color: 'var(--fg-3)' }}>Select a tool from the sidebar</p>
               </div>
-            )
-          })}
-        </div>
-      </div>
+            )}
+          </div>
 
-      {/* Right: Terminal */}
-      <div className="w-96 flex-shrink-0 flex flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">Live Output</h3>
-          {activeTerminalTool && (
-            <span className="text-xs text-cyan-400 font-mono" style={{ textShadow: '0 0 8px rgba(6,182,212,0.4)' }}>
-              {activeTerminalTool}
-            </span>
-          )}
+          {/* Terminal */}
+          <div style={{ display: 'flex', flexDirection: 'column', padding: 12, gap: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Live Output</span>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{activeTool}</span>
+            </div>
+            <div style={{ flex: 1, border: rule, borderRadius: 3, overflow: 'hidden', minHeight: 0 }}>
+              <Terminal ref={terminalRef} className="h-full" />
+            </div>
+          </div>
         </div>
-        <Terminal
-          ref={terminalRef}
-          className="flex-1 rounded-xl overflow-hidden border border-cyan-900/20 shadow-glow-cyan"
-        />
       </div>
     </div>
   )

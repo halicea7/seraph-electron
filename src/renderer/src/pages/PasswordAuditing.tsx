@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Lock, Upload, Play, RefreshCw, Check, KeyRound, ShieldAlert, Download } from 'lucide-react'
+import Icon from '../components/Icon'
 import Terminal, { TerminalHandle } from '../components/Terminal'
 import type { Project, Credential } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
@@ -35,6 +35,40 @@ const ATTACK_MODES = [
   { id: '6', label: 'Hybrid (wordlist + mask)' },
 ]
 
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
+const selStyle: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  background: 'var(--bg)',
+  border: ruleStrong,
+  borderRadius: 3,
+  padding: '5px 8px',
+  fontSize: 12,
+  color: 'var(--fg)',
+  fontFamily: 'var(--font-sans)',
+  outline: 'none',
+}
+
+const sectionStyle: React.CSSProperties = {
+  background: 'var(--bg-2)',
+  border: ruleStrong,
+  borderRadius: 4,
+  padding: '12px 14px',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 10,
+  fontWeight: 700,
+  color: 'var(--fg-3)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  marginBottom: 8,
+  fontFamily: 'var(--font-sans)',
+}
+
 export default function PasswordAuditing() {
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [tool, setTool] = useState<'hashcat' | 'john'>('hashcat')
@@ -47,17 +81,14 @@ export default function PasswordAuditing() {
   const [running, setRunning] = useState(false)
   const [, setJobId] = useState<string | null>(null)
 
-  // Vault loading
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState('')
   const [vaultCreds, setVaultCreds] = useState<Credential[]>([])
   const [selectedCredIds, setSelectedCredIds] = useState<string[]>([])
 
-  // Results
   const [results, setResults] = useState<{ cracked: number; pairs: CrackedPair[]; vault_updated: number } | null>(null)
   const [savedPairs, setSavedPairs] = useState<Set<string>>(new Set())
 
-  // Wordlist bundles
   const [bundles, setBundles] = useState<WordlistBundle[]>([])
   const [installing, setInstalling] = useState<string | null>(null)
   const [installLog, setInstallLog] = useState<Record<string, string>>({})
@@ -223,37 +254,39 @@ export default function PasswordAuditing() {
     setSavedPairs(prev => new Set([...prev, pair.hash]))
   }
 
-  const selectClass = "w-full rounded px-3 py-2 text-xs text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50 bg-[#05080d]"
   const hashTypes = tool === 'hashcat' ? (tools?.hash_types || []) : (tools?.john_formats || [])
 
   return (
-    <div className="flex h-full gap-4 min-h-0">
+    <div style={{ display: 'flex', height: '100%', gap: 16, minHeight: 0, background: 'var(--bg)', color: 'var(--fg)', padding: 16 }}>
       {/* Left: Config */}
-      <div className="w-64 flex-shrink-0 flex flex-col gap-4 overflow-y-auto min-h-0">
+      <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', minHeight: 0 }}>
+
         {/* Tool selector */}
-        <div className="glass glass-hover rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Tool</h3>
-          <div className="flex gap-2">
+        <div style={sectionStyle}>
+          <span style={labelStyle}>Tool</span>
+          <div style={{ display: 'flex', gap: 6 }}>
             {(['hashcat', 'john'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => { setTool(t); setHashType(t === 'hashcat' ? '0' : 'auto') }}
-                className={`flex-1 py-1.5 rounded text-xs font-mono font-semibold transition-all ${
-                  tool === t ? 'bg-cyan-700 text-white' : 'border border-cyan-900/30 text-slate-400 hover:text-cyan-400'
-                }`}
+                style={{
+                  flex: 1, padding: '5px 0', borderRadius: 3,
+                  background: tool === t ? 'var(--accent)' : 'none',
+                  color: tool === t ? 'var(--bg)' : 'var(--fg-3)',
+                  border: tool === t ? 'none' : ruleStrong,
+                  fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                }}
               >
                 {t}
               </button>
             ))}
           </div>
-
-          {/* Tool availability */}
           {tools && (
-            <div className="mt-2 flex gap-3">
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
               {(['hashcat', 'john'] as const).map(t => (
-                <div key={t} className="flex items-center gap-1 text-[10px]">
-                  <span className={`w-1.5 h-1.5 rounded-full ${tools[t].available ? 'bg-green-400' : 'bg-red-500'}`} />
-                  <span className="text-slate-500 font-mono">{t}</span>
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: tools[t].available ? 'var(--ok)' : 'var(--crit)', display: 'inline-block' }} />
+                  <span style={{ color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{t}</span>
                 </div>
               ))}
             </div>
@@ -261,27 +294,25 @@ export default function PasswordAuditing() {
         </div>
 
         {/* Hash type */}
-        <div className="glass glass-hover rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            {tool === 'hashcat' ? 'Hash Type (-m)' : 'Format'}
-          </h3>
-          <select value={hashType} onChange={e => setHashType(e.target.value)} className={selectClass}>
+        <div style={sectionStyle}>
+          <span style={labelStyle}>{tool === 'hashcat' ? 'Hash Type (-m)' : 'Format'}</span>
+          <select value={hashType} onChange={e => setHashType(e.target.value)} style={selStyle}>
             {hashTypes.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
           </select>
         </div>
 
         {/* Attack mode (hashcat only) */}
         {tool === 'hashcat' && (
-          <div className="glass glass-hover rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Attack Mode (-a)</h3>
-            <select value={attackMode} onChange={e => setAttackMode(e.target.value)} className={selectClass}>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Attack Mode (-a)</span>
+            <select value={attackMode} onChange={e => setAttackMode(e.target.value)} style={selStyle}>
               {ATTACK_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
             {attackMode === '3' && (
-              <div className="mt-2">
-                <label className="text-[10px] text-slate-500 mb-1 block">Mask</label>
-                <input value={mask} onChange={e => setMask(e.target.value)} className={selectClass} placeholder="?d?d?d?d?d?d?d?d" />
-                <div className="mt-1 text-[10px] text-slate-600">?l=lower ?u=upper ?d=digit ?s=special ?a=all</div>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ ...labelStyle, marginBottom: 4 }}>Mask</label>
+                <input value={mask} onChange={e => setMask(e.target.value)} style={selStyle} placeholder="?d?d?d?d?d?d?d?d" />
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>?l=lower ?u=upper ?d=digit ?s=special ?a=all</div>
               </div>
             )}
           </div>
@@ -289,10 +320,10 @@ export default function PasswordAuditing() {
 
         {/* Wordlist */}
         {attackMode !== '3' && (
-          <div className="glass glass-hover rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Wordlist</h3>
+          <div style={sectionStyle}>
+            <span style={labelStyle}>Wordlist</span>
             {tools && tools.wordlists.length > 0 && (
-              <select value={wordlist} onChange={e => setWordlist(e.target.value)} className={`${selectClass} mb-2`}>
+              <select value={wordlist} onChange={e => setWordlist(e.target.value)} style={{ ...selStyle, marginBottom: 6 }}>
                 <option value="">Select wordlist...</option>
                 {tools.wordlists.map(w => <option key={w} value={w}>{w.split('/').pop()}</option>)}
               </select>
@@ -300,38 +331,48 @@ export default function PasswordAuditing() {
             <input
               value={customWordlist}
               onChange={e => setCustomWordlist(e.target.value)}
-              className={selectClass}
+              style={selStyle}
               placeholder="Custom path..."
             />
           </div>
         )}
 
         {/* Get wordlists */}
-        <div className="glass rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Download size={10} /> Get Wordlists
-          </h3>
-          <div className="space-y-2">
+        <div style={sectionStyle}>
+          <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="download" size={10} color="currentColor" /> Get Wordlists
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {bundles.map(b => (
-              <div key={b.id} className="rounded-lg border border-cyan-900/20 p-2.5">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-xs font-mono text-slate-200">{b.label}</span>
+              <div key={b.id} style={{ background: 'var(--bg)', border: rule, borderRadius: 3, padding: '8px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{b.label}</span>
                   {b.installed ? (
-                    <span className="flex items-center gap-1 text-[10px] text-green-400"><Check size={10} /> Installed</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--ok)' }}>
+                      <Icon name="check" size={9} color="currentColor" /> Installed
+                    </span>
                   ) : (
                     <button
                       onClick={() => installBundle(b.id)}
                       disabled={installing !== null}
-                      className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-cyan-700/40 text-cyan-400 hover:bg-cyan-950/40 disabled:opacity-40 transition-all"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        fontSize: 10, padding: '2px 8px', borderRadius: 3,
+                        background: 'none', border: ruleStrong,
+                        color: installing === b.id ? 'var(--accent)' : 'var(--fg-3)',
+                        cursor: installing !== null ? 'not-allowed' : 'pointer',
+                        opacity: installing !== null && installing !== b.id ? 0.4 : 1,
+                        fontFamily: 'var(--font-sans)',
+                      }}
                     >
-                      {installing === b.id ? <RefreshCw size={9} className="animate-spin" /> : <Download size={9} />}
+                      <Icon name={installing === b.id ? 'refresh' : 'download'} size={9} color="currentColor" />
                       {installing === b.id ? 'Installing…' : 'Install'}
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-500">{b.description}</p>
+                <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{b.description}</p>
                 {installLog[b.id] && (
-                  <pre className="mt-1.5 text-[9px] font-mono text-slate-400 bg-[#05080d] rounded p-1.5 max-h-20 overflow-y-auto whitespace-pre-wrap">
+                  <pre style={{ margin: '6px 0 0', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', background: 'var(--bg)', borderRadius: 2, padding: 6, maxHeight: 80, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
                     {installLog[b.id]}
                   </pre>
                 )}
@@ -341,132 +382,170 @@ export default function PasswordAuditing() {
         </div>
 
         {/* Load from vault */}
-        <div className="glass rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1">
-            <KeyRound size={10} /> Load from Vault
-          </h3>
-          <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className={`${selectClass} mb-2`}>
+        <div style={sectionStyle}>
+          <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="key" size={10} color="currentColor" /> Load from Vault
+          </span>
+          <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={{ ...selStyle, marginBottom: 8 }}>
             <option value="">Select project...</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           {vaultCreds.length > 0 ? (
             <>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="flex items-center gap-1.5 cursor-pointer">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
                   <input
                     type="checkbox"
                     checked={selectedCredIds.length === vaultCreds.length}
                     ref={el => { if (el) el.indeterminate = selectedCredIds.length > 0 && selectedCredIds.length < vaultCreds.length }}
                     onChange={e => setSelectedCredIds(e.target.checked ? vaultCreds.map(c => c.id) : [])}
-                    className="accent-cyan-500"
+                    style={{ accentColor: 'var(--accent)' }}
                   />
-                  <span className="text-[10px] text-slate-400">All ({vaultCreds.length})</span>
+                  All ({vaultCreds.length})
                 </label>
                 {selectedCredIds.length > 0 && (
-                  <span className="text-[10px] text-cyan-500">{selectedCredIds.length} selected</span>
+                  <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>{selectedCredIds.length} selected</span>
                 )}
               </div>
-              <div className="space-y-1 max-h-32 overflow-y-auto mb-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', marginBottom: 8 }}>
                 {vaultCreds.map(c => (
-                  <label key={c.id} className="flex items-center gap-2 cursor-pointer group">
+                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
                     <input
                       type="checkbox"
                       checked={selectedCredIds.includes(c.id)}
                       onChange={() => toggleCredId(c.id)}
-                      className="accent-cyan-500"
+                      style={{ accentColor: 'var(--accent)' }}
                     />
-                    <span className="text-[10px] font-mono text-slate-400 truncate group-hover:text-slate-200">{c.secret.slice(0, 24)}…</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.secret.slice(0, 24)}…</span>
                   </label>
                 ))}
               </div>
               <button
                 onClick={loadFromVault}
                 disabled={selectedCredIds.length === 0}
-                className="w-full py-1.5 rounded border border-cyan-900/30 text-xs text-cyan-400 hover:bg-cyan-950/30 disabled:opacity-40 transition-all flex items-center justify-center gap-1"
+                style={{
+                  width: '100%', padding: '5px 0', borderRadius: 3,
+                  background: 'none', border: ruleStrong,
+                  fontSize: 11, color: selectedCredIds.length > 0 ? 'var(--accent)' : 'var(--fg-3)',
+                  cursor: selectedCredIds.length > 0 ? 'pointer' : 'not-allowed',
+                  fontFamily: 'var(--font-sans)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  opacity: selectedCredIds.length === 0 ? 0.5 : 1,
+                }}
               >
-                <Upload size={11} /> Load {selectedCredIds.length || ''} hash{selectedCredIds.length !== 1 ? 'es' : ''}
+                <Icon name="upload" size={11} color="currentColor" />
+                Load {selectedCredIds.length || ''} hash{selectedCredIds.length !== 1 ? 'es' : ''}
               </button>
             </>
           ) : (
-            <p className="text-[10px] text-slate-600 italic">{selectedProject ? 'No hash-type credentials in this project' : 'Select a project'}</p>
+            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
+              {selectedProject ? 'No hash-type credentials in this project' : 'Select a project'}
+            </p>
           )}
         </div>
       </div>
 
       {/* Center: hash input + command + results */}
-      <div className="flex-1 flex flex-col min-w-0 gap-4 overflow-y-auto">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, gap: 12, overflowY: 'auto' }}>
         <div>
-          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-            <Lock size={18} className="text-cyan-400" /> Password Auditing
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-sans)' }}>
+            <Icon name="lock" size={16} color="var(--accent)" /> Password Auditing
           </h2>
-          <p className="text-sm text-slate-400">hashcat / john the ripper — cracked plaintexts saved back to Credential Vault</p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+            hashcat / john the ripper — cracked plaintexts saved back to Credential Vault
+          </p>
         </div>
 
         {/* Hash input */}
-        <div className="glass rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hashes (one per line)</label>
-            <span className="text-[10px] text-slate-500 font-mono">{getHashes().length} hash{getHashes().length !== 1 ? 'es' : ''}</span>
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={labelStyle}>Hashes (one per line)</span>
+            <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+              {getHashes().length} hash{getHashes().length !== 1 ? 'es' : ''}
+            </span>
           </div>
           <textarea
             value={hashInput}
             onChange={e => setHashInput(e.target.value)}
             rows={6}
-            placeholder="5f4dcc3b5aa765d61d8327deb882cf99&#10;098f6bcd4621d373cade4e832627b4f6&#10;..."
-            className="w-full rounded px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50 resize-none bg-[#05080d]"
+            placeholder={"5f4dcc3b5aa765d61d8327deb882cf99\n098f6bcd4621d373cade4e832627b4f6\n..."}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: 'var(--bg)', border: rule, borderRadius: 3,
+              padding: '8px 10px', fontSize: 11, color: 'var(--fg)',
+              fontFamily: 'var(--font-mono)', outline: 'none', resize: 'none',
+            }}
           />
         </div>
 
         {/* Command preview */}
-        <div className="glass rounded-xl p-4">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Command Preview</label>
-          <div className="font-mono text-xs text-slate-300 rounded px-3 py-2 border border-cyan-900/20 break-all bg-[#05080d]">
+        <div style={sectionStyle}>
+          <span style={labelStyle}>Command Preview</span>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)',
+            background: 'var(--bg)', border: rule, borderRadius: 3,
+            padding: '8px 10px', wordBreak: 'break-all',
+          }}>
             {buildCommandPreview()}
           </div>
           <button
             onClick={handleRun}
             disabled={running || !getHashes().length}
-            className="mt-3 w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-40 text-sm text-white font-semibold transition-all hover:shadow-glow-green flex items-center justify-center gap-2"
+            style={{
+              marginTop: 12, width: '100%', padding: '9px 0', borderRadius: 4,
+              background: running || !getHashes().length ? 'var(--bg-2)' : 'var(--ok)',
+              color: running || !getHashes().length ? 'var(--fg-3)' : '#fff',
+              border: 'none', fontSize: 13, fontWeight: 700,
+              fontFamily: 'var(--font-sans)', cursor: running || !getHashes().length ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              opacity: running || !getHashes().length ? 0.5 : 1,
+            }}
           >
-            {running ? <><RefreshCw size={15} className="animate-spin" /> Cracking...</> : <><Play size={15} /> Start Cracking</>}
+            {running
+              ? <><Icon name="refresh" size={14} color="currentColor" /> Cracking...</>
+              : <><Icon name="play" size={14} color="currentColor" /> Start Cracking</>
+            }
           </button>
         </div>
 
         {/* Results */}
         {results && (
-          <div className="glass rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <ShieldAlert size={14} className="text-cyan-400" />
-              <h3 className="text-sm font-semibold text-slate-200">Results</h3>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-green-950/60 text-green-400 border border-green-700/30 font-semibold">
+          <div style={sectionStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Icon name="shield" size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Results</span>
+              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(84,175,97,0.1)', color: 'var(--ok)', border: '1px solid rgba(84,175,97,0.3)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
                 {results.cracked} cracked
               </span>
               {results.vault_updated > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-400 border border-cyan-700/30 font-semibold">
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
                   {results.vault_updated} vault updated
                 </span>
               )}
             </div>
 
             {results.pairs.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No hashes cracked in this run.</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>No hashes cracked in this run.</p>
             ) : (
-              <div className="space-y-1">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {results.pairs.map((pair, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-1.5 rounded border border-cyan-900/10 hover:bg-cyan-950/10 transition-colors group">
-                    <span className="font-mono text-[10px] text-slate-500 truncate w-48 flex-shrink-0">{pair.hash}</span>
-                    <span className="text-slate-600 text-xs">→</span>
-                    <span className="font-mono text-sm text-green-400 font-semibold flex-1">{pair.plain}</span>
+                  <div
+                    key={i}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 3, border: rule }}
+                  >
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: 160, flexShrink: 0 }}>{pair.hash}</span>
+                    <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ok)', fontWeight: 700, flex: 1 }}>{pair.plain}</span>
                     {selectedProject && !savedPairs.has(pair.hash) && (
                       <button
                         onClick={() => saveToVault(pair)}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] text-cyan-500 hover:text-cyan-300 border border-cyan-900/30 px-2 py-0.5 rounded transition-all"
+                        style={{ fontSize: 10, color: 'var(--accent)', background: 'none', border: ruleStrong, borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontFamily: 'var(--font-sans)', flexShrink: 0 }}
                       >
                         Save to Vault
                       </button>
                     )}
                     {savedPairs.has(pair.hash) && (
-                      <Check size={12} className="text-green-500 flex-shrink-0" />
+                      <Icon name="check" size={12} color="var(--ok)" />
                     )}
                   </div>
                 ))}
@@ -477,14 +556,11 @@ export default function PasswordAuditing() {
       </div>
 
       {/* Right: Terminal */}
-      <div className="w-96 flex-shrink-0 flex flex-col">
-        <div className="mb-3">
-          <h3 className="text-sm font-semibold text-slate-200">Live Output</h3>
+      <div style={{ width: 360, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Live Output</span>
+        <div style={{ flex: 1, border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
+          <Terminal ref={terminalRef} className="flex-1" />
         </div>
-        <Terminal
-          ref={terminalRef}
-          className="flex-1 rounded-xl overflow-hidden border border-cyan-900/20 shadow-glow-cyan"
-        />
       </div>
     </div>
   )

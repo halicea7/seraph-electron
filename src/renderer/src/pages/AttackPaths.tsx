@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import cytoscape from 'cytoscape'
-import { GitBranch, RefreshCw, Shield, Download } from 'lucide-react'
+import Icon from '@/components/Icon'
 import type { Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
 
@@ -31,17 +31,29 @@ interface GraphData {
 }
 
 const EDGE_COLORS: Record<string, string> = {
-  c2:      '#ef4444',
-  finding: '#f59e0b',
+  c2:      'var(--crit)',
+  finding: 'var(--accent)',
+  lateral: '#a855f7',
+}
+
+const EDGE_COLORS_STATIC: Record<string, string> = {
+  c2:      '#e84040',
+  finding: '#f0a83a',
   lateral: '#a855f7',
 }
 
 const TARGET_ICONS: Record<string, string> = {
-  linux_host:   '🖥',
-  windows_host: '🪟',
-  web_app:      '🌐',
-  cloud_aws:    '☁',
-  network:      '🔗',
+  linux_host:   '⬡',
+  windows_host: '▣',
+  web_app:      '◈',
+  cloud_aws:    '◉',
+  network:      '◎',
+}
+
+const EDGE_TYPE_LABEL: Record<string, string> = {
+  c2:      'C2 Session',
+  finding: 'Exploit Path',
+  lateral: 'Lateral Movement',
 }
 
 export default function AttackPaths() {
@@ -83,13 +95,13 @@ export default function AttackPaths() {
       ...graph.nodes.map(n => {
         const isAttacker = n.data.type === 'attacker'
         const isCompromised = n.data.compromised
-        const bg = isAttacker ? '#001a2d' : isCompromised ? '#3f0000' : '#0d1520'
-        const border = isAttacker ? '#06b6d4' : isCompromised ? '#ef4444' : '#334155'
-        const glow = isAttacker ? 'rgba(6,182,212,0.7)' : isCompromised ? 'rgba(239,68,68,0.6)' : 'rgba(51,65,85,0.3)'
+        const bg      = isAttacker ? '#1a1400' : isCompromised ? '#2a0a0a' : '#1a1714'
+        const border  = isAttacker ? '#f0a83a' : isCompromised ? '#e84040' : '#3a3530'
+        const glow    = isAttacker ? 'rgba(240,168,58,0.5)' : isCompromised ? 'rgba(232,64,64,0.5)' : 'rgba(58,53,48,0.3)'
         return { data: { ...n.data, bg, border, glow } }
       }),
       ...graph.edges.map(e => ({
-        data: { ...e.data, lineColor: EDGE_COLORS[e.data.type] || '#334155' },
+        data: { ...e.data, lineColor: EDGE_COLORS_STATIC[e.data.type] || '#3a3530' },
       })),
     ]
 
@@ -102,18 +114,18 @@ export default function AttackPaths() {
           style: {
             'background-color': 'data(bg)',
             'border-color': 'data(border)',
-            'border-width': 2,
+            'border-width': 1.5,
             'label': 'data(label)',
-            'color': '#e2e8f0',
-            'font-size': '11px',
-            'font-family': 'JetBrains Mono, monospace',
+            'color': '#c8c3b8',
+            'font-size': '10px',
+            'font-family': '"IBM Plex Mono", monospace',
             'text-valign': 'bottom',
             'text-margin-y': 6,
-            'text-max-width': '120px',
+            'text-max-width': '110px',
             'text-wrap': 'ellipsis',
-            'width': 44,
-            'height': 44,
-            'shadow-blur': 16,
+            'width': 40,
+            'height': 40,
+            'shadow-blur': 14,
             'shadow-color': 'data(glow)',
             'shadow-opacity': 0.9,
             'shadow-offset-x': 0,
@@ -122,38 +134,38 @@ export default function AttackPaths() {
         },
         {
           selector: 'node[type="attacker"]',
-          style: { 'shape': 'diamond', 'width': 52, 'height': 52 },
+          style: { 'shape': 'diamond', 'width': 48, 'height': 48 },
         },
         {
           selector: 'node:selected',
-          style: { 'border-width': 3, 'border-color': '#06b6d4' },
+          style: { 'border-width': 2.5, 'border-color': '#f0a83a' },
         },
         {
           selector: 'edge',
           style: {
-            'width': 2,
+            'width': 1.5,
             'line-color': 'data(lineColor)',
             'target-arrow-color': 'data(lineColor)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'label': 'data(label)',
             'font-size': '9px',
-            'color': '#94a3b8',
+            'color': '#7a7268',
             'text-rotation': 'autorotate',
-            'opacity': 0.75,
+            'opacity': 0.7,
           },
         },
         {
           selector: 'edge:selected',
-          style: { 'opacity': 1, 'width': 3 },
+          style: { 'opacity': 1, 'width': 2.5 },
         },
       ],
       layout: {
         name: 'cose',
         animate: true,
-        animationDuration: 600,
+        animationDuration: 500,
         nodeRepulsion: () => 10000,
-        idealEdgeLength: () => 140,
+        idealEdgeLength: () => 130,
         gravity: 0.8,
         randomize: false,
       } as any,
@@ -171,143 +183,153 @@ export default function AttackPaths() {
 
   function exportPNG() {
     if (!cyRef.current) return
-    const png = cyRef.current.png({ full: true, scale: 2, bg: '#05080d' })
+    const png = cyRef.current.png({ full: true, scale: 2, bg: '#0d0c0a' })
     const a = document.createElement('a')
     a.href = png
     a.download = 'attack-paths.png'
     a.click()
   }
 
-  const edgeTypeLabel: Record<string, string> = { c2: 'C2 Session', finding: 'Exploit Path', lateral: 'Lateral Movement' }
-  const edgeTypeBadge: Record<string, string> = {
-    c2:      'bg-red-900/40 text-red-300 border-red-500/30',
-    finding: 'bg-amber-900/40 text-amber-300 border-amber-500/30',
-    lateral: 'bg-purple-900/40 text-purple-300 border-purple-500/30',
-  }
-
-  const nodeCount = graph?.nodes.length ?? 0
-  const edgeCount = graph?.edges.length ?? 0
+  const nodeCount       = graph?.nodes.length ?? 0
+  const edgeCount       = graph?.edges.length ?? 0
   const compromisedCount = graph?.nodes.filter(n => n.data.compromised).length ?? 0
 
+  const selectedNode = selectedEl && 'target_type' in selectedEl ? selectedEl as NodeData : null
+  const selectedEdge = selectedEl && 'source' in selectedEl ? selectedEl as EdgeData : null
+
   return (
-    <div className="flex h-full gap-4 p-6 min-h-0">
-      {/* Left panel */}
-      <div className="w-60 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+    <div style={{ display: 'flex', height: '100%', gap: 16, padding: '20px 24px', minHeight: 0, boxSizing: 'border-box' }}>
+
+      {/* ── Left panel ── */}
+      <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
+
         {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <GitBranch size={20} className="text-red-400" />
-            Attack Paths
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">Visualise compromise paths</p>
+        <div style={{ paddingBottom: 12, borderBottom: '1px solid var(--rule)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Icon name="target" size={15} color="var(--crit)" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', letterSpacing: '0.01em' }}>Attack Paths</span>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Visualise compromise paths</p>
         </div>
 
         {/* Project selector */}
-        <div className="glass rounded-xl p-4 space-y-2">
-          <label className="text-xs text-slate-400 font-medium">Project</label>
+        <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Project</label>
           <select
-            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50"
             value={selectedProject}
             onChange={e => setSelectedProject(e.target.value)}
+            style={{
+              width: '100%', background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
+              borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)',
+              fontFamily: 'var(--font-sans)', outline: 'none',
+            }}
           >
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button
             onClick={loadGraph}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-xs text-slate-300 transition-all"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
+              background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+            }}
           >
-            <RefreshCw size={12} className={loading ? 'animate-spin text-cyan-400' : ''} />
-            Refresh
+            <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
+            {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
         {/* Stats */}
         {graph && (
-          <div className="glass rounded-xl p-4 space-y-2">
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Graph Stats</p>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Nodes</span>
-                <span className="text-white font-mono">{nodeCount}</span>
+          <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Graph</p>
+            {[
+              { label: 'Nodes', value: nodeCount, color: 'var(--fg)' },
+              { label: 'Edges', value: edgeCount, color: 'var(--fg)' },
+              { label: 'Compromised', value: compromisedCount, color: compromisedCount > 0 ? 'var(--crit)' : 'var(--ok)' },
+            ].map(row => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.label}</span>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: row.color }}>{row.value}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Edges</span>
-                <span className="text-white font-mono">{edgeCount}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Compromised</span>
-                <span className={`font-mono ${compromisedCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{compromisedCount}</span>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 
         {/* Legend */}
-        <div className="glass rounded-xl p-4 space-y-2">
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Legend</p>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-3 h-0.5 rounded" style={{ background: EDGE_COLORS.c2 }} />
-              C2 Session
+        <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Legend</p>
+          {[
+            { color: EDGE_COLORS_STATIC.c2,      label: 'C2 Session' },
+            { color: EDGE_COLORS_STATIC.finding,  label: 'Exploit Path' },
+            { color: EDGE_COLORS_STATIC.lateral,  label: 'Lateral Movement' },
+          ].map(item => (
+            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 16, height: 2, background: item.color, borderRadius: 1, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{item.label}</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-3 h-0.5 rounded" style={{ background: EDGE_COLORS.finding }} />
-              Exploit Path
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-3 h-0.5 rounded" style={{ background: EDGE_COLORS.lateral }} />
-              Lateral Movement
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-3 h-3 rounded border" style={{ background: '#3f0000', borderColor: '#ef4444' }} />
-              Compromised target
-            </div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            <span style={{ width: 12, height: 12, background: '#2a0a0a', border: '1px solid #e84040', borderRadius: 2, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Compromised</span>
           </div>
         </div>
 
         {/* Selection detail */}
         {selectedEl && (
-          <div className="glass rounded-xl p-4 space-y-2">
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Selected</p>
-            {'type' in selectedEl && (selectedEl as NodeData).type === 'attacker' && (
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-cyan-300 flex items-center gap-1"><Shield size={12} /> Attacker</p>
+          <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Selected</p>
+
+            {selectedNode?.type === 'attacker' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="shield" size={12} color="var(--accent)" />
+                <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Attacker node</span>
               </div>
             )}
-            {'type' in selectedEl && (selectedEl as NodeData).type === 'target' && (() => {
-              const n = selectedEl as NodeData
-              return (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">
-                    {TARGET_ICONS[n.target_type || ''] || '?'} {n.label}
+
+            {selectedNode?.type === 'target' && (
+              <div>
+                <p style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 600, margin: '0 0 4px' }}>
+                  {TARGET_ICONS[selectedNode.target_type || ''] || '○'} {selectedNode.label}
+                </p>
+                <p style={{ fontSize: 11, color: selectedNode.compromised ? 'var(--crit)' : 'var(--ok)', margin: '0 0 6px' }}>
+                  {selectedNode.compromised ? '⚠ Compromised' : '✓ Clean'}
+                </p>
+                {selectedNode.finding_counts && Object.keys(selectedNode.finding_counts).length > 0 && (
+                  <div>
+                    {Object.entries(selectedNode.finding_counts).map(([sev, cnt]) => (
+                      <p key={sev} style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>{cnt}× {sev}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedEdge && (
+              <div>
+                <span style={{
+                  display: 'inline-block', fontSize: 10, padding: '2px 6px',
+                  border: `1px solid ${EDGE_COLORS_STATIC[selectedEdge.type] || 'var(--rule-strong)'}`,
+                  borderRadius: 2, color: EDGE_COLORS_STATIC[selectedEdge.type] || 'var(--fg-3)',
+                  marginBottom: 6,
+                }}>
+                  {EDGE_TYPE_LABEL[selectedEdge.type] || selectedEdge.type}
+                </span>
+                {selectedEdge.count != null && (
+                  <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>{selectedEdge.count} exploit(s)</p>
+                )}
+                {selectedEdge.username && (
+                  <p style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', margin: '2px 0' }}>
+                    user: {selectedEdge.username}
                   </p>
-                  <p className={`text-xs ${n.compromised ? 'text-red-400' : 'text-green-400'}`}>
-                    {n.compromised ? '⚠ Compromised' : '✓ Not compromised'}
-                  </p>
-                  {n.finding_counts && Object.keys(n.finding_counts).length > 0 && (
-                    <div className="pt-1 space-y-0.5">
-                      {Object.entries(n.finding_counts).map(([sev, cnt]) => (
-                        <p key={sev} className="text-[11px] text-slate-400">{cnt}x {sev}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-            {('type' in selectedEl) && (['c2', 'finding', 'lateral'] as const).includes((selectedEl as EdgeData).type as any) && (() => {
-              const e = selectedEl as EdgeData
-              return (
-                <div className="space-y-1">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${edgeTypeBadge[e.type] || ''}`}>
-                    {edgeTypeLabel[e.type] || e.type}
-                  </span>
-                  {e.count && <p className="text-xs text-slate-400 pt-1">{e.count} exploit(s)</p>}
-                  {e.username && <p className="text-xs text-slate-400 font-mono">user: {e.username}</p>}
-                  {e.session_type && <p className="text-xs text-slate-400">type: {e.session_type}</p>}
-                </div>
-              )
-            })()}
+                )}
+                {selectedEdge.session_type && (
+                  <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>type: {selectedEdge.session_type}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -315,27 +337,44 @@ export default function AttackPaths() {
         {graph && (
           <button
             onClick={exportPNG}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg glass glass-hover text-xs text-slate-300 transition-all"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '6px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
+              background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+            }}
           >
-            <Download size={12} /> Export PNG
+            <Icon name="download" size={11} />
+            Export PNG
           </button>
         )}
       </div>
 
-      {/* Graph canvas */}
-      <div className="flex-1 glass rounded-xl relative overflow-hidden">
+      {/* ── Graph canvas ── */}
+      <div style={{
+        flex: 1, border: '1px solid var(--rule)', borderRadius: 4,
+        position: 'relative', overflow: 'hidden', background: 'var(--bg)',
+      }}>
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/30">
-            <RefreshCw size={24} className="animate-spin text-cyan-400" />
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 10, background: 'rgba(13,12,10,0.6)',
+          }}>
+            <Icon name="refresh" size={22} color="var(--accent)" />
           </div>
         )}
+
         {graph && graph.nodes.length === 0 && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-3">
-            <GitBranch size={40} className="opacity-20" />
-            <p className="text-sm">No targets in this project yet.</p>
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 12,
+          }}>
+            <Icon name="target" size={36} color="var(--rule-strong)" />
+            <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>No targets in this project yet.</p>
           </div>
         )}
-        <div ref={containerRef} className="absolute inset-0" />
+
+        <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
       </div>
     </div>
   )

@@ -1,21 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Bot, Play, Square, SkipForward, CheckCircle, Loader,
-  ChevronDown, ChevronRight, Terminal, GitBranch, AlertTriangle, RefreshCw,
-  Swords, Search, FileSearch, RotateCcw, ChevronUp, Pencil, Eye, EyeOff, Wifi,
+  ChevronDown, ChevronRight, GitBranch, AlertTriangle,
+  FileSearch, RotateCcw, ChevronUp, Pencil,
 } from 'lucide-react'
+import Icon from '@/components/Icon'
 import { PENTEST_TOOLS, MSF_MODULES, PENTEST_CATEGORIES, MSF_CATEGORIES, MODE_CONFIGS, OperatorMode } from '@/lib/operator'
 import { useAIOperator, type OperatorStep, type OperatorPhase } from '@/contexts/AIOperatorContext'
 
-// ── Mode icon map ─────────────────────────────────────────────────────────────
-
 const MODE_ICONS: Record<OperatorMode, React.ReactNode> = {
-  attack: <Swords size={13} />,
-  recon:  <Search size={13} />,
+  attack: <Icon name="swords" size={13} />,
+  recon:  <Icon name="search" size={13} />,
   audit:  <FileSearch size={13} />,
 }
 
-// ── Page component ────────────────────────────────────────────────────────────
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
 
 export default function AIOperator() {
   const op = useAIOperator()
@@ -23,7 +23,6 @@ export default function AIOperator() {
   const sessionActive = op.phase !== 'idle'
   const target = op.targets.find(t => t.id === op.selectedTarget)
 
-  // Local UI state — doesn't need to persist across navigation
   const [pendingMode, setPendingMode] = useState<OperatorMode | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
 
@@ -44,26 +43,26 @@ export default function AIOperator() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Left Config Panel ──────────────────────────────────────────────── */}
-      <div
-        className="w-72 shrink-0 flex flex-col border-r border-cyan-900/20 overflow-y-auto"
-        style={{ background: '#090d14' }}
-      >
+      {/* ── Left Config Panel ── */}
+      <div style={{
+        width: 272, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        borderRight: rule, overflowY: 'auto', background: 'var(--bg)',
+      }}>
         {/* Header */}
-        <div className="p-4 border-b border-cyan-900/20">
-          <div className="flex items-center gap-2" style={{ color: modeConfig.color }}>
-            <Bot size={16} />
-            <h2 className="text-sm font-semibold text-slate-200">AI Operator</h2>
+        <div style={{ padding: '14px 16px', borderBottom: rule }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Bot size={15} color={modeConfig.color} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>AI Operator</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">Supervised LLM-driven session</p>
+          <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Supervised LLM-driven session</p>
         </div>
 
-        {/* ── Mode selector ────────────────────────────────────────────────── */}
-        <div className="p-3 border-b border-cyan-900/20 space-y-2">
-          <div className="text-[10px] uppercase tracking-wider text-slate-600 font-semibold px-1">Mode</div>
-          <div className="grid grid-cols-3 gap-1.5">
+        {/* Mode selector */}
+        <div style={{ padding: '12px 12px', borderBottom: rule }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700, marginBottom: 8, paddingLeft: 2 }}>Mode</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
             {(Object.values(MODE_CONFIGS) as typeof MODE_CONFIGS[OperatorMode][]).map(cfg => {
               const isActive = op.mode === cfg.id
               return (
@@ -72,11 +71,15 @@ export default function AIOperator() {
                   onClick={() => handleModeClick(cfg.id)}
                   disabled={sessionActive}
                   title={cfg.desc}
-                  className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all duration-150 disabled:opacity-40"
-                  style={isActive
-                    ? { color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }
-                    : { color: '#475569', background: 'transparent', border: '1px solid rgba(71,85,105,0.2)' }
-                  }
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '8px 4px', borderRadius: 3, fontSize: 10, fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer',
+                    transition: 'all 0.15s', opacity: sessionActive ? 0.4 : 1,
+                    ...(isActive
+                      ? { color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }
+                      : { color: 'var(--fg-3)', background: 'transparent', border: ruleStrong }),
+                  }}
                 >
                   {MODE_ICONS[cfg.id]}
                   {cfg.label}
@@ -84,47 +87,50 @@ export default function AIOperator() {
               )
             })}
           </div>
-          <p className="text-[10px] px-1" style={{ color: `${modeConfig.color}99` }}>
+          <p style={{ fontSize: 10, padding: '6px 2px 0', margin: 0, color: `${modeConfig.color}99` }}>
             {modeConfig.desc}
           </p>
         </div>
 
-        <div className="flex-1 p-4 space-y-5 text-xs">
+        <div style={{ flex: 1, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 18, fontSize: 12 }}>
 
           {/* Project */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Project</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>Project</label>
             <select
               value={op.selectedProject}
               onChange={e => op.setSelectedProject(e.target.value)}
               disabled={sessionActive}
-              className="w-full rounded-lg px-2.5 py-1.5 text-slate-200 border border-cyan-900/20 focus:outline-none disabled:opacity-50"
-              style={{ background: '#05080d', fontSize: '12px' }}
+              style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)', outline: 'none', opacity: sessionActive ? 0.5 : 1 }}
             >
               {op.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
 
           {/* Target */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Target</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>Target</label>
             <select
               value={op.selectedTarget}
               onChange={e => op.setSelectedTarget(e.target.value)}
               disabled={sessionActive}
-              className="w-full rounded-lg px-2.5 py-1.5 text-slate-200 border border-cyan-900/20 focus:outline-none disabled:opacity-50"
-              style={{ background: '#05080d', fontSize: '12px' }}
+              style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)', outline: 'none', opacity: sessionActive ? 0.5 : 1 }}
             >
               {op.targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
             </select>
           </div>
 
           {/* Model */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Model</label>
-              <button onClick={op.loadModelOptions} disabled={op.loadingModels} className="text-slate-500 hover:text-cyan-400 transition-colors" title="Refresh models">
-                <RefreshCw size={11} className={op.loadingModels ? 'animate-spin' : ''} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>Model</label>
+              <button
+                onClick={op.loadModelOptions}
+                disabled={op.loadingModels}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}
+                title="Refresh models"
+              >
+                <Icon name="refresh" size={11} color={op.loadingModels ? 'var(--accent)' : 'currentColor'} />
               </button>
             </div>
             {op.modelOptions.length > 0 ? (
@@ -132,35 +138,35 @@ export default function AIOperator() {
                 value={op.selectedModelKey}
                 onChange={e => op.setSelectedModelKey(e.target.value)}
                 disabled={sessionActive}
-                className="w-full rounded-lg px-2.5 py-1.5 text-slate-200 border border-cyan-900/20 focus:outline-none disabled:opacity-50"
-                style={{ background: '#05080d', fontSize: '12px' }}
+                style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)', outline: 'none', opacity: sessionActive ? 0.5 : 1 }}
               >
                 {op.modelOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             ) : (
-              <p className="text-[11px] text-amber-400/80">No tool-capable models found. Pull a model that supports tools (e.g. <code>ollama pull qwen3</code>).</p>
+              <p style={{ fontSize: 11, color: '#f0a83a', margin: 0, lineHeight: 1.5 }}>
+                No tool-capable models found. Pull one (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>ollama pull qwen3</code>).
+              </p>
             )}
           </div>
 
-          <div className="border-t border-cyan-900/20" />
+          <div style={{ borderTop: rule }} />
 
           {/* Pentest Tools */}
-          <div className="space-y-3">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Pentest Tools</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>Pentest Tools</label>
             {PENTEST_CATEGORIES.map(cat => (
-              <div key={cat} className="space-y-1">
-                <div className="text-[10px] text-slate-600 font-medium">{cat}</div>
+              <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>{cat}</div>
                 {PENTEST_TOOLS.filter(t => t.category === cat).map(tool => (
-                  <label key={tool.id} className="flex items-center gap-2 py-0.5 cursor-pointer" title={tool.desc}>
+                  <label key={tool.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 0', cursor: 'pointer' }} title={tool.desc}>
                     <input
                       type="checkbox"
                       checked={op.enabledTools.has(tool.id)}
                       onChange={() => op.toggleTool(tool.id)}
                       disabled={sessionActive}
-                      className="rounded"
                       style={{ accentColor: modeConfig.color }}
                     />
-                    <span className={`font-mono text-[11px] transition-colors ${op.enabledTools.has(tool.id) ? 'text-slate-200' : 'text-slate-600'}`}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: op.enabledTools.has(tool.id) ? 'var(--fg)' : 'var(--fg-3)' }}>
                       {tool.label}
                     </span>
                   </label>
@@ -169,24 +175,24 @@ export default function AIOperator() {
             ))}
           </div>
 
-          <div className="border-t border-cyan-900/20" />
+          <div style={{ borderTop: rule }} />
 
           {/* MSF Modules */}
-          <div className="space-y-3">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Metasploit Modules</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>Metasploit Modules</label>
             {MSF_CATEGORIES.map(cat => (
-              <div key={cat} className="space-y-1">
-                <div className="text-[10px] text-slate-600 font-medium">{cat}</div>
+              <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 10, color: 'var(--fg-3)', fontWeight: 500 }}>{cat}</div>
                 {MSF_MODULES.filter(t => t.category === cat).map(mod => (
-                  <label key={mod.id} className="flex items-center gap-2 py-0.5 cursor-pointer" title={mod.desc}>
+                  <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 0', cursor: 'pointer' }} title={mod.desc}>
                     <input
                       type="checkbox"
                       checked={op.enabledMsf.has(mod.id)}
                       onChange={() => op.toggleMsf(mod.id)}
                       disabled={sessionActive}
-                      className="rounded accent-red-500"
+                      style={{ accentColor: '#e84040' }}
                     />
-                    <span className={`font-mono text-[11px] transition-colors ${op.enabledMsf.has(mod.id) ? 'text-slate-200' : 'text-slate-600'}`}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: op.enabledMsf.has(mod.id) ? 'var(--fg)' : 'var(--fg-3)' }}>
                       {mod.label}
                     </span>
                   </label>
@@ -195,32 +201,32 @@ export default function AIOperator() {
             ))}
           </div>
 
-          <div className="border-t border-cyan-900/20" />
+          <div style={{ borderTop: rule }} />
 
-          {/* System Prompt (collapsible) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          {/* System Prompt */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <button
                 onClick={() => setPromptOpen(o => !o)}
-                className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-slate-500 hover:text-slate-300 transition-colors"
+                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
               >
                 {promptOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                 System Prompt
                 {!op.promptIsAuto && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 normal-case tracking-normal">
+                  <span style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 2, fontSize: 9, fontWeight: 700, background: 'rgba(240,168,58,0.12)', color: '#f0a83a', border: '1px solid rgba(240,168,58,0.3)', textTransform: 'none', letterSpacing: 0 }}>
                     Custom
                   </span>
                 )}
               </button>
               {!op.promptIsAuto && (
-                <button onClick={op.regeneratePrompt} title="Reset to auto-generated prompt" className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-cyan-400 transition-colors">
+                <button onClick={op.regeneratePrompt} title="Reset to auto-generated prompt" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                   <RotateCcw size={10} /> Reset
                 </button>
               )}
             </div>
             {promptOpen && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1 text-[10px] text-slate-600">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--fg-3)' }}>
                   <Pencil size={9} />
                   {op.promptIsAuto ? 'Auto-generated · edits lock this prompt' : 'Custom · session will use this as-is'}
                 </div>
@@ -229,8 +235,12 @@ export default function AIOperator() {
                   onChange={e => { op.setPromptDraft(e.target.value); op.setPromptIsAuto(false) }}
                   disabled={sessionActive}
                   rows={12}
-                  className="w-full rounded-lg px-3 py-2 text-[11px] font-mono text-slate-300 border border-cyan-900/20 focus:border-cyan-600/40 focus:outline-none resize-none leading-relaxed disabled:opacity-50"
-                  style={{ background: '#060b10' }}
+                  style={{
+                    width: '100%', boxSizing: 'border-box', background: 'var(--bg)', border: ruleStrong,
+                    borderRadius: 3, padding: '8px 10px', fontSize: 11, fontFamily: 'var(--font-mono)',
+                    color: 'var(--fg)', resize: 'none', outline: 'none', lineHeight: 1.5,
+                    opacity: sessionActive ? 0.5 : 1,
+                  }}
                 />
               </div>
             )}
@@ -239,44 +249,45 @@ export default function AIOperator() {
         </div>
 
         {/* Start / Stop / New */}
-        <div className="p-4 border-t border-cyan-900/20 space-y-3">
+        <div style={{ padding: '14px 16px', borderTop: rule, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
           {/* LHOST */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-              <Wifi size={10} /> LHOST (your IP)
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', fontWeight: 700 }}>
+              <Icon name="wifi" size={10} /> LHOST (your IP)
             </label>
             <input
               type="text"
               value={op.lhostIp}
               onChange={e => op.setLhostIp(e.target.value)}
               placeholder="e.g. 192.168.1.10"
-              className="w-full rounded-lg px-2.5 py-1.5 text-slate-200 border border-cyan-900/20 focus:border-cyan-600/40 focus:outline-none font-mono"
-              style={{ background: '#05080d', fontSize: '11px' }}
+              style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 8px', fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none' }}
             />
-            <p className="text-[10px] text-slate-600">Auto-substituted into MSF LHOST placeholders</p>
+            <p style={{ fontSize: 10, color: 'var(--fg-3)', margin: 0 }}>Auto-substituted into MSF LHOST placeholders</p>
           </div>
 
           {/* Stream toggle */}
           <button
             onClick={() => op.setShowStream(s => !s)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all"
-            style={op.showStream
-              ? { color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }
-              : { color: '#475569', background: 'transparent', border: '1px solid rgba(71,85,105,0.2)' }
-            }
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '7px 10px', borderRadius: 3, fontSize: 12, cursor: 'pointer',
+              transition: 'all 0.15s',
+              ...(op.showStream
+                ? { color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }
+                : { color: 'var(--fg-3)', background: 'transparent', border: ruleStrong }),
+            }}
           >
-            <span className="flex items-center gap-1.5 font-semibold">
-              {op.showStream ? <Eye size={12} /> : <EyeOff size={12} />}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+              <Icon name={op.showStream ? 'eye' : 'eye_off'} size={12} />
               Live model stream
             </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide"
-              style={op.showStream
+            <span style={{
+              fontSize: 9, padding: '1px 5px', borderRadius: 2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+              ...(op.showStream
                 ? { color: modeConfig.color, background: `${modeConfig.color}22` }
-                : { color: '#475569', background: 'rgba(71,85,105,0.15)' }
-              }
-            >
+                : { color: 'var(--fg-3)', background: 'rgba(58,53,48,0.4)' }),
+            }}>
               {op.showStream ? 'On' : 'Off'}
             </span>
           </button>
@@ -285,22 +296,34 @@ export default function AIOperator() {
             <button
               onClick={op.startSession}
               disabled={!op.selectedProject || !op.selectedTarget || !op.selectedModelKey}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg disabled:opacity-40 text-sm text-white font-semibold transition-all"
-              style={{ background: modeConfig.color, opacity: (!op.selectedProject || !op.selectedTarget || !op.selectedModelKey) ? 0.4 : 1 }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                padding: '9px 12px', borderRadius: 3, border: 'none', cursor: 'pointer',
+                background: modeConfig.color, color: '#fff', fontSize: 13, fontWeight: 600,
+                opacity: (!op.selectedProject || !op.selectedTarget || !op.selectedModelKey) ? 0.4 : 1,
+              }}
             >
               <Play size={14} /> Start {modeConfig.label} Session
             </button>
           ) : op.phase === 'done' ? (
             <button
               onClick={op.resetSession}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-200 font-semibold transition-all"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                padding: '9px 12px', borderRadius: 3, border: ruleStrong, cursor: 'pointer',
+                background: 'var(--bg-2)', color: 'var(--fg-2)', fontSize: 13, fontWeight: 600,
+              }}
             >
-              <RefreshCw size={14} /> New Session
+              <Icon name="refresh" size={14} /> New Session
             </button>
           ) : (
             <button
               onClick={op.handleStop}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-700 hover:bg-red-900/60 border border-red-900/30 text-sm text-red-400 font-semibold transition-all"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                padding: '9px 12px', borderRadius: 3, border: '1px solid rgba(232,64,64,0.3)', cursor: 'pointer',
+                background: 'rgba(232,64,64,0.06)', color: '#e84040', fontSize: 13, fontWeight: 600,
+              }}
             >
               <Square size={14} /> Stop Session
             </button>
@@ -308,53 +331,61 @@ export default function AIOperator() {
         </div>
       </div>
 
-      {/* ── Right Session Panel ───────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Right Session Panel ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {op.phase === 'idle' ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }}
-            >
-              <Bot size={32} style={{ color: `${modeConfig.color}99` }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, textAlign: 'center', padding: '0 40px' }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: modeConfig.bg, border: `1px solid ${modeConfig.border}`,
+            }}>
+              <Bot size={28} color={`${modeConfig.color}99`} />
             </div>
             <div>
-              <h3 className="text-slate-300 font-semibold mb-1" style={{ color: modeConfig.color }}>
-                {modeConfig.label} Mode
-              </h3>
-              <p className="text-sm text-slate-500 max-w-sm">
+              <h3 style={{ color: modeConfig.color, fontWeight: 600, marginBottom: 6 }}>{modeConfig.label} Mode</h3>
+              <p style={{ fontSize: 13, color: 'var(--fg-3)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
                 {modeConfig.desc}. Select a project, target, and model. Enable tools, optionally edit the system prompt, then start a supervised session.
               </p>
             </div>
-            <div className="flex flex-col gap-2 text-xs text-slate-600 max-w-xs">
-              <div className="flex items-center gap-2"><CheckCircle size={12} className="text-green-600" /> You approve every command before it runs</div>
-              <div className="flex items-center gap-2"><CheckCircle size={12} className="text-green-600" /> Findings auto-populate the attack path graph</div>
-              <div className="flex items-center gap-2"><CheckCircle size={12} className="text-green-600" /> Sessions resume if you navigate away</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 280 }}>
+              {[
+                'You approve every command before it runs',
+                'Findings auto-populate the attack path graph',
+                'Sessions resume if you navigate away',
+              ].map(msg => (
+                <div key={msg} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-3)' }}>
+                  <CheckCircle size={12} color="var(--ok)" />
+                  {msg}
+                </div>
+              ))}
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Context banner */}
             {target && (
-              <div className="glass rounded-xl px-4 py-3 flex items-center gap-4 text-xs text-slate-400 border border-cyan-900/20">
-                <div
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                  style={{ color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }}
-                >
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px',
+                border: rule, borderRadius: 3, fontSize: 12, color: 'var(--fg-3)',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 7px', borderRadius: 2, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: modeConfig.color, background: modeConfig.bg, border: `1px solid ${modeConfig.border}` }}>
                   {MODE_ICONS[op.mode]} {modeConfig.label}
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-600">|</div>
-                <div className="flex items-center gap-1.5"><Terminal size={12} className="text-cyan-400" /> {target.hostname_or_ip}</div>
-                <div className="flex items-center gap-1.5 text-slate-600">|</div>
+                <span style={{ color: 'var(--rule-strong)' }}>|</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name="terminal" size={12} color="var(--accent)" /> {target.hostname_or_ip}
+                </div>
+                <span style={{ color: 'var(--rule-strong)' }}>|</span>
                 <div>{op.modelOptions.find(o => o.key === op.selectedModelKey)?.label ?? op.selectedModelKey}</div>
-                <div className="flex items-center gap-1.5 text-slate-600">|</div>
+                <span style={{ color: 'var(--rule-strong)' }}>|</span>
                 <div>{op.enabledTools.size + op.enabledMsf.size} tools</div>
                 {!op.promptIsAuto && (
                   <>
-                    <div className="flex items-center gap-1.5 text-slate-600">|</div>
-                    <div className="text-amber-400/70 text-[10px]">Custom prompt</div>
+                    <span style={{ color: 'var(--rule-strong)' }}>|</span>
+                    <div style={{ color: 'var(--accent)', fontSize: 10 }}>Custom prompt</div>
                   </>
                 )}
               </div>
@@ -380,26 +411,20 @@ export default function AIOperator() {
 
             {/* Thinking + live stream */}
             {op.phase === 'thinking' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 px-4 py-3 glass rounded-xl border border-cyan-900/20">
-                  <Loader size={14} className="animate-spin text-cyan-400 shrink-0" />
-                  <span className="text-sm text-slate-400">Analyzing and planning next action…</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: rule, borderRadius: 3 }}>
+                  <Loader size={14} color="var(--accent)" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: 'var(--fg-2)' }}>Analyzing and planning next action…</span>
                 </div>
                 {op.showStream && (
-                  <div className="rounded-xl border overflow-hidden" style={{ background: '#060b10', borderColor: modeConfig.border }}>
-                    <div
-                      className="flex items-center gap-2 px-3 py-2 border-b text-[10px] font-semibold uppercase tracking-widest"
-                      style={{ borderColor: 'rgba(6,182,212,0.08)', color: modeConfig.color }}
-                    >
-                      <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: modeConfig.color }} />
+                  <div style={{ border: `1px solid ${modeConfig.border}`, borderRadius: 3, overflow: 'hidden', background: 'var(--bg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderBottom: `1px solid ${modeConfig.border}40`, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: modeConfig.color }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: modeConfig.color, animation: 'pulse 1.5s ease-in-out infinite' }} />
                       Model output — live
                     </div>
-                    <pre
-                      className="px-4 py-3 text-[11px] font-mono text-slate-300 leading-relaxed overflow-y-auto whitespace-pre-wrap break-all"
-                      style={{ maxHeight: '280px', minHeight: '60px' }}
-                    >
-                      {op.llmStream || <span className="text-slate-600 italic">waiting for first token…</span>}
-                      {op.llmStream && <span className="animate-pulse text-cyan-400">▌</span>}
+                    <pre style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', lineHeight: 1.5, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 280, minHeight: 60, margin: 0 }}>
+                      {op.llmStream || <span style={{ color: 'var(--fg-3)', fontStyle: 'italic' }}>waiting for first token…</span>}
+                      {op.llmStream && <span style={{ animation: 'pulse 1s ease-in-out infinite', color: 'var(--accent)' }}>▌</span>}
                     </pre>
                   </div>
                 )}
@@ -408,19 +433,18 @@ export default function AIOperator() {
 
             {/* Error */}
             {op.errorMsg && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-900/30 bg-red-900/10">
-                <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-                <span className="text-sm text-red-400">{op.errorMsg}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 3, border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.06)' }}>
+                <AlertTriangle size={14} color="#e84040" style={{ marginTop: 1, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: '#e84040' }}>{op.errorMsg}</span>
               </div>
             )}
 
             {/* Done */}
             {op.phase === 'done' && !op.errorMsg && (
-              <div className="flex items-center gap-3 px-4 py-3 glass rounded-xl border border-green-900/30">
-                <CheckCircle size={14} className="text-green-400 shrink-0" />
-                <span className="text-sm text-slate-300">
-                  Session complete — {op.steps.filter(s => s.result === 'approved').length} steps executed.
-                  Check Attack Paths for the updated graph.
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: '1px solid rgba(84,175,97,0.3)', borderRadius: 3, background: 'rgba(84,175,97,0.06)' }}>
+                <CheckCircle size={14} color="var(--ok)" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: 'var(--fg-2)' }}>
+                  Session complete — {op.steps.filter(s => s.result === 'approved').length} steps executed. Check Attack Paths for the updated graph.
                 </span>
               </div>
             )}
@@ -430,43 +454,43 @@ export default function AIOperator() {
         )}
       </div>
 
-      {/* ── Mode reset dialog ──────────────────────────────────────────────── */}
+      {/* ── Mode reset dialog ── */}
       {pendingMode && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)' }}
           onClick={() => setPendingMode(null)}
         >
           <div
-            className="rounded-2xl border p-6 w-80 space-y-4"
-            style={{ background: '#0d1520', borderColor: MODE_CONFIGS[pendingMode].border }}
+            style={{ border: `1px solid ${MODE_CONFIGS[pendingMode].border}`, borderRadius: 4, padding: 24, width: 320, display: 'flex', flexDirection: 'column', gap: 16, background: 'var(--bg-2)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-bold" style={{ color: MODE_CONFIGS[pendingMode].color }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: MODE_CONFIGS[pendingMode].color, marginBottom: 4 }}>
                 {MODE_ICONS[pendingMode]}
                 Switch to {MODE_CONFIGS[pendingMode].label} Mode
               </div>
-              <p className="text-xs text-slate-500">{MODE_CONFIGS[pendingMode].desc}</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>{MODE_CONFIGS[pendingMode].desc}</p>
             </div>
-            <p className="text-xs text-slate-400">
+            <p style={{ fontSize: 12, color: 'var(--fg-2)', margin: 0 }}>
               Reset tool selection to <strong style={{ color: MODE_CONFIGS[pendingMode].color }}>{MODE_CONFIGS[pendingMode].label}</strong> defaults?
             </p>
-            <div className="flex flex-col gap-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
                 onClick={() => confirmModeSwitch(true)}
-                className="w-full py-2 rounded-lg text-xs font-semibold text-white transition-all"
-                style={{ background: MODE_CONFIGS[pendingMode].color }}
+                style={{ padding: '8px 12px', borderRadius: 3, border: 'none', cursor: 'pointer', background: MODE_CONFIGS[pendingMode].color, color: '#fff', fontSize: 12, fontWeight: 600 }}
               >
                 Reset tools to {MODE_CONFIGS[pendingMode].label} defaults
               </button>
               <button
                 onClick={() => confirmModeSwitch(false)}
-                className="w-full py-2 rounded-lg text-xs font-semibold text-slate-300 glass glass-hover transition-all"
+                style={{ padding: '8px 12px', borderRadius: 3, cursor: 'pointer', background: 'var(--bg)', border: rule, color: 'var(--fg-2)', fontSize: 12, fontWeight: 600 }}
               >
                 Switch mode, keep current tools
               </button>
-              <button onClick={() => setPendingMode(null)} className="w-full py-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors">
+              <button
+                onClick={() => setPendingMode(null)}
+                style={{ padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--fg-3)' }}
+              >
                 Cancel
               </button>
             </div>
@@ -506,10 +530,16 @@ function StepCard({ step, index, mode, isActive, isRunning, liveOutput, runStart
 
   const fmtElapsed = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`
 
-  const statusColor = step.result === 'approved' ? 'text-green-400 border-green-900/30'
-    : step.result === 'skipped'                  ? 'text-slate-500 border-slate-800'
-    : step.result === 'error'                    ? 'text-red-400 border-red-900/30'
-    : 'text-cyan-400 border-cyan-900/30'
+  const borderColor = step.result === 'approved' ? 'rgba(84,175,97,0.35)'
+    : step.result === 'skipped' ? 'var(--rule-strong)'
+    : step.result === 'error'   ? 'rgba(232,64,64,0.35)'
+    : isActive                  ? modeConfig.border
+    : 'var(--rule)'
+
+  const statusColor = step.result === 'approved' ? 'var(--ok)'
+    : step.result === 'skipped' ? 'var(--fg-3)'
+    : step.result === 'error'   ? 'var(--crit)'
+    : 'var(--accent)'
 
   const statusLabel = step.result === 'approved' ? 'Executed'
     : step.result === 'skipped' ? 'Skipped'
@@ -520,80 +550,95 @@ function StepCard({ step, index, mode, isActive, isRunning, liveOutput, runStart
   const isMsf = step.action && (step.action.tool.includes('/') || step.action.command.startsWith('msfconsole'))
 
   return (
-    <div
-      className={`glass rounded-xl border overflow-hidden transition-all ${statusColor}`}
-      style={isActive ? { borderColor: modeConfig.border } : undefined}
-    >
-      <div className="px-4 py-3 flex items-center justify-between border-b border-cyan-900/10">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-slate-600">STEP {index}</span>
-          {isRunning && <Loader size={11} className="animate-spin text-cyan-400" />}
-          {step.result === 'approved' && !isRunning && <CheckCircle size={11} className="text-green-400" />}
-          {step.result === 'skipped' && <SkipForward size={11} className="text-slate-500" />}
+    <div style={{ border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', background: 'var(--bg-2)' }}>
+      {/* Step header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: '1px solid var(--rule)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)' }}>STEP {index}</span>
+          {isRunning && <Loader size={11} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />}
+          {step.result === 'approved' && !isRunning && <CheckCircle size={11} color="var(--ok)" />}
+          {step.result === 'skipped' && <SkipForward size={11} color="var(--fg-3)" />}
         </div>
-        <span className={`text-[10px] font-medium ${statusColor.split(' ')[0]}`}>{statusLabel}</span>
+        <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
       </div>
 
-      <div className="p-4 space-y-4">
-        {step.analysis && <p className="text-sm text-slate-300 leading-relaxed">{step.analysis}</p>}
+      <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {step.analysis && <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0 }}>{step.analysis}</p>}
 
         {step.attackPathNote && (
-          <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/5 rounded-lg px-3 py-2 border border-amber-900/20">
-            <GitBranch size={11} className="shrink-0" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#f0a83a', background: 'rgba(240,168,58,0.05)', borderRadius: 3, padding: '7px 10px', border: '1px solid rgba(240,168,58,0.2)' }}>
+            <GitBranch size={11} style={{ flexShrink: 0 }} />
             <span>{step.attackPathNote}</span>
           </div>
         )}
 
         {step.action && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${isMsf ? 'bg-purple-500/10 text-purple-400 border border-purple-900/30' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-900/30'}`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 2,
+                ...(isMsf
+                  ? { color: '#a855f7', background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.3)' }
+                  : { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.25)' }),
+              }}>
                 {isMsf ? 'MSF' : 'TOOL'} · {step.action.tool}
               </span>
             </div>
-            <pre className="text-xs font-mono text-slate-200 bg-black/40 rounded-lg px-3 py-2.5 overflow-x-auto whitespace-pre-wrap break-all border border-cyan-900/10">
-              <span className="text-slate-500 select-none">$ </span>{step.action.command}
+            <pre style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', background: 'var(--bg)', borderRadius: 3, padding: '9px 12px', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', border: '1px solid var(--rule)', margin: 0 }}>
+              <span style={{ color: 'var(--fg-3)', userSelect: 'none' }}>$ </span>{step.action.command}
             </pre>
-            {step.action.rationale && <p className="text-xs text-slate-500 italic">{step.action.rationale}</p>}
+            {step.action.rationale && <p style={{ fontSize: 11, color: 'var(--fg-3)', fontStyle: 'italic', margin: 0 }}>{step.action.rationale}</p>}
           </div>
         )}
 
         {isActive && (
-          <div className="flex items-center gap-2 pt-1">
-            <button onClick={onApprove} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs text-white font-semibold transition-colors" style={{ background: modeConfig.color }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+            <button
+              onClick={onApprove}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 3, border: 'none', cursor: 'pointer', background: modeConfig.color, color: '#fff', fontSize: 12, fontWeight: 600 }}
+            >
               <CheckCircle size={12} /> Approve
             </button>
-            <button onClick={onSkip} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg glass glass-hover text-xs text-slate-300 font-semibold transition-colors">
+            <button
+              onClick={onSkip}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 3, cursor: 'pointer', background: 'var(--bg)', border: '1px solid var(--rule-strong)', color: 'var(--fg-2)', fontSize: 12, fontWeight: 600 }}
+            >
               <SkipForward size={12} /> Skip
             </button>
-            <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg glass glass-hover text-xs text-red-400 font-semibold transition-colors ml-auto">
-              <Square size={12} /> Stop
+            <button
+              onClick={onStop}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 3, cursor: 'pointer', background: 'rgba(232,64,64,0.06)', border: '1px solid rgba(232,64,64,0.3)', color: '#e84040', fontSize: 12, fontWeight: 600, marginLeft: 'auto' }}
+            >
+              <Icon name="stop" size={12} /> Stop
             </button>
           </div>
         )}
 
         {isRunning && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider">
-                <Loader size={10} className="animate-spin" /> Live output
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> Live output
               </div>
-              <span className="text-[10px] font-mono text-slate-600">{fmtElapsed(elapsed)}</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)' }}>{fmtElapsed(elapsed)}</span>
             </div>
-            <pre className="text-[11px] font-mono text-green-300 bg-black/60 rounded-lg px-3 py-2 max-h-64 overflow-y-auto border border-green-900/20 whitespace-pre-wrap break-all">
-              {liveOutput ? liveOutput.slice(-6000) : <span className="text-slate-600 italic">Waiting for process output…</span>}
+            <pre style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ok)', background: 'var(--bg)', borderRadius: 3, padding: '8px 12px', maxHeight: 256, overflowY: 'auto', border: '1px solid rgba(84,175,97,0.2)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+              {liveOutput ? liveOutput.slice(-6000) : <span style={{ color: 'var(--fg-3)', fontStyle: 'italic' }}>Waiting for process output…</span>}
             </pre>
           </div>
         )}
 
         {step.result === 'approved' && !isRunning && step.output && (
-          <div className="space-y-1">
-            <button onClick={onToggleOutput} className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 uppercase tracking-wider transition-colors">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <button
+              onClick={onToggleOutput}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
               {step.outputOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
               Output · {step.output.length.toLocaleString()} bytes
             </button>
             {step.outputOpen && (
-              <pre className="text-[11px] font-mono text-green-300 bg-black/60 rounded-lg px-3 py-2 max-h-64 overflow-y-auto border border-green-900/20 whitespace-pre-wrap">
+              <pre style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ok)', background: 'var(--bg)', borderRadius: 3, padding: '8px 12px', maxHeight: 256, overflowY: 'auto', border: '1px solid rgba(84,175,97,0.2)', whiteSpace: 'pre-wrap', margin: 0 }}>
                 {step.output.slice(0, 12000)}
               </pre>
             )}

@@ -1,35 +1,65 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Network, ShieldAlert, Globe, Server, ClipboardCheck,
-  Cloud, Activity, ChevronDown, ChevronUp, Download,
-  Play, RefreshCw, CheckSquare, Square, BookMarked, ChevronRight,
-  Clock, X, Shield, CheckCircle, XCircle, AlertTriangle, Gauge, KeyRound,
+  ShieldAlert, Globe, Server, ClipboardCheck, Cloud,
+  CheckSquare, Square, BookMarked, CheckCircle, XCircle,
+  AlertTriangle, Gauge, KeyRound,
 } from 'lucide-react'
+import Icon from '../components/Icon'
 import ScriptPreview from '../components/ScriptPreview'
 import Terminal, { TerminalHandle } from '../components/Terminal'
 import { getProjects, getTargets } from '../api/client'
 import type { Project, TargetSummary, ScanCategory } from '../types'
 import { getApiBase } from '@/lib/config'
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  network_discovery: <Network size={20} />,
-  vulnerability_scan: <ShieldAlert size={20} />,
-  web_audit: <Globe size={20} />,
-  host_hardening: <Server size={20} />,
-  openscap: <ClipboardCheck size={20} />,
-  cloud_aws: <Cloud size={20} />,
-  log_monitoring: <Activity size={20} />,
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const rule = '1px solid var(--rule)'
+const ruleStrong = '1px solid var(--rule-strong)'
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box', background: 'var(--bg)',
+  border: ruleStrong, borderRadius: 3, padding: '6px 10px',
+  fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none',
 }
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)',
+  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6,
+  fontFamily: 'var(--font-sans)',
+}
+
+const cardStyle: React.CSSProperties = {
+  background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14, flexShrink: 0,
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Profile {
   id: string
   name: string
   description: string
-  scan_categories: Array<{ category_id: string; config: Record<string, any> }>
+  scan_categories: Array<{ category_id: string; config: Record<string, unknown> }>
   schedule: string | null
   last_run: string | null
   next_run: string | null
 }
+
+// ── Category icon helper ───────────────────────────────────────────────────────
+
+function CategoryIcon({ id, color, size = 16 }: { id: string; color: string; size?: number }) {
+  switch (id) {
+    case 'network_discovery': return <Icon name="network" size={size} color={color} />
+    case 'vulnerability_scan': return <ShieldAlert size={size} color={color} />
+    case 'web_audit': return <Globe size={size} color={color} />
+    case 'host_hardening': return <Server size={size} color={color} />
+    case 'openscap': return <ClipboardCheck size={size} color={color} />
+    case 'cloud_aws': return <Cloud size={size} color={color} />
+    case 'log_monitoring': return <Icon name="activity" size={size} color={color} />
+    default: return <Icon name="shield" size={size} color={color} />
+  }
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AuditBuilder() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -39,35 +69,31 @@ export default function AuditBuilder() {
   const [categories, setCategories] = useState<Record<string, ScanCategory>>({})
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
-  const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, any>>>({})
+  const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, unknown>>>({})
   const [generatedScript, setGeneratedScript] = useState('')
   const [scanId, setScanId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'compliance'>('preview')
 
-  // Compliance / hardening profiles
-  const [hardeningProfiles, setHardeningProfiles] = useState<any[]>([])
+  const [hardeningProfiles, setHardeningProfiles] = useState<Record<string, unknown>[]>([])
   const [selectedHardeningProfile, setSelectedHardeningProfile] = useState('cis_l1')
-  const [complianceReport, setComplianceReport] = useState<any | null>(null)
+  const [complianceReport, setComplianceReport] = useState<Record<string, unknown> | null>(null)
   const [scoring, setScoring] = useState(false)
   const [scoreError, setScoreError] = useState('')
   const [toolStatus, setToolStatus] = useState<Record<string, { available: boolean }>>({})
   const terminalRef = useRef<TerminalHandle>(null)
 
-  // SSH credential state
   const REMOTE_CATEGORIES = new Set(['host_hardening', 'openscap', 'log_monitoring'])
   const needsSSH = [...selectedCategories].some(c => REMOTE_CATEGORIES.has(c))
   const [sshCredentials, setSshCredentials] = useState<Array<{ id: string; username: string; target_host: string; notes: string }>>([])
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('')
 
-  // Profile state
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [profileName, setProfileName] = useState('')
   const [showProfileSave, setShowProfileSave] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
 
-  // Schedule state
   const [showSchedule, setShowSchedule] = useState(false)
   const [scheduleCron, setScheduleCron] = useState('')
   const [savingSchedule, setSavingSchedule] = useState(false)
@@ -89,25 +115,18 @@ export default function AuditBuilder() {
 
   async function handleScoreScan() {
     if (!scanId || !selectedProject) return
-    setScoring(true)
-    setScoreError('')
+    setScoring(true); setScoreError('')
     try {
       const res = await fetch(`${getApiBase()}/hardening/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scan_id: scanId, profile_id: selectedHardeningProfile, project_id: selectedProject }),
       })
-      if (!res.ok) {
-        const err = await res.json()
-        setScoreError(err.detail || 'Scoring failed')
-        return
-      }
+      if (!res.ok) { const err = await res.json(); setScoreError(err.detail || 'Scoring failed'); return }
       setComplianceReport(await res.json())
-    } catch (e: any) {
-      setScoreError(e.message || 'Scoring failed')
-    } finally {
-      setScoring(false)
-    }
+    } catch (e: unknown) {
+      setScoreError(e instanceof Error ? e.message : 'Scoring failed')
+    } finally { setScoring(false) }
   }
 
   async function loadProjects() {
@@ -115,9 +134,7 @@ export default function AuditBuilder() {
       const data = await getProjects()
       setProjects(data)
       if (data.length > 0) setSelectedProject(data[0].id)
-    } catch (err) {
-      console.error('Failed to load projects', err)
-    }
+    } catch (err) { console.error('Failed to load projects', err) }
   }
 
   async function loadCategories() {
@@ -125,7 +142,7 @@ export default function AuditBuilder() {
       const res = await fetch(`${getApiBase()}/audit/categories`)
       const data = await res.json()
       setCategories(data)
-      const defaults: Record<string, Record<string, any>> = {}
+      const defaults: Record<string, Record<string, unknown>> = {}
       for (const [id, cat] of Object.entries(data as Record<string, ScanCategory>)) {
         defaults[id] = {}
         for (const [key, schema] of Object.entries(cat.config_schema)) {
@@ -133,19 +150,14 @@ export default function AuditBuilder() {
         }
       }
       setCategoryConfigs(defaults)
-    } catch (err) {
-      console.error('Failed to load categories', err)
-    }
+    } catch (err) { console.error('Failed to load categories', err) }
   }
 
   async function loadToolStatus() {
     try {
       const res = await fetch(`${getApiBase()}/settings/tools`)
-      const data = await res.json()
-      setToolStatus(data)
-    } catch {
-      // Tool status is optional — ignore errors
-    }
+      setToolStatus(await res.json())
+    } catch { /* optional */ }
   }
 
   async function loadProfiles() {
@@ -153,17 +165,15 @@ export default function AuditBuilder() {
       const res = await fetch(`${getApiBase()}/profiles`)
       if (res.ok) {
         const data = await res.json()
-        const parsed = data.map((p: any) => ({
+        const parsed = data.map((p: Record<string, unknown>) => ({
           ...p,
           scan_categories: typeof p.scan_categories === 'string'
-            ? JSON.parse(p.scan_categories)
+            ? JSON.parse(p.scan_categories as string)
             : p.scan_categories,
         }))
         setProfiles(parsed)
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }
 
   useEffect(() => {
@@ -192,7 +202,7 @@ export default function AuditBuilder() {
     })
   }
 
-  function updateConfig(categoryId: string, key: string, value: any) {
+  function updateConfig(categoryId: string, key: string, value: unknown) {
     setCategoryConfigs(prev => ({
       ...prev,
       [categoryId]: { ...prev[categoryId], [key]: value },
@@ -203,7 +213,7 @@ export default function AuditBuilder() {
     const profile = profiles.find(p => p.id === profileId)
     if (!profile) return
     const newSelected = new Set<string>()
-    const newConfigs: Record<string, Record<string, any>> = { ...categoryConfigs }
+    const newConfigs: Record<string, Record<string, unknown>> = { ...categoryConfigs }
     for (const cat of profile.scan_categories) {
       newSelected.add(cat.category_id)
       newConfigs[cat.category_id] = { ...newConfigs[cat.category_id], ...cat.config }
@@ -219,11 +229,7 @@ export default function AuditBuilder() {
     await fetch(`${getApiBase()}/profiles/${selectedProfileId}/schedule`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cron: scheduleCron || null,
-        project_id: selectedProject || null,
-        target_id: selectedTarget || null,
-      }),
+      body: JSON.stringify({ cron: scheduleCron || null, project_id: selectedProject || null, target_id: selectedTarget || null }),
     })
     setSavingSchedule(false)
     setShowSchedule(false)
@@ -259,11 +265,8 @@ export default function AuditBuilder() {
       setProfileName('')
       setShowProfileSave(false)
       await loadProfiles()
-    } catch (err) {
-      console.error('Failed to save profile', err)
-    } finally {
-      setSavingProfile(false)
-    }
+    } catch (err) { console.error('Failed to save profile', err) }
+    finally { setSavingProfile(false) }
   }
 
   async function handleGenerate() {
@@ -271,33 +274,25 @@ export default function AuditBuilder() {
     setGenerating(true)
     try {
       const scanCategories = Array.from(selectedCategories).map(id => ({
-        category_id: id,
-        config: categoryConfigs[id] || {},
+        category_id: id, config: categoryConfigs[id] || {},
       }))
       const res = await fetch(`${getApiBase()}/audit/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_id: selectedProject,
-          target_id: selectedTarget,
+          project_id: selectedProject, target_id: selectedTarget,
           scan_categories: scanCategories,
           credential_id: needsSSH && selectedCredentialId ? selectedCredentialId : null,
         }),
       })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail ?? `HTTP ${res.status}`)
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail ?? `HTTP ${res.status}`) }
       const data = await res.json()
       setGeneratedScript(data.script)
       setScanId(data.scan_id)
       setComplianceReport(null)
       setActiveTab('preview')
-    } catch (err) {
-      console.error('Script generation failed', err)
-    } finally {
-      setGenerating(false)
-    }
+    } catch (err) { console.error('Script generation failed', err) }
+    finally { setGenerating(false) }
   }
 
   async function handleDownload() {
@@ -315,12 +310,8 @@ export default function AuditBuilder() {
   function handleRunOnServer() {
     if (!scanId || !generatedScript) return
     setActiveTab('terminal')
-    setTimeout(() => {
-      terminalRef.current?.connect(scanId, generatedScript)
-    }, 100)
+    setTimeout(() => { terminalRef.current?.connect(scanId, generatedScript) }, 100)
   }
-
-  const inputClass = "w-full rounded px-3 py-1.5 text-sm text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50"
 
   function renderConfigField(categoryId: string, key: string, schema: ScanCategory['config_schema'][string]) {
     const value = categoryConfigs[categoryId]?.[key]
@@ -328,9 +319,8 @@ export default function AuditBuilder() {
     if (schema.type === 'select') {
       return (
         <select
-          className={inputClass}
-          style={{ background: '#05080d' }}
-          value={value}
+          style={{ ...inputStyle, fontSize: 12 }}
+          value={value as string}
           onChange={e => updateConfig(categoryId, key, e.target.value)}
         >
           {(schema.options ?? []).map((opt: string) => (
@@ -341,25 +331,25 @@ export default function AuditBuilder() {
     }
 
     if (schema.type === 'multiselect') {
-      const selected: string[] = Array.isArray(value) ? value : []
+      const selected: string[] = Array.isArray(value) ? value as string[] : []
       return (
-        <div className="flex flex-wrap gap-2">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(schema.options ?? []).map((opt: string) => {
-            const isSelected = selected.includes(opt)
+            const isSel = selected.includes(opt)
             return (
               <button
                 key={opt}
                 onClick={() => {
-                  const next = isSelected
-                    ? selected.filter(s => s !== opt)
-                    : [...selected, opt]
+                  const next = isSel ? selected.filter(s => s !== opt) : [...selected, opt]
                   updateConfig(categoryId, key, next)
                 }}
-                className={`px-2 py-1 rounded text-xs border transition-colors ${
-                  isSelected
-                    ? 'bg-cyan-600 border-cyan-500 text-white'
-                    : 'bg-transparent border-cyan-900/30 text-slate-400 hover:border-cyan-900/60'
-                }`}
+                style={{
+                  padding: '3px 10px', borderRadius: 3, fontSize: 11, cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)',
+                  background: isSel ? 'rgba(240,168,58,0.12)' : 'var(--bg)',
+                  border: isSel ? '1px solid rgba(240,168,58,0.35)' : ruleStrong,
+                  color: isSel ? 'var(--accent)' : 'var(--fg-3)',
+                }}
               >
                 {opt}
               </button>
@@ -373,9 +363,11 @@ export default function AuditBuilder() {
       return (
         <button
           onClick={() => updateConfig(categoryId, key, !value)}
-          className="flex items-center gap-2 text-sm text-slate-300"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-sans)', color: 'var(--fg-2)' }}
         >
-          {value ? <CheckSquare size={16} className="text-cyan-400" /> : <Square size={16} className="text-slate-500" />}
+          {value
+            ? <CheckSquare size={15} color="var(--accent)" />
+            : <Square size={15} color="var(--fg-3)" />}
           {value ? 'Enabled' : 'Disabled'}
         </button>
       )
@@ -384,70 +376,57 @@ export default function AuditBuilder() {
     return (
       <input
         type="text"
-        className={inputClass}
-        style={{ background: '#05080d' }}
-        value={value || ''}
+        style={inputStyle}
+        value={(value as string) || ''}
         placeholder={schema.placeholder || ''}
         onChange={e => updateConfig(categoryId, key, e.target.value)}
       />
     )
   }
 
-  const selectClass = "w-full rounded px-3 py-2 text-sm text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50"
-
   return (
-    <div className="flex h-full gap-4 overflow-hidden">
-      {/* Left Panel */}
-      <div className="w-80 flex-shrink-0 flex flex-col gap-4 min-h-0">
-        {/* Project & Target Selection */}
-        <div className="glass glass-hover rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-slate-200 mb-3">Target Selection</h3>
-          <div className="space-y-3">
+    <div style={{ display: 'flex', height: '100%', gap: 14, overflow: 'hidden', padding: 16, background: 'var(--bg)', boxSizing: 'border-box' }}>
+
+      {/* ── Left Panel ─────────────────────────────────────────────────────── */}
+      <div style={{ width: 296, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+
+        {/* Target Selection */}
+        <div style={cardStyle}>
+          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>
+            Target Selection
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Project</label>
-              <select
-                className={selectClass}
-                style={{ background: '#05080d' }}
-                value={selectedProject}
-                onChange={e => setSelectedProject(e.target.value)}
-              >
-                <option value="">Select project...</option>
+              <label style={labelStyle}>Project</label>
+              <select style={inputStyle} value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+                <option value="">Select project…</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Target</label>
+              <label style={labelStyle}>Target</label>
               <select
-                className={selectClass}
-                style={{ background: '#05080d' }}
+                style={{ ...inputStyle, opacity: targets.length === 0 ? 0.5 : 1 }}
                 value={selectedTarget}
                 onChange={e => setSelectedTarget(e.target.value)}
                 disabled={targets.length === 0}
               >
-                <option value="">Select target...</option>
+                <option value="">Select target…</option>
                 {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
               </select>
             </div>
 
-            {/* SSH credential picker — shown when a remote category is selected */}
             {needsSSH && (
               <div>
-                <label className="text-xs mb-1 flex items-center gap-1.5 text-amber-400">
-                  <KeyRound size={11} />
-                  SSH Key Credential
+                <label style={{ ...labelStyle, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <KeyRound size={10} /> SSH Key Credential
                 </label>
                 {sshCredentials.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 px-1">
-                    No SSH keys in vault for this project.{' '}
-                    <a href="/vault" className="text-cyan-500 hover:text-cyan-300 underline">Add one →</a>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                    No SSH keys in vault for this project.
                   </p>
                 ) : (
-                  <select
-                    className={selectClass}
-                    style={{ background: '#05080d' }}
-                    value={selectedCredentialId}
-                    onChange={e => setSelectedCredentialId(e.target.value)}
-                  >
+                  <select style={inputStyle} value={selectedCredentialId} onChange={e => setSelectedCredentialId(e.target.value)}>
                     <option value="">Run locally (no SSH)</option>
                     {sshCredentials.map(c => (
                       <option key={c.id} value={c.id}>
@@ -457,7 +436,7 @@ export default function AuditBuilder() {
                   </select>
                 )}
                 {selectedCredentialId && (
-                  <p className="text-[10px] text-amber-500/70 mt-1 px-1">
+                  <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)', opacity: 0.7 }}>
                     Script will run on the target via SSH
                   </p>
                 )}
@@ -468,31 +447,27 @@ export default function AuditBuilder() {
 
         {/* Load Profile */}
         {profiles.length > 0 && (
-          <div className="glass glass-hover rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-              <BookMarked size={14} className="text-slate-400" />
-              Load Profile
-            </h3>
-            <div className="flex gap-2">
+          <div style={cardStyle}>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)' }}>
+              <BookMarked size={12} color="var(--fg-3)" /> Load Profile
+            </p>
+            <div style={{ display: 'flex', gap: 6 }}>
               <select
-                className={`flex-1 ${selectClass}`}
-                style={{ background: '#05080d' }}
+                style={{ ...inputStyle, flex: 1 }}
                 value={selectedProfileId}
                 onChange={e => { setSelectedProfileId(e.target.value); setShowSchedule(false) }}
               >
-                <option value="">Select profile...</option>
+                <option value="">Select profile…</option>
                 {profiles.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.schedule ? '⏰ ' : ''}{p.name}
-                  </option>
+                  <option key={p.id} value={p.id}>{p.schedule ? '⏰ ' : ''}{p.name}</option>
                 ))}
               </select>
               <button
                 onClick={() => applyProfile(selectedProfileId)}
                 disabled={!selectedProfileId}
-                className="px-3 py-2 rounded bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-sm transition-colors flex items-center gap-1"
+                style={{ padding: '6px 10px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', color: 'var(--accent)', cursor: selectedProfileId ? 'pointer' : 'not-allowed', opacity: selectedProfileId ? 1 : 0.4 }}
               >
-                <ChevronRight size={14} />
+                <Icon name="chev_r" size={13} color="var(--accent)" />
               </button>
               <button
                 onClick={() => {
@@ -501,27 +476,32 @@ export default function AuditBuilder() {
                   setShowSchedule(s => !s)
                 }}
                 disabled={!selectedProfileId}
-                className="px-3 py-2 rounded border border-cyan-900/30 disabled:opacity-40 text-slate-400 hover:text-cyan-400 hover:border-cyan-700/50 text-sm transition-colors"
                 title="Schedule"
+                style={{ padding: '6px 10px', borderRadius: 3, background: 'none', border: ruleStrong, color: 'var(--fg-3)', cursor: selectedProfileId ? 'pointer' : 'not-allowed', opacity: selectedProfileId ? 1 : 0.4 }}
               >
-                <Clock size={14} />
+                <Icon name="clock" size={13} color="var(--fg-3)" />
               </button>
             </div>
 
-            {/* Schedule panel */}
             {showSchedule && selectedProfileId && (() => {
               const prof = profiles.find(p => p.id === selectedProfileId)
               return (
-                <div className="mt-3 pt-3 border-t border-cyan-900/20 space-y-2">
-                  <div className="text-xs text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1"><Clock size={10} /> Schedule (cron)</span>
-                    <button onClick={() => setShowSchedule(false)} className="text-slate-600 hover:text-slate-400"><X size={11} /></button>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: rule }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-sans)' }}>
+                      <Icon name="clock" size={10} color="var(--fg-3)" /> Schedule (cron)
+                    </span>
+                    <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                      <Icon name="x" size={11} color="var(--fg-3)" />
+                    </button>
                   </div>
-                  {/* Quick presets */}
-                  <div className="flex flex-wrap gap-1">
-                    {[['Daily 2am','0 2 * * *'],['Weekly Sun','0 2 * * 0'],['Hourly','0 * * * *']].map(([label, expr]) => (
-                      <button key={label} onClick={() => setScheduleCron(expr)}
-                        className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-900/30 text-slate-500 hover:text-cyan-400 hover:border-cyan-700/40 transition-colors">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                    {[['Daily 2am', '0 2 * * *'], ['Weekly Sun', '0 2 * * 0'], ['Hourly', '0 * * * *']].map(([label, expr]) => (
+                      <button
+                        key={label}
+                        onClick={() => setScheduleCron(expr)}
+                        style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, background: 'none', border: ruleStrong, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
+                      >
                         {label}
                       </button>
                     ))}
@@ -530,18 +510,31 @@ export default function AuditBuilder() {
                     value={scheduleCron}
                     onChange={e => setScheduleCron(e.target.value)}
                     placeholder="0 2 * * *"
-                    className="w-full rounded px-2 py-1.5 text-xs font-mono text-slate-200 border border-cyan-900/20 focus:outline-none focus:border-cyan-500/50 bg-[#05080d]"
+                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 11 }}
                   />
-                  {prof?.last_run && <div className="text-[10px] text-slate-500">Last run: {new Date(prof.last_run).toLocaleString()}</div>}
-                  {prof?.next_run && <div className="text-[10px] text-slate-500">Next run: {new Date(prof.next_run).toLocaleString()}</div>}
-                  <div className="flex gap-2">
-                    <button onClick={handleSaveSchedule} disabled={savingSchedule || !scheduleCron}
-                      className="flex-1 py-1 rounded bg-cyan-700 hover:bg-cyan-600 disabled:opacity-40 text-xs text-white transition-colors">
-                      {savingSchedule ? 'Saving...' : 'Save'}
+                  {prof?.last_run && (
+                    <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                      Last run: {new Date(prof.last_run).toLocaleString()}
+                    </p>
+                  )}
+                  {prof?.next_run && (
+                    <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                      Next run: {new Date(prof.next_run).toLocaleString()}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button
+                      onClick={handleSaveSchedule}
+                      disabled={savingSchedule || !scheduleCron}
+                      style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 11, color: 'var(--accent)', cursor: savingSchedule || !scheduleCron ? 'not-allowed' : 'pointer', opacity: savingSchedule || !scheduleCron ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
+                    >
+                      {savingSchedule ? 'Saving…' : 'Save'}
                     </button>
                     {prof?.schedule && (
-                      <button onClick={handleClearSchedule}
-                        className="px-2 py-1 rounded border border-red-900/40 text-xs text-red-400 hover:bg-red-950/30 transition-colors">
+                      <button
+                        onClick={handleClearSchedule}
+                        style={{ padding: '5px 10px', borderRadius: 3, background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', fontSize: 11, color: 'var(--crit)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
+                      >
                         Clear
                       </button>
                     )}
@@ -553,59 +546,59 @@ export default function AuditBuilder() {
         )}
 
         {/* Scan Categories */}
-        <div className="glass rounded-xl overflow-hidden flex-1 flex flex-col min-h-0">
-          <div className="px-4 py-3 border-b border-cyan-900/20 flex-shrink-0">
-            <h3 className="text-sm font-semibold text-slate-200">Scan Categories</h3>
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ padding: '10px 14px', borderBottom: ruleStrong, flexShrink: 0 }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>
+              Scan Categories
+            </p>
           </div>
-          <div className="divide-y divide-cyan-900/10 overflow-y-auto flex-1">
+          <div style={{ overflowY: 'auto', flex: 1 }}>
             {Object.entries(categories).map(([id, cat]) => {
               const isSelected = selectedCategories.has(id)
               const isExpanded = expandedCategory === id
               const toolsAvailable = cat.tools.length === 0 || cat.tools.some(t => toolStatus[t]?.available)
+              const iconColor = isSelected ? 'var(--accent)' : 'var(--fg-3)'
 
               return (
-                <div key={id} className={`${!toolsAvailable ? 'opacity-50' : ''}`}>
+                <div key={id} style={{ opacity: toolsAvailable ? 1 : 0.45, borderBottom: rule }}>
                   <div
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-cyan-900/10 border-l-2 border-l-cyan-500/40'
-                        : 'hover:bg-cyan-950/10'
-                    }`}
                     onClick={() => toggleCategory(id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                      cursor: 'pointer',
+                      background: isSelected ? 'rgba(240,168,58,0.04)' : 'transparent',
+                      borderLeft: isSelected ? '2px solid rgba(240,168,58,0.5)' : '2px solid transparent',
+                    }}
                   >
-                    <div className={`${isSelected ? 'text-cyan-400' : 'text-slate-500'}`}>
-                      {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                    <div style={{ flexShrink: 0, color: isSelected ? 'var(--accent)' : 'var(--fg-3)' }}>
+                      {isSelected ? <CheckSquare size={14} color="var(--accent)" /> : <Square size={14} color="var(--fg-3)" />}
                     </div>
-                    <div className={`${isSelected ? 'text-cyan-400' : 'text-slate-400'}`}>
-                      {CATEGORY_ICONS[id]}
+                    <div style={{ flexShrink: 0 }}>
+                      <CategoryIcon id={id} color={iconColor} size={15} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-200">{cat.name}</div>
-                      <div className="text-xs text-slate-400 truncate">{cat.description}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{cat.name}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-sans)' }}>{cat.description}</p>
                     </div>
                     <button
-                      onClick={e => {
-                        e.stopPropagation()
-                        setExpandedCategory(isExpanded ? null : id)
-                      }}
-                      className="text-slate-500 hover:text-slate-300 p-1"
+                      onClick={e => { e.stopPropagation(); setExpandedCategory(isExpanded ? null : id) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}
                     >
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      <Icon name={isExpanded ? 'chev_u' : 'chev_d'} size={13} color="var(--fg-3)" />
                     </button>
                   </div>
 
                   {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-cyan-900/10" style={{ background: 'rgba(5,8,13,0.5)' }}>
+                    <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.15)', borderTop: rule }}>
                       {/* Control mappings */}
-                      <div className="mt-3 mb-3">
-                        <div className="text-xs text-slate-400 mb-1">Control Mappings</div>
-                        <div className="flex flex-wrap gap-1">
+                      <div style={{ marginBottom: 10 }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Control Mappings</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                           {cat.control_mappings.map(m => (
                             <span
                               key={`${m.framework}-${m.control_id}`}
-                              className="text-xs px-2 py-0.5 rounded text-slate-400 border border-cyan-900/20"
-                              style={{ background: '#0d1520' }}
                               title={m.title}
+                              style={{ fontSize: 10, padding: '1px 7px', borderRadius: 3, color: 'var(--fg-3)', border: ruleStrong, background: 'var(--bg)', fontFamily: 'var(--font-mono)' }}
                             >
                               {m.framework === 'NIST_800_53' ? 'NIST ' : 'CIS '}{m.control_id}
                             </span>
@@ -613,12 +606,10 @@ export default function AuditBuilder() {
                         </div>
                       </div>
                       {/* Config fields */}
-                      <div className="space-y-3">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {Object.entries(cat.config_schema).map(([key, schema]) => (
                           <div key={key}>
-                            <label className="text-xs text-slate-400 mb-1 block capitalize">
-                              {key.replace(/_/g, ' ')}
-                            </label>
+                            <label style={labelStyle}>{key.replace(/_/g, ' ')}</label>
                             {renderConfigField(id, key, schema)}
                           </div>
                         ))}
@@ -635,52 +626,55 @@ export default function AuditBuilder() {
         <button
           onClick={handleGenerate}
           disabled={generating || selectedCategories.size === 0 || !selectedTarget}
-          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold transition-all flex items-center justify-center gap-2 hover:shadow-glow-blue"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 600,
+            fontFamily: 'var(--font-sans)', cursor: generating || selectedCategories.size === 0 || !selectedTarget ? 'not-allowed' : 'pointer',
+            background: generating || selectedCategories.size === 0 || !selectedTarget ? 'var(--bg-2)' : 'rgba(240,168,58,0.12)',
+            border: '1px solid rgba(240,168,58,0.35)',
+            color: generating || selectedCategories.size === 0 || !selectedTarget ? 'var(--fg-3)' : 'var(--accent)',
+            flexShrink: 0,
+          }}
         >
-          {generating ? (
-            <><RefreshCw size={16} className="animate-spin" /> Generating...</>
-          ) : (
-            <><Play size={16} /> Generate Script</>
-          )}
+          <Icon name={generating ? 'refresh' : 'play'} size={15} color="currentColor" />
+          {generating ? 'Generating…' : 'Generate Script'}
         </button>
 
         {/* Save Profile */}
         {selectedCategories.size > 0 && (
-          <div className="glass glass-hover rounded-xl p-4">
+          <div style={{ ...cardStyle }}>
             {!showProfileSave ? (
               <button
                 onClick={() => setShowProfileSave(true)}
-                className="w-full flex items-center justify-center gap-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}
               >
-                <BookMarked size={14} />
-                Save as Profile
+                <BookMarked size={13} color="var(--fg-3)" /> Save as Profile
               </button>
             ) : (
-              <div className="space-y-2">
-                <label className="text-xs text-slate-400">Profile Name</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={labelStyle}>Profile Name</label>
                 <input
                   type="text"
                   value={profileName}
                   onChange={e => setProfileName(e.target.value)}
                   placeholder="e.g. Linux Full Audit"
-                  className="w-full rounded px-3 py-2 text-sm text-slate-200 focus:outline-none border border-cyan-900/20 focus:border-cyan-500/50"
-                  style={{ background: '#05080d' }}
+                  style={inputStyle}
                   autoFocus
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveProfile() }}
                 />
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     onClick={() => { setShowProfileSave(false); setProfileName('') }}
-                    className="flex-1 py-1.5 rounded text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveProfile}
                     disabled={savingProfile || !profileName.trim()}
-                    className="flex-1 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm text-white font-medium transition-colors"
+                    style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 12, color: 'var(--accent)', cursor: savingProfile || !profileName.trim() ? 'not-allowed' : 'pointer', opacity: savingProfile || !profileName.trim() ? 0.5 : 1, fontFamily: 'var(--font-sans)', fontWeight: 600 }}
                   >
-                    {savingProfile ? 'Saving...' : 'Save'}
+                    {savingProfile ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               </div>
@@ -689,186 +683,209 @@ export default function AuditBuilder() {
         )}
       </div>
 
-      {/* Right Panel */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* ── Right Panel ────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, gap: 12 }}>
+
         {/* Tab Bar + Actions */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex gap-1 glass rounded-lg p-1">
-            {(['preview', 'terminal', 'compliance'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded text-sm font-medium transition-colors capitalize ${
-                  activeTab === tab
-                    ? 'bg-blue-600 text-white shadow-glow-blue'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {tab === 'compliance' ? <span className="flex items-center gap-1"><Shield size={12} />Compliance</span> : tab}
-              </button>
-            ))}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
+            {(['preview', 'terminal', 'compliance'] as const).map(tab => {
+              const isActive = activeTab === tab
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: '5px 14px', borderRadius: 3, fontSize: 12, fontWeight: 500,
+                    fontFamily: 'var(--font-sans)', cursor: 'pointer', textTransform: 'capitalize',
+                    background: isActive ? 'rgba(240,168,58,0.12)' : 'transparent',
+                    color: isActive ? 'var(--accent)' : 'var(--fg-3)',
+                    border: isActive ? '1px solid rgba(240,168,58,0.3)' : '1px solid transparent',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  {tab === 'compliance' && <Icon name="shield" size={11} color="currentColor" />}
+                  {tab === 'compliance' ? 'Compliance' : tab}
+                </button>
+              )
+            })}
           </div>
 
           {generatedScript && (
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg glass glass-hover text-sm text-slate-300 transition-colors"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'var(--bg-2)', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
               >
-                <Download size={14} /> Download
+                <Icon name="download" size={13} color="currentColor" /> Download
               </button>
               <button
                 onClick={handleRunOnServer}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-sm text-white font-medium transition-all hover:shadow-glow-green"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, background: 'rgba(84,175,97,0.1)', border: '1px solid rgba(84,175,97,0.35)', fontSize: 12, fontWeight: 600, color: 'var(--ok)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
               >
-                <Play size={14} /> Run on Server
+                <Icon name="play" size={13} color="var(--ok)" /> Run on Server
               </button>
             </div>
           )}
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {activeTab === 'preview' ? (
-            <ScriptPreview
-              script={generatedScript}
-              className="h-full"
-            />
+            <div style={{ height: '100%' }}>
+              <ScriptPreview script={generatedScript} className="h-full" />
+            </div>
           ) : activeTab === 'terminal' ? (
-            <Terminal
-              ref={terminalRef}
-              className="h-full rounded-xl overflow-hidden border border-cyan-900/20 shadow-glow-cyan"
-            />
+            <div style={{ height: '100%', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
+              <Terminal ref={terminalRef} className="h-full" />
+            </div>
           ) : (
-            /* ── Compliance Tab ─────────────────────────────────────── */
-            <div className="space-y-4 pb-6">
+            /* ── Compliance Tab ─────────────────────────────────────────── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
               {/* Profile Selector */}
-              <div className="glass rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-slate-200 mb-1 flex items-center gap-2">
-                  <Shield size={14} className="text-cyan-400" /> Hardening Profile
+              <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+                <h3 style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-sans)' }}>
+                  <Icon name="shield" size={14} color="var(--accent)" /> Hardening Profile
                 </h3>
-                <p className="text-xs text-slate-500 mb-4">Select a compliance framework, then run an audit with the recommended categories and click Score.</p>
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  {hardeningProfiles.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedHardeningProfile(p.id)}
-                      className={`rounded-lg p-3 text-left border transition-all ${
-                        selectedHardeningProfile === p.id
-                          ? 'border-cyan-500/50 bg-cyan-500/10'
-                          : 'border-cyan-900/20 hover:border-cyan-900/40'
-                      }`}
-                    >
-                      <div className="text-sm font-semibold text-slate-200 mb-1">{p.name}</div>
-                      <div className="text-[10px] text-slate-500 leading-snug">{p.description}</div>
-                      <div className="mt-2 text-[10px] text-cyan-500 font-mono">{p.controls?.length} controls</div>
-                    </button>
-                  ))}
+                <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
+                  Select a compliance framework, then run an audit with the recommended categories and click Score.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                  {hardeningProfiles.map(p => {
+                    const profile = p as Record<string, unknown>
+                    const isActive = selectedHardeningProfile === profile.id
+                    return (
+                      <button
+                        key={String(profile.id)}
+                        onClick={() => setSelectedHardeningProfile(String(profile.id))}
+                        style={{
+                          padding: 12, textAlign: 'left', borderRadius: 4, cursor: 'pointer',
+                          background: isActive ? 'rgba(240,168,58,0.06)' : 'var(--bg)',
+                          border: isActive ? '1px solid rgba(240,168,58,0.35)' : ruleStrong,
+                        }}
+                      >
+                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{String(profile.name)}</p>
+                        <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--fg-3)', lineHeight: 1.4, fontFamily: 'var(--font-sans)' }}>{String(profile.description)}</p>
+                        <p style={{ margin: 0, fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                          {Array.isArray(profile.controls) ? profile.controls.length : 0} controls
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
-                <div className="flex items-center gap-3">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <button
                     onClick={handleScoreScan}
                     disabled={scoring || !scanId}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold transition-all"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', borderRadius: 4,
+                      background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
+                      fontSize: 12, fontWeight: 600, color: '#60a5fa',
+                      cursor: scoring || !scanId ? 'not-allowed' : 'pointer',
+                      opacity: scoring || !scanId ? 0.5 : 1, fontFamily: 'var(--font-sans)',
+                    }}
                   >
-                    {scoring ? <RefreshCw size={13} className="animate-spin" /> : <Gauge size={13} />}
-                    {scoring ? 'Scoring...' : 'Score Scan'}
+                    {scoring ? <Icon name="refresh" size={13} color="currentColor" /> : <Gauge size={13} color="currentColor" />}
+                    {scoring ? 'Scoring…' : 'Score Scan'}
                   </button>
-                  {!scanId && <span className="text-xs text-slate-500">Generate and run a scan first, then score it.</span>}
-                  {scoreError && <span className="text-xs text-red-400">{scoreError}</span>}
+                  {!scanId && <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Generate and run a scan first, then score it.</span>}
+                  {scoreError && <span style={{ fontSize: 12, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{scoreError}</span>}
                 </div>
               </div>
 
               {/* Score Results */}
-              {complianceReport && (
-                <>
-                  {/* Score Card */}
-                  <div className="glass rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="text-xs text-slate-500 mb-1">{complianceReport.profile}</div>
-                        <div className="text-2xl font-bold text-slate-100">
-                          {complianceReport.overall_score}
-                          <span className="text-lg text-slate-500">/100</span>
-                        </div>
-                        <div className="text-xs text-slate-400 mt-0.5">Hardening Score</div>
-                      </div>
-                      <div className="flex gap-6">
-                        <div className="text-center">
-                          <div className="text-xl font-bold text-green-400">{complianceReport.pass_count}</div>
-                          <div className="text-[10px] text-slate-500">Passed</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xl font-bold text-red-400">{complianceReport.fail_count}</div>
-                          <div className="text-[10px] text-slate-500">Failed</div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Score bar */}
-                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${complianceReport.overall_score}%`,
-                          background: complianceReport.overall_score >= 70
-                            ? '#22c55e'
-                            : complianceReport.overall_score >= 50
-                            ? '#f59e0b'
-                            : '#ef4444',
-                        }}
-                      />
-                    </div>
-                  </div>
+              {complianceReport && (() => {
+                const report = complianceReport as Record<string, unknown>
+                const score = Number(report.overall_score ?? 0)
+                const passCount = Number(report.pass_count ?? 0)
+                const failCount = Number(report.fail_count ?? 0)
+                const controls = Array.isArray(report.controls) ? report.controls as Record<string, unknown>[] : []
+                const warnings = Array.isArray(report.warnings) ? report.warnings as string[] : []
+                const suggestions = Array.isArray(report.suggestions) ? report.suggestions as string[] : []
+                const barColor = score >= 70 ? 'var(--ok)' : score >= 50 ? 'var(--accent)' : 'var(--crit)'
 
-                  {/* Controls */}
-                  <div className="glass rounded-xl p-4">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Controls</h4>
-                    <div className="space-y-1.5">
-                      {complianceReport.controls.map((ctrl: any) => (
-                        <div key={ctrl.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface-2)' }}>
-                          {ctrl.status === 'pass'
-                            ? <CheckCircle size={13} className="text-green-400 shrink-0" />
-                            : <XCircle size={13} className="text-red-400 shrink-0" />}
-                          <span className="text-[10px] font-mono text-slate-500 shrink-0 w-16">{ctrl.id}</span>
-                          <span className="text-xs text-slate-300">{ctrl.title}</span>
-                          <span className={`ml-auto text-[10px] font-semibold ${ctrl.status === 'pass' ? 'text-green-400' : 'text-red-400'}`}>
-                            {ctrl.status.toUpperCase()}
-                          </span>
+                return (
+                  <>
+                    {/* Score Card */}
+                    <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div>
+                          <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{String(report.profile ?? '')}</p>
+                          <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
+                            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--fg)' }}>{score}</span>
+                            <span style={{ fontSize: 18, color: 'var(--fg-3)' }}>/100</span>
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Hardening Score</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Warnings */}
-                  {complianceReport.warnings.length > 0 && (
-                    <div className="glass rounded-xl p-4">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                        <AlertTriangle size={11} className="text-amber-400" /> Warnings ({complianceReport.warnings.length})
-                      </h4>
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {complianceReport.warnings.map((w: string, i: number) => (
-                          <div key={i} className="text-xs font-mono text-amber-300/80 py-0.5 border-b border-amber-900/10">{w}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Suggestions */}
-                  {complianceReport.suggestions.length > 0 && (
-                    <div className="glass rounded-xl p-4">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Suggestions</h4>
-                      <div className="space-y-1.5">
-                        {complianceReport.suggestions.map((s: string, i: number) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-400">
-                            <ChevronRight size={11} className="text-cyan-600 shrink-0 mt-0.5" />
-                            <span>{s}</span>
+                        <div style={{ display: 'flex', gap: 24 }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ok)', fontFamily: 'var(--font-mono)' }}>{passCount}</p>
+                            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Passed</p>
                           </div>
-                        ))}
+                          <div style={{ textAlign: 'center' }}>
+                            <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>{failCount}</p>
+                            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Failed</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 3, background: 'var(--bg)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 3, background: barColor, width: `${score}%`, transition: 'width 0.7s ease' }} />
                       </div>
                     </div>
-                  )}
-                </>
-              )}
+
+                    {/* Controls */}
+                    <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Controls</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {controls.map(ctrl => {
+                          const isPassed = ctrl.status === 'pass'
+                          return (
+                            <div key={String(ctrl.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 3, background: 'var(--bg)' }}>
+                              {isPassed
+                                ? <CheckCircle size={12} color="var(--ok)" />
+                                : <XCircle size={12} color="var(--crit)" />}
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', flexShrink: 0, width: 56 }}>{String(ctrl.id)}</span>
+                              <span style={{ flex: 1, fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{String(ctrl.title)}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: isPassed ? 'var(--ok)' : 'var(--crit)', fontFamily: 'var(--font-sans)' }}>
+                                {String(ctrl.status).toUpperCase()}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Warnings */}
+                    {warnings.length > 0 && (
+                      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)' }}>
+                          <AlertTriangle size={11} color="var(--accent)" /> Warnings ({warnings.length})
+                        </p>
+                        <div style={{ maxHeight: 192, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {warnings.map((w, i) => (
+                            <p key={i} style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', opacity: 0.8, paddingBottom: 4, borderBottom: rule }}>{w}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Suggestions */}
+                    {suggestions.length > 0 && (
+                      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Suggestions</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {suggestions.map((s, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}>
+                              <Icon name="chev_r" size={11} color="var(--accent)" />
+                              <span>{s}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>
