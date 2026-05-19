@@ -6,8 +6,8 @@ import {
   Plus, Trash2, ArrowUp, ArrowDown, Layers, PenLine, Save,
 } from 'lucide-react'
 import Icon from '@/components/Icon'
-import type { Project } from '../types'
 import { getApiBase, getWsBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -154,11 +154,11 @@ export default function Playbooks() {
   const [view, setView] = useState<'library' | 'run' | 'history' | 'builder'>('library')
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [runs, setRuns] = useState<PlaybookRun[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
+  const { selectedProject: sp, projects } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [targets, setTargets] = useState<TargetOption[]>([])
 
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null)
-  const [selectedProject, setSelectedProject] = useState('')
   const [selectedTarget, setSelectedTarget] = useState('')
   const [mode, setMode] = useState<'auto' | 'step_through'>('auto')
   const [useAi, setUseAi] = useState(false)
@@ -192,8 +192,8 @@ export default function Playbooks() {
   const runGroups = useMemo(() => buildGroups(steps), [steps])
   const builderGroups = useMemo(() => buildGroups(builderSteps), [builderSteps])
 
-  useEffect(() => { loadPlaybooks(); loadRuns(); loadProjects() }, [])
-  useEffect(() => { if (selectedProject) loadTargets(selectedProject); else setTargets([]) }, [selectedProject])
+  useEffect(() => { loadPlaybooks(); loadRuns() }, [])
+  useEffect(() => { if (projectId) loadTargets(projectId); else setTargets([]) }, [projectId])
   useEffect(() => { if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight }, [termLines])
 
   async function loadPlaybooks() {
@@ -204,10 +204,6 @@ export default function Playbooks() {
     const res = await fetch(`${getApiBase()}/playbooks/runs`)
     if (res.ok) setRuns(await res.json())
   }
-  async function loadProjects() {
-    const res = await fetch(`${getApiBase()}/projects`)
-    if (res.ok) setProjects(await res.json())
-  }
   async function loadTargets(projectId: string) {
     const res = await fetch(`${getApiBase()}/projects/${projectId}/targets`)
     if (res.ok) setTargets(await res.json())
@@ -215,7 +211,6 @@ export default function Playbooks() {
 
   function openWizard(pb: Playbook) {
     setSelectedPlaybook(pb)
-    setSelectedProject('')
     setSelectedTarget('')
     setMode('auto')
     setUseAi(false)
@@ -223,13 +218,13 @@ export default function Playbooks() {
   }
 
   async function handleStartRun() {
-    if (!selectedPlaybook || !selectedProject || !selectedTarget) return
+    if (!selectedPlaybook || !projectId || !selectedTarget) return
     setStarting(true)
     try {
       const res = await fetch(`${getApiBase()}/playbooks/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playbook_id: selectedPlaybook.id, project_id: selectedProject, target_id: selectedTarget, mode }),
+        body: JSON.stringify({ playbook_id: selectedPlaybook.id, project_id: projectId, target_id: selectedTarget, mode }),
       })
       if (!res.ok) throw new Error('Failed to start run')
       const data = await res.json()
@@ -1067,20 +1062,12 @@ export default function Playbooks() {
             </div>
 
             {/* Project */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Project</label>
-              <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={INPUT_STYLE}>
-                <option value="">Select project…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-
             {/* Target */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <Target size={11} /> Target
               </label>
-              <select value={selectedTarget} onChange={e => setSelectedTarget(e.target.value)} disabled={!selectedProject} style={{ ...INPUT_STYLE, opacity: !selectedProject ? 0.5 : 1 }}>
+              <select value={selectedTarget} onChange={e => setSelectedTarget(e.target.value)} disabled={!projectId} style={{ ...INPUT_STYLE, opacity: !projectId ? 0.5 : 1 }}>
                 <option value="">Select target…</option>
                 {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
               </select>
@@ -1130,8 +1117,8 @@ export default function Playbooks() {
               </button>
               <button
                 onClick={handleStartRun}
-                disabled={starting || !selectedProject || !selectedTarget}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: (starting || !selectedProject || !selectedTarget) ? 0.5 : 1 }}
+                disabled={starting || !projectId || !selectedTarget}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: (starting || !projectId || !selectedTarget) ? 0.5 : 1 }}
               >
                 {starting ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={13} />}
                 Start Run

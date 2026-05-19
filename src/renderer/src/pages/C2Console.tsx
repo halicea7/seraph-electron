@@ -7,8 +7,8 @@ import {
   ListChecks, Network, Camera, ArrowUpCircle, KeyRound, BookOpen
 } from 'lucide-react'
 import Terminal, { TerminalHandle } from '../components/Terminal'
-import type { Project } from '../types'
 import { getApiBase, getWsBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -344,8 +344,8 @@ function SliverPanel() {
 
 export default function C2Console() {
   const [activeTab, setActiveTab] = useState<'sessions' | 'payloads' | 'listeners' | 'attack' | 'loot' | 'postex' | 'lotl'>('sessions')
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { projectId: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [msfStatus, setMsfStatus] = useState<MsfStatus>({ connected: false })
   const [sessions, setSessions] = useState<C2Session[]>([])
   const [activeSession, setActiveSession] = useState<C2Session | null>(null)
@@ -454,19 +454,18 @@ export default function C2Console() {
   const [termInput, setTermInput] = useState('')
 
   useEffect(() => {
-    loadProjects()
     checkStatus()
     loadPayloads()
   }, [])
 
   useEffect(() => {
-    if (!selectedProject) return
+    if (!projectId) return
     loadSessions()
     loadLoot()
     // Auto-sync: poll sessions every 30 s to pick up backend-synced sessions
     const autoSyncTimer = setInterval(loadSessions, 30_000)
     return () => clearInterval(autoSyncTimer)
-  }, [selectedProject])
+  }, [projectId])
 
   useEffect(() => {
     if (msfStatus.connected) {
@@ -495,13 +494,6 @@ export default function C2Console() {
     if (activeTab === 'lotl') loadLotl()
   }, [activeTab])
 
-  async function loadProjects() {
-    const res = await fetch(`${getApiBase()}/projects`)
-    const data = await res.json()
-    setProjects(data)
-    if (data.length > 0) setSelectedProject(data[0].id)
-  }
-
   async function checkStatus() {
     const res = await fetch(`${getApiBase()}/c2/status`)
     if (res.ok) setMsfStatus(await res.json())
@@ -522,14 +514,14 @@ export default function C2Console() {
   }
 
   async function loadSessions() {
-    if (!selectedProject) return
-    const res = await fetch(`${getApiBase()}/c2/sessions?project_id=${selectedProject}`)
+    if (!projectId) return
+    const res = await fetch(`${getApiBase()}/c2/sessions?project_id=${projectId}`)
     if (res.ok) setSessions(await res.json())
   }
 
   async function loadLoot() {
-    if (!selectedProject) return
-    const res = await fetch(`${getApiBase()}/c2/loot?project_id=${selectedProject}`)
+    if (!projectId) return
+    const res = await fetch(`${getApiBase()}/c2/loot?project_id=${projectId}`)
     if (res.ok) setLoot(await res.json())
   }
 
@@ -568,10 +560,10 @@ export default function C2Console() {
   }
 
   async function handleSync() {
-    if (!selectedProject) return
+    if (!projectId) return
     setLoading(true)
     try {
-      await fetch(`${getApiBase()}/c2/sessions/sync?project_id=${selectedProject}`, { method: 'POST' })
+      await fetch(`${getApiBase()}/c2/sessions/sync?project_id=${projectId}`, { method: 'POST' })
       await loadSessions()
     } finally {
       setLoading(false)
@@ -655,7 +647,7 @@ export default function C2Console() {
   }
 
   async function handleGenerateAttackPlan() {
-    if (!selectedProject) return
+    if (!projectId) return
     setGeneratingAttack(true)
     setAttackPlanError('')
     setAttackPlan(null)
@@ -663,7 +655,7 @@ export default function C2Console() {
       const res = await fetch(`${getApiBase()}/c2/attack-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: selectedProject, lhost }),
+        body: JSON.stringify({ project_id: projectId, lhost }),
       })
       const data = await res.json()
       if (!res.ok) { setAttackPlanError(data.detail || 'Failed to generate plan'); return }
@@ -679,9 +671,9 @@ export default function C2Console() {
     if (sessionPollRef.current) clearInterval(sessionPollRef.current)
     const deadline = Date.now() + 60_000
     sessionPollRef.current = setInterval(async () => {
-      if (!selectedProject) return
-      await fetch(`${getApiBase()}/c2/sessions/sync?project_id=${selectedProject}`, { method: 'POST' })
-      const res = await fetch(`${getApiBase()}/c2/sessions?project_id=${selectedProject}`)
+      if (!projectId) return
+      await fetch(`${getApiBase()}/c2/sessions/sync?project_id=${projectId}`, { method: 'POST' })
+      const res = await fetch(`${getApiBase()}/c2/sessions?project_id=${projectId}`)
       if (res.ok) {
         const data: C2Session[] = await res.json()
         setSessions(data)
@@ -721,7 +713,7 @@ export default function C2Console() {
           module: rec.module,
           options: rec.options,
           payload: rec.payload,
-          project_id: selectedProject,
+          project_id: projectId,
         }),
       })
       const data = await res.json()
@@ -932,7 +924,7 @@ export default function C2Console() {
     let ticks = 0
     const poll = setInterval(async () => {
       ticks++
-      const res = await fetch(`${getApiBase()}/c2/loot?project_id=${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/c2/loot?project_id=${projectId}`)
       if (res.ok) {
         const entries: LootEntry[] = await res.json()
         setLoot(entries)
@@ -978,7 +970,7 @@ export default function C2Console() {
       })
       if (res.ok) {
         // Refresh session list so sysinfo panel updates
-        const sesRes = await fetch(`${getApiBase()}/c2/sessions?project_id=${selectedProject}`)
+        const sesRes = await fetch(`${getApiBase()}/c2/sessions?project_id=${projectId}`)
         if (sesRes.ok) {
           const updated: C2Session[] = await sesRes.json()
           setSessions(updated)
@@ -1064,15 +1056,6 @@ export default function C2Console() {
               </button>
             </div>
           )}
-        </div>
-
-        {/* Project selector */}
-        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
-          <label style={{ fontSize: 11, color: 'var(--fg-3)', display: 'block', marginBottom: 8 }}>Project</label>
-          <select style={inputClass} value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-            <option value="">Select project...</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
         </div>
 
         {/* Session list */}
@@ -1616,13 +1599,13 @@ export default function C2Console() {
                 )}
                 <button
                   onClick={handleGenerateAttackPlan}
-                  disabled={generatingAttack || !selectedProject}
+                  disabled={generatingAttack || !projectId}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', borderRadius: 4,
                     background: 'rgba(232,64,64,0.15)', border: '1px solid rgba(232,64,64,0.3)',
                     color: 'var(--crit)', fontSize: 13, fontWeight: 500,
-                    cursor: (generatingAttack || !selectedProject) ? 'not-allowed' : 'pointer',
-                    opacity: (generatingAttack || !selectedProject) ? 0.4 : 1,
+                    cursor: (generatingAttack || !projectId) ? 'not-allowed' : 'pointer',
+                    opacity: (generatingAttack || !projectId) ? 0.4 : 1,
                     fontFamily: 'var(--font-sans)',
                   }}
                 >

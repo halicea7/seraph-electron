@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Search, Download, ChevronDown, Tag, X, EyeOff, RotateCcw, ShieldOff, Plus, Trash2 } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
+import { useAppStore } from '@/stores/appStore'
 
 const rule = '1px solid var(--rule)'
 
@@ -286,6 +287,8 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 }
 
 export default function AllFindings() {
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [searchParams, setSearchParams] = useSearchParams()
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -321,11 +324,15 @@ export default function AllFindings() {
   }, [])
 
   useEffect(() => {
-    fetch(`${getApiBase()}/findings`)
+    setLoading(true)
+    const url = projectId
+      ? `${getApiBase()}/findings?project_id=${projectId}`
+      : `${getApiBase()}/findings`
+    fetch(url)
       .then(r => r.json())
       .then(setFindings)
       .finally(() => setLoading(false))
-  }, [])
+  }, [projectId])
 
   useEffect(() => {
     if (!rulesOpen) return

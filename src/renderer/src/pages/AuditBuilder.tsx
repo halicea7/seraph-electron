@@ -7,8 +7,9 @@ import {
 import Icon from '../components/Icon'
 import ScriptPreview from '../components/ScriptPreview'
 import Terminal, { TerminalHandle } from '../components/Terminal'
-import { getProjects, getTargets } from '../api/client'
-import type { Project, TargetSummary, ScanCategory } from '../types'
+import { getTargets } from '../api/client'
+import type { TargetSummary, ScanCategory } from '../types'
+import { useAppStore } from '@/stores/appStore'
 import { getApiBase } from '@/lib/config'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -62,8 +63,8 @@ function CategoryIcon({ id, color, size = 16 }: { id: string; color: string; siz
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AuditBuilder() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState<string>('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [targets, setTargets] = useState<TargetSummary[]>([])
   const [selectedTarget, setSelectedTarget] = useState<string>('')
   const [categories, setCategories] = useState<Record<string, ScanCategory>>({})
@@ -99,7 +100,6 @@ export default function AuditBuilder() {
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   useEffect(() => {
-    loadProjects()
     loadCategories()
     loadToolStatus()
     loadProfiles()
@@ -114,27 +114,19 @@ export default function AuditBuilder() {
   }
 
   async function handleScoreScan() {
-    if (!scanId || !selectedProject) return
+    if (!scanId || !projectId) return
     setScoring(true); setScoreError('')
     try {
       const res = await fetch(`${getApiBase()}/hardening/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scan_id: scanId, profile_id: selectedHardeningProfile, project_id: selectedProject }),
+        body: JSON.stringify({ scan_id: scanId, profile_id: selectedHardeningProfile, project_id: projectId }),
       })
       if (!res.ok) { const err = await res.json(); setScoreError(err.detail || 'Scoring failed'); return }
       setComplianceReport(await res.json())
     } catch (e: unknown) {
       setScoreError(e instanceof Error ? e.message : 'Scoring failed')
     } finally { setScoring(false) }
-  }
-
-  async function loadProjects() {
-    try {
-      const data = await getProjects()
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    } catch (err) { console.error('Failed to load projects', err) }
   }
 
   async function loadCategories() {
@@ -177,8 +169,8 @@ export default function AuditBuilder() {
   }
 
   useEffect(() => {
-    if (selectedProject) {
-      getTargets(selectedProject)
+    if (projectId) {
+      getTargets(projectId)
         .then(data => {
           setTargets(data)
           if (data.length > 0) setSelectedTarget(data[0].id)
@@ -186,12 +178,12 @@ export default function AuditBuilder() {
         })
         .catch(err => console.error('Failed to load targets', err))
 
-      fetch(`${getApiBase()}/credentials/keys?project_id=${selectedProject}`)
+      fetch(`${getApiBase()}/credentials/keys?project_id=${projectId}`)
         .then(r => r.ok ? r.json() : [])
         .then(setSshCredentials)
         .catch(() => {})
     }
-  }, [selectedProject])
+  }, [projectId])
 
   function toggleCategory(id: string) {
     setSelectedCategories(prev => {
@@ -229,7 +221,7 @@ export default function AuditBuilder() {
     await fetch(`${getApiBase()}/profiles/${selectedProfileId}/schedule`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cron: scheduleCron || null, project_id: selectedProject || null, target_id: selectedTarget || null }),
+      body: JSON.stringify({ cron: scheduleCron || null, project_id: projectId || null, target_id: selectedTarget || null }),
     })
     setSavingSchedule(false)
     setShowSchedule(false)
@@ -270,7 +262,7 @@ export default function AuditBuilder() {
   }
 
   async function handleGenerate() {
-    if (!selectedProject || !selectedTarget || selectedCategories.size === 0) return
+    if (!projectId || !selectedTarget || selectedCategories.size === 0) return
     setGenerating(true)
     try {
       const scanCategories = Array.from(selectedCategories).map(id => ({
@@ -280,7 +272,7 @@ export default function AuditBuilder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_id: selectedProject, target_id: selectedTarget,
+          project_id: projectId, target_id: selectedTarget,
           scan_categories: scanCategories,
           credential_id: needsSSH && selectedCredentialId ? selectedCredentialId : null,
         }),
@@ -396,13 +388,6 @@ export default function AuditBuilder() {
             Target Selection
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div>
-              <label style={labelStyle}>Project</label>
-              <select style={inputStyle} value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-                <option value="">Select project…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
             <div>
               <label style={labelStyle}>Target</label>
               <select
@@ -625,14 +610,14 @@ export default function AuditBuilder() {
         {/* Generate Button */}
         <button
           onClick={handleGenerate}
-          disabled={generating || selectedCategories.size === 0 || !selectedTarget}
+          disabled={generating || selectedCategories.size === 0 || !projectId || !selectedTarget}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 600,
-            fontFamily: 'var(--font-sans)', cursor: generating || selectedCategories.size === 0 || !selectedTarget ? 'not-allowed' : 'pointer',
-            background: generating || selectedCategories.size === 0 || !selectedTarget ? 'var(--bg-2)' : 'rgba(240,168,58,0.12)',
+            fontFamily: 'var(--font-sans)', cursor: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'not-allowed' : 'pointer',
+            background: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'var(--bg-2)' : 'rgba(240,168,58,0.12)',
             border: '1px solid rgba(240,168,58,0.35)',
-            color: generating || selectedCategories.size === 0 || !selectedTarget ? 'var(--fg-3)' : 'var(--accent)',
+            color: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'var(--fg-3)' : 'var(--accent)',
             flexShrink: 0,
           }}
         >

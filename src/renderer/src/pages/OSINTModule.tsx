@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import ToolCard, { ToolStatus } from '../components/ToolCard'
 import Terminal, { TerminalHandle } from '../components/Terminal'
 import Icon from '@/components/Icon'
-import type { Project, Target } from '../types/index'
+import type { Target } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 interface OSINTTool {
   tool: string
@@ -30,8 +31,8 @@ function renderTemplate(template: string, domain: string): string {
 const rule = '1px solid var(--rule)'
 
 export default function OSINTModule() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [targets, setTargets] = useState<Target[]>([])
   const [selectedTarget, setSelectedTarget] = useState('')
   const [domain, setDomain] = useState('')
@@ -41,10 +42,6 @@ export default function OSINTModule() {
   const terminalRef = useRef<TerminalHandle>(null)
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then(data => {
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    })
     fetch(`${getApiBase()}/osint/tools`).then(r => r.json()).then(data => {
       setTools(data)
       const states: Record<string, ToolState> = {}
@@ -56,14 +53,14 @@ export default function OSINTModule() {
   }, [])
 
   useEffect(() => {
-    if (!selectedProject) return
-    fetch(`${getApiBase()}/projects/${selectedProject}/targets`)
+    if (!projectId) return
+    fetch(`${getApiBase()}/projects/${projectId}/targets`)
       .then(r => r.json())
       .then(data => {
         setTargets(data)
         if (data.length > 0) { setSelectedTarget(data[0].id); setDomain(data[0].hostname_or_ip) }
       })
-  }, [selectedProject])
+  }, [projectId])
 
   useEffect(() => {
     setToolStates(prev => {
@@ -82,7 +79,7 @@ export default function OSINTModule() {
   }
 
   async function handleRun(toolName: string, command: string) {
-    if (!selectedProject || !selectedTarget) { alert('Select a project and target first.'); return }
+    if (!projectId || !selectedTarget) { alert('Select a project and target first.'); return }
     if (!domain) { alert('Enter a domain to recon.'); return }
 
     updateTool(toolName, { status: 'running', output: '', scanId: null, results: null })
@@ -91,7 +88,7 @@ export default function OSINTModule() {
     const res = await fetch(`${getApiBase()}/osint/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: selectedProject, target_id: selectedTarget, domain, tool_name: toolName, command }),
+      body: JSON.stringify({ project_id: projectId, target_id: selectedTarget, domain, tool_name: toolName, command }),
     })
 
     if (!res.ok) { updateTool(toolName, { status: 'failed', output: 'Failed to create scan record' }); return }
@@ -162,15 +159,8 @@ export default function OSINTModule() {
           <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Passive recon — no active probing</p>
         </div>
 
-        {/* Project / Target / Domain */}
+        {/* Target / Domain */}
         <div style={{ padding: '12px 16px', borderBottom: rule, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'block', marginBottom: 4 }}>Project</label>
-            <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={selectStyle}>
-              <option value="">Select project…</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
           <div>
             <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'block', marginBottom: 4 }}>Target</label>
             <select value={selectedTarget} onChange={e => { setSelectedTarget(e.target.value); const t = targets.find(t => t.id === e.target.value); if (t) setDomain(t.hostname_or_ip) }} disabled={targets.length === 0} style={{ ...selectStyle, opacity: targets.length === 0 ? 0.5 : 1 }}>

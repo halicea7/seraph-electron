@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import Icon from '../components/Icon'
-import type { Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 interface WatchedService {
   id: string
@@ -40,8 +40,8 @@ const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
 
 export default function CveWatch() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [targets, setTargets] = useState<Target[]>([])
   const [watchedServices, setWatchedServices] = useState<Record<string, WatchedService[]>>({})
   const [cveFindings, setCveFindings] = useState<CveFinding[]>([])
@@ -49,23 +49,16 @@ export default function CveWatch() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then(data => {
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (selectedProject) loadData()
-  }, [selectedProject])
+    if (projectId) loadData()
+  }, [projectId])
 
   async function loadData() {
     setLoading(true)
     try {
       const [targetsRes, wsRes, findingsRes] = await Promise.all([
-        fetch(`${getApiBase()}/projects/${selectedProject}/targets`),
-        fetch(`${getApiBase()}/cve-watch?project_id=${selectedProject}`),
-        fetch(`${getApiBase()}/findings?project_id=${selectedProject}`),
+        fetch(`${getApiBase()}/projects/${projectId}/targets`),
+        fetch(`${getApiBase()}/cve-watch?project_id=${projectId}`),
+        fetch(`${getApiBase()}/findings?project_id=${projectId}`),
       ])
 
       const targetsData: Target[] = targetsRes.ok ? await targetsRes.json() : []
@@ -111,18 +104,6 @@ export default function CveWatch() {
           <Icon name="refresh" size={12} color={loading ? 'var(--accent)' : 'currentColor'} />
           Refresh
         </button>
-      </div>
-
-      {/* Project selector */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <label style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>Project</label>
-        <select
-          value={selectedProject}
-          onChange={e => setSelectedProject(e.target.value)}
-          style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none' }}
-        >
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
       </div>
 
       {/* Stats row */}

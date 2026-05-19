@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import Icon from '../components/Icon'
-import type { Credential, CredType, CredSource, Project } from '../types/index'
+import type { Credential, CredType, CredSource } from '../types/index'
 import { getApiBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 const CRED_TYPES: CredType[] = ['password', 'hash', 'key', 'token', 'other']
 const CRED_SOURCES: CredSource[] = ['manual', 'c2_loot', 'osint', 'brute_force']
@@ -84,8 +85,8 @@ function SegBtns({ options, value, onChange }: { options: string[]; value: strin
 }
 
 export default function CredentialVault() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -97,30 +98,24 @@ export default function CredentialVault() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`)
-      .then(r => r.json())
-      .then(data => {
-        setProjects(data)
-        if (data.length > 0) setSelectedProject(data[0].id)
-      })
-  }, [])
-
-  useEffect(() => {
-    if (selectedProject) loadCredentials()
-  }, [selectedProject])
+    loadCredentials()
+  }, [projectId])
 
   async function loadCredentials() {
-    const res = await fetch(`${getApiBase()}/credentials?project_id=${selectedProject}`)
+    const url = projectId
+      ? `${getApiBase()}/credentials?project_id=${projectId}`
+      : `${getApiBase()}/credentials`
+    const res = await fetch(url)
     setCredentials(await res.json())
   }
 
   async function handleSave() {
-    if (!selectedProject) return
+    if (!projectId) return
     setSaving(true)
     await fetch(`${getApiBase()}/credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, project_id: selectedProject }),
+      body: JSON.stringify({ ...form, project_id: projectId }),
     })
     setSaving(false)
     setShowModal(false)
@@ -193,7 +188,7 @@ export default function CredentialVault() {
       {/* Page header */}
       <div style={{ padding: '18px var(--pad)', borderBottom: rule, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <div className="smcap" style={{ marginBottom: 4 }}>{projects.find(p => p.id === selectedProject)?.name ?? 'Workspace'}</div>
+          <div className="smcap" style={{ marginBottom: 4 }}>{sp?.name ?? 'All Projects'}</div>
           <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>Credential Vault</h1>
           <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>
             Captured passwords, hashes, keys, and tokens. AES-256 at rest, redacted by default.
@@ -209,7 +204,7 @@ export default function CredentialVault() {
           <button
             className="btn btn-primary"
             onClick={() => setShowModal(true)}
-            disabled={!selectedProject}
+            disabled={!projectId}
           >
             <Icon name="plus" size={11} color="#1a1408" /> Add credential
           </button>
@@ -227,18 +222,6 @@ export default function CredentialVault() {
 
       {/* Filter strip */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px var(--pad)', borderBottom: rule, background: 'var(--bg-2)', flexWrap: 'wrap' }}>
-        {/* Project selector */}
-        <select
-          value={selectedProject}
-          onChange={e => setSelectedProject(e.target.value)}
-          style={{ background: 'var(--bg)', border: rule, padding: '4px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', fontFamily: 'var(--font-mono)' }}
-        >
-          <option value="">All projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-
-        <div style={{ width: 1, height: 18, background: 'var(--rule)' }} />
-
         <SegBtns
           options={['all', ...CRED_TYPES.filter(t => byType[t] > 0)]}
           value={filterType}

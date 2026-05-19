@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '../components/Icon'
 import Terminal, { TerminalHandle } from '../components/Terminal'
-import type { Project, Credential } from '../types/index'
+import type { Credential } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 interface ToolInfo {
   available: boolean
@@ -70,6 +71,9 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function PasswordAuditing() {
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
+
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [tool, setTool] = useState<'hashcat' | 'john'>('hashcat')
   const [hashType, setHashType] = useState('0')
@@ -81,8 +85,6 @@ export default function PasswordAuditing() {
   const [running, setRunning] = useState(false)
   const [, setJobId] = useState<string | null>(null)
 
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
   const [vaultCreds, setVaultCreds] = useState<Credential[]>([])
   const [selectedCredIds, setSelectedCredIds] = useState<string[]>([])
 
@@ -109,16 +111,15 @@ export default function PasswordAuditing() {
   useEffect(() => {
     loadTools()
     loadBundles()
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then(setProjects)
   }, [])
 
   useEffect(() => {
-    if (selectedProject) {
-      fetch(`${getApiBase()}/credentials?project_id=${selectedProject}`)
+    if (projectId) {
+      fetch(`${getApiBase()}/credentials?project_id=${projectId}`)
         .then(r => r.json())
         .then((data: Credential[]) => setVaultCreds(data.filter(c => c.cred_type === 'hash')))
     }
-  }, [selectedProject])
+  }, [projectId])
 
   function installBundle(bundleId: string) {
     if (installing) return
@@ -181,7 +182,7 @@ export default function PasswordAuditing() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        project_id: selectedProject,
+        project_id: projectId,
         tool,
         hashes,
         hash_type: hashType,
@@ -237,12 +238,12 @@ export default function PasswordAuditing() {
   }
 
   async function saveToVault(pair: CrackedPair) {
-    if (!selectedProject) return
+    if (!projectId) return
     await fetch(`${getApiBase()}/credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        project_id: selectedProject,
+        project_id: projectId,
         username: '',
         secret: pair.plain,
         cred_type: 'password',
@@ -386,10 +387,6 @@ export default function PasswordAuditing() {
           <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="key" size={10} color="currentColor" /> Load from Vault
           </span>
-          <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={{ ...selStyle, marginBottom: 8 }}>
-            <option value="">Select project...</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
           {vaultCreds.length > 0 ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -439,7 +436,7 @@ export default function PasswordAuditing() {
             </>
           ) : (
             <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
-              {selectedProject ? 'No hash-type credentials in this project' : 'Select a project'}
+              {projectId ? 'No hash-type credentials in this project' : 'Select a project'}
             </p>
           )}
         </div>
@@ -536,7 +533,7 @@ export default function PasswordAuditing() {
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: 160, flexShrink: 0 }}>{pair.hash}</span>
                     <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ok)', fontWeight: 700, flex: 1 }}>{pair.plain}</span>
-                    {selectedProject && !savedPairs.has(pair.hash) && (
+                    {projectId && !savedPairs.has(pair.hash) && (
                       <button
                         onClick={() => saveToVault(pair)}
                         style={{ fontSize: 10, color: 'var(--accent)', background: 'none', border: ruleStrong, borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontFamily: 'var(--font-sans)', flexShrink: 0 }}

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Brain, Sparkles, AlertTriangle } from 'lucide-react'
 import Icon from '../components/Icon'
-import type { Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -174,8 +174,8 @@ function StatusDropdown({ current, onSelect }: { current: VulnStatus; onSelect: 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function VulnTracker() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp, projects } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [vulns, setVulns] = useState<Vuln[]>([])
   const [stats, setStats] = useState<VulnStats>({ total: 0, by_status: {}, by_severity: {} })
 
@@ -209,32 +209,22 @@ export default function VulnTracker() {
   // ── Data loading ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`)
-      .then(r => r.json())
-      .then((data: Project[]) => {
-        setProjects(data)
-        if (data.length > 0) setSelectedProject(data[0].id)
-      })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (selectedProject) {
+    if (projectId) {
       loadVulns()
       loadStats()
     }
-  }, [selectedProject])
+  }, [projectId])
 
   async function loadVulns() {
     try {
-      const res = await fetch(`${getApiBase()}/vulns?project_id=${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/vulns?project_id=${projectId}`)
       setVulns(await res.json())
     } catch { setVulns([]) }
   }
 
   async function loadStats() {
     try {
-      const res = await fetch(`${getApiBase()}/vulns/stats?project_id=${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/vulns/stats?project_id=${projectId}`)
       setStats(await res.json())
     } catch { setStats({ total: 0, by_status: {}, by_severity: {} }) }
   }
@@ -260,11 +250,11 @@ export default function VulnTracker() {
 
   async function handleSave() {
     if (!formTitle.trim()) { setModalError('Title is required.'); return }
-    if (!selectedProject) { setModalError('Select a project first.'); return }
+    if (!projectId) { setModalError('Select a project first.'); return }
     setSaving(true); setModalError('')
     try {
       const body = {
-        project_id: selectedProject,
+        project_id: projectId,
         title: formTitle.trim(), description: formDesc.trim(),
         severity: formSeverity, status: formStatus,
         cvss_score: formCvss.trim() || null, cve_id: formCve.trim() || null,
@@ -313,7 +303,7 @@ export default function VulnTracker() {
     setSelectedFindingIds(new Set()); setFindingsList([])
     setShowImport(true)
     try {
-      const res = await fetch(`${getApiBase()}/findings?project_id=${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/findings?project_id=${projectId}`)
       setFindingsList(await res.json())
     } catch { setFindingsList([]) }
   }
@@ -332,7 +322,7 @@ export default function VulnTracker() {
     try {
       await fetch(`${getApiBase()}/vulns/import-findings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: selectedProject, finding_ids: Array.from(selectedFindingIds) }),
+        body: JSON.stringify({ project_id: projectId, finding_ids: Array.from(selectedFindingIds) }),
       })
       setShowImport(false); await loadVulns(); await loadStats()
     } catch { /* ignore */ } finally { setImporting(false) }
@@ -353,12 +343,6 @@ export default function VulnTracker() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const selStyle: React.CSSProperties = {
-    background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3,
-    padding: '5px 8px', fontSize: 12, color: 'var(--fg)',
-    fontFamily: 'var(--font-sans)', outline: 'none',
-  }
-
   return (
     <div style={{ padding: 24, height: '100%', overflowY: 'auto', background: 'var(--bg)', color: 'var(--fg)' }}>
 
@@ -372,21 +356,17 @@ export default function VulnTracker() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={selStyle}>
-            <option value="">Select project...</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
           <button
             onClick={openImportModal}
-            disabled={!selectedProject}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: selectedProject ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', opacity: selectedProject ? 1 : 0.5 }}
+            disabled={!projectId}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: projectId ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', opacity: projectId ? 1 : 0.5 }}
           >
             <Icon name="download" size={13} color="currentColor" /> Import from Findings
           </button>
           <button
             onClick={openCreateModal}
-            disabled={!selectedProject}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, background: selectedProject ? 'var(--accent)' : 'var(--bg-2)', color: selectedProject ? 'var(--bg)' : 'var(--fg-3)', border: 'none', fontSize: 12, fontWeight: 700, cursor: selectedProject ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', opacity: selectedProject ? 1 : 0.5 }}
+            disabled={!projectId}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, background: projectId ? 'var(--accent)' : 'var(--bg-2)', color: projectId ? 'var(--bg)' : 'var(--fg-3)', border: 'none', fontSize: 12, fontWeight: 700, cursor: projectId ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', opacity: projectId ? 1 : 0.5 }}
           >
             <Icon name="plus" size={13} color="currentColor" /> New Vulnerability
           </button>
@@ -480,7 +460,7 @@ export default function VulnTracker() {
           <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
             {vulns.length === 0 ? 'No vulnerabilities tracked yet.' : 'No vulnerabilities match the current filters.'}
           </p>
-          {vulns.length === 0 && selectedProject && (
+          {vulns.length === 0 && projectId && (
             <button
               onClick={openCreateModal}
               style={{ marginTop: 12, fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import cytoscape from 'cytoscape'
 import Icon from '@/components/Icon'
-import type { Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 interface GraphNode {
   id: string
@@ -55,8 +55,8 @@ const TARGET_ICONS: Record<string, string> = {
 const rule = '1px solid var(--rule)'
 
 export default function NetworkMap() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [graph, setGraph] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
@@ -64,20 +64,13 @@ export default function NetworkMap() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then(data => {
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (selectedProject) loadGraph()
-  }, [selectedProject])
+    if (projectId) loadGraph()
+  }, [projectId])
 
   async function loadGraph() {
     setLoading(true)
     setSelectedNode(null)
-    const res = await fetch(`${getApiBase()}/network/graph?project_id=${selectedProject}`)
+    const res = await fetch(`${getApiBase()}/network/graph?project_id=${projectId}`)
     const data = await res.json()
     setGraph(data)
     setLoading(false)
@@ -199,26 +192,15 @@ export default function NetworkMap() {
           <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Target topology visualisation</p>
         </div>
 
-        {/* Project selector */}
-        <div style={{ border: rule, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Project</label>
-          <select
-            value={selectedProject}
-            onChange={e => setSelectedProject(e.target.value)}
-            style={{ background: 'var(--bg-2)', border: '1px solid var(--rule-strong)', borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)', outline: 'none' }}
-          >
-            <option value="">Select project…</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button
-            onClick={loadGraph}
-            disabled={!selectedProject || loading}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3, background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer', opacity: (!selectedProject || loading) ? 0.5 : 1 }}
-          >
-            <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
-        </div>
+        {/* Refresh */}
+        <button
+          onClick={loadGraph}
+          disabled={!projectId || loading}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3, background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer', opacity: (!projectId || loading) ? 0.5 : 1 }}
+        >
+          <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
 
         {/* Legend */}
         <div style={{ border: rule, borderRadius: 4, padding: '10px 12px' }}>

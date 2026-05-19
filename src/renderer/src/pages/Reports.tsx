@@ -3,9 +3,10 @@ import { Brain, Loader, BookmarkCheck } from 'lucide-react'
 import Icon from '../components/Icon'
 import ReactMarkdown from 'react-markdown'
 import FindingsTable from '../components/FindingsTable'
-import type { Project, Finding } from '../types'
-import { getProjects, getFindings, generateReport, getStats, type PlatformStats } from '../api/client'
+import type { Finding } from '../types'
+import { getFindings, generateReport, getStats, type PlatformStats } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
+import { useAppStore } from '@/stores/appStore'
 import { useAINarrative } from '../contexts/AINarrativeContext'
 import { getApiBase } from '@/lib/config'
 
@@ -31,8 +32,8 @@ const ruleStrong = '1px solid var(--rule-strong)'
 export default function Reports() {
   const { user } = useAuth()
   const { generating: generatingNarrative, progress: narrativeProgress, generate } = useAINarrative()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState<string>('')
+  const { selectedProject: sp, projects } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [findings, setFindings] = useState<Finding[]>([])
   const [stats, setStats] = useState<PlatformStats | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -47,7 +48,6 @@ export default function Reports() {
   const [auditor, setAuditor] = useState<string>(user?.full_name || user?.username || '')
 
   useEffect(() => {
-    loadProjects()
     loadStats()
   }, [])
 
@@ -56,23 +56,15 @@ export default function Reports() {
   }, [user])
 
   useEffect(() => {
-    if (selectedProject) {
-      loadFindings(selectedProject)
-      loadSavedNarrative(selectedProject, narrativeStyle)
+    if (projectId) {
+      loadFindings(projectId)
+      loadSavedNarrative(projectId, narrativeStyle)
     }
-  }, [selectedProject])
+  }, [projectId])
 
   useEffect(() => {
-    if (selectedProject) loadSavedNarrative(selectedProject, narrativeStyle)
+    if (projectId) loadSavedNarrative(projectId, narrativeStyle)
   }, [narrativeStyle])
-
-  async function loadProjects() {
-    try {
-      const data = await getProjects()
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    } catch { /* backend may not be running */ }
-  }
 
   async function loadStats() {
     try { setStats(await getStats()) } catch { /* ignore */ }
@@ -89,58 +81,58 @@ export default function Reports() {
     } catch { /* ignore */ }
   }
 
-  async function loadFindings(_projectId: string) {
+  async function loadFindings(pid: string) {
     setLoading(true)
-    try { setFindings(await getFindings()) } catch { setFindings([]) } finally { setLoading(false) }
+    try { setFindings(await getFindings(pid)) } catch { setFindings([]) } finally { setLoading(false) }
   }
 
   async function handleGenerateNarrative() {
-    if (!selectedProject) return
+    if (!projectId) return
     setNarrativeError('')
     try {
-      const result = await generate(selectedProject, narrativeStyle)
+      const result = await generate(projectId, narrativeStyle)
       if (result) { setNarrative(result.narrative); setNarrativeSavedAt(result.savedAt); setActiveTab('narrative') }
     } catch (err: any) { setNarrativeError(err.message || 'Unknown error') }
   }
 
   async function handleExportPDF() {
-    if (!selectedProject) return
+    if (!projectId) return
     setGenerating(true)
     try {
-      const res = await fetch(`${getApiBase()}/audit/reports/pdf/${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/audit/reports/pdf/${projectId}`)
       if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail || `HTTP ${res.status}`) }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `seraph_report_${selectedProject.slice(0, 8)}.pdf`; a.click()
+      const a = document.createElement('a'); a.href = url; a.download = `seraph_report_${projectId.slice(0, 8)}.pdf`; a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) { alert(`PDF export failed: ${err.message}`) } finally { setGenerating(false) }
   }
 
   async function handleGenerateReport(format: 'html' | 'markdown') {
-    if (!selectedProject) return
+    if (!projectId) return
     setGenerating(true)
     try {
       const isHtmlNative = template === 'executive_summary' || template === 'technical_detail' || template === 'compliance_mapped'
       let blob: Blob
       if (isHtmlNative && format === 'html') {
-        const res = await fetch(`${getApiBase()}/audit/reports/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: selectedProject, report_type: template, auditor: auditor || 'Seraph (Automated)' }) })
+        const res = await fetch(`${getApiBase()}/audit/reports/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, report_type: template, auditor: auditor || 'Seraph (Automated)' }) })
         const data = await res.json()
         blob = new Blob([data.html || ''], { type: 'text/html' })
       } else {
         const params = new URLSearchParams({ format, auditor: auditor || 'Seraph (Automated)' })
-        blob = await (await fetch(`${getApiBase()}/audit/reports/download/${selectedProject}?${params}`)).blob()
+        blob = await (await fetch(`${getApiBase()}/audit/reports/download/${projectId}?${params}`)).blob()
       }
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `seraph_${template}_${selectedProject.slice(0, 8)}.${format === 'markdown' ? 'md' : 'html'}`; a.click()
+      const a = document.createElement('a'); a.href = url; a.download = `seraph_${template}_${projectId.slice(0, 8)}.${format === 'markdown' ? 'md' : 'html'}`; a.click()
       URL.revokeObjectURL(url)
     } catch { /* ignore */ } finally { setGenerating(false) }
   }
 
   async function handlePreviewReport() {
-    if (!selectedProject) return
+    if (!projectId) return
     setGenerating(true)
     try {
-      const data = await generateReport(selectedProject, template, auditor || 'Seraph (Automated)')
+      const data = await generateReport(projectId, template, auditor || 'Seraph (Automated)')
       setReportPreview(data.html || data.markdown || '')
       setActiveTab('report')
     } catch { /* ignore */ } finally { setGenerating(false) }
@@ -148,7 +140,7 @@ export default function Reports() {
 
   const severityCounts = stats?.severity_counts || {}
   const displayFindings = template === 'executive_summary' ? findings.filter(f => f.severity === 'critical' || f.severity === 'high') : findings
-  const selectedProj = projects.find(p => p.id === selectedProject)
+  const selectedProj = projects.find(p => p.id === projectId)
   const hasNewFindings = !!(selectedProj?.latest_finding_at && (!narrativeSavedAt || new Date(selectedProj.latest_finding_at) > new Date(narrativeSavedAt)))
 
   const selStyle: React.CSSProperties = {
@@ -224,11 +216,6 @@ export default function Reports() {
 
       {/* Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} style={selStyle}>
-          <option value="">Select project...</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-
         <input type="text" value={auditor} onChange={e => setAuditor(e.target.value)} placeholder="Auditor name" style={{ ...inputStyle, width: 160 }} />
 
         {/* Template picker */}
@@ -258,9 +245,9 @@ export default function Reports() {
             </select>
             <button
               onClick={handleGenerateNarrative}
-              disabled={generatingNarrative || !selectedProject}
+              disabled={generatingNarrative || !projectId}
               title={hasNewFindings ? 'New findings since last narrative — regenerate' : 'Generate AI narrative using local LLM'}
-              style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: 'none', border: 'none', fontSize: 12, color: '#a855f7', cursor: generatingNarrative || !selectedProject ? 'not-allowed' : 'pointer', opacity: generatingNarrative || !selectedProject ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: 'none', border: 'none', fontSize: 12, color: '#a855f7', cursor: generatingNarrative || !projectId ? 'not-allowed' : 'pointer', opacity: generatingNarrative || !projectId ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
             >
               {generatingNarrative ? <Loader size={12} style={{ display: 'block' }} /> : <Brain size={12} />}
               AI Narrative
@@ -270,16 +257,16 @@ export default function Reports() {
             </button>
           </div>
 
-          <button onClick={handlePreviewReport} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+          <button onClick={handlePreviewReport} disabled={generating || !projectId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !projectId ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !projectId ? 0.5 : 1 }}>
             <Icon name={generating ? 'refresh' : 'file'} size={13} color="currentColor" /> Preview
           </button>
-          <button onClick={() => handleGenerateReport('html')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+          <button onClick={() => handleGenerateReport('html')} disabled={generating || !projectId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: generating || !projectId ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !projectId ? 0.5 : 1 }}>
             <Icon name="download" size={13} color="currentColor" /> HTML
           </button>
-          <button onClick={() => handleGenerateReport('markdown')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+          <button onClick={() => handleGenerateReport('markdown')} disabled={generating || !projectId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !projectId ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !projectId ? 0.5 : 1 }}>
             <Icon name="download" size={13} color="currentColor" /> Markdown
           </button>
-          <button onClick={handleExportPDF} disabled={generating || !selectedProject} title="Export PDF (requires WeasyPrint)" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--crit)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+          <button onClick={handleExportPDF} disabled={generating || !projectId} title="Export PDF (requires WeasyPrint)" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--crit)', cursor: generating || !projectId ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !projectId ? 0.5 : 1 }}>
             <Icon name="download" size={13} color="currentColor" /> PDF
           </button>
         </div>

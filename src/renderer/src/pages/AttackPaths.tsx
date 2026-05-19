@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import cytoscape from 'cytoscape'
 import Icon from '@/components/Icon'
-import type { Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
+import { useAppStore } from '@/stores/appStore'
 
 interface NodeData {
   id: string
@@ -57,8 +57,8 @@ const EDGE_TYPE_LABEL: Record<string, string> = {
 }
 
 export default function AttackPaths() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
   const [graph, setGraph] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedEl, setSelectedEl] = useState<NodeData | EdgeData | null>(null)
@@ -66,21 +66,14 @@ export default function AttackPaths() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then(data => {
-      setProjects(data)
-      if (data.length > 0) setSelectedProject(data[0].id)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (selectedProject) loadGraph()
-  }, [selectedProject])
+    if (projectId) loadGraph()
+  }, [projectId])
 
   async function loadGraph() {
     setLoading(true)
     setSelectedEl(null)
     try {
-      const res = await fetch(`${getApiBase()}/attack-paths/${selectedProject}`)
+      const res = await fetch(`${getApiBase()}/attack-paths/${projectId}`)
       if (res.ok) setGraph(await res.json())
     } finally {
       setLoading(false)
@@ -212,34 +205,20 @@ export default function AttackPaths() {
           <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Visualise compromise paths</p>
         </div>
 
-        {/* Project selector */}
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Project</label>
-          <select
-            value={selectedProject}
-            onChange={e => setSelectedProject(e.target.value)}
-            style={{
-              width: '100%', background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
-              borderRadius: 3, padding: '5px 8px', fontSize: 12, color: 'var(--fg)',
-              fontFamily: 'var(--font-sans)', outline: 'none',
-            }}
-          >
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button
-            onClick={loadGraph}
-            disabled={loading}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
-              background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
-            }}
-          >
-            <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
-        </div>
+        {/* Refresh */}
+        <button
+          onClick={loadGraph}
+          disabled={loading}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
+            background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
 
         {/* Stats */}
         {graph && (
