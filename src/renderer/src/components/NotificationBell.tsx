@@ -113,7 +113,7 @@ export default function NotificationBell() {
         onClick={() => {
           if (!open && buttonRef.current) {
             const r = buttonRef.current.getBoundingClientRect()
-            setPopupPos({ top: r.top, left: r.right + 10 })
+            setPopupPos({ top: Math.max(8, r.top - 320), left: r.right + 8 })
           }
           setOpen(o => !o)
         }}

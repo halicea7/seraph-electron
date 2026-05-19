@@ -234,6 +234,8 @@ function VulnRecords({ projectId }: { projectId: string }) {
 
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiExpanded, setAiExpanded] = useState<string | null>(null)
+  const [aiModels, setAiModels] = useState<string[]>([])
+  const [aiModel, setAiModel] = useState('')
 
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -246,6 +248,21 @@ function VulnRecords({ projectId }: { projectId: string }) {
       loadStats()
     }
   }, [projectId])
+
+  useEffect(() => {
+    if (aiModels.length > 0) return
+    fetch(`${getApiBase()}/settings/ai`)
+      .then(r => r.json())
+      .then(async cfg => {
+        const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
+        const r2 = await fetch(`${base}/api/tags`)
+        const d = await r2.json()
+        const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name)
+        setAiModels(models)
+        if (models.length) setAiModel(models[0])
+      })
+      .catch(() => {})
+  }, [])
 
   async function loadVulns() {
     try {
@@ -322,7 +339,11 @@ function VulnRecords({ projectId }: { projectId: string }) {
   async function handleAiRemediate(vuln: Vuln) {
     setAiLoading(vuln.id)
     try {
-      const res = await fetch(`${getApiBase()}/vulns/${vuln.id}/ai-remediate`, { method: 'POST' })
+      const res = await fetch(`${getApiBase()}/vulns/${vuln.id}/ai-remediate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: aiModel || undefined }),
+      })
       const data = await res.json()
       setVulns(prev => prev.map(v => v.id === vuln.id ? { ...v, ai_remediation: data.ai_remediation } : v))
       setAiExpanded(vuln.id)
@@ -381,6 +402,16 @@ function VulnRecords({ projectId }: { projectId: string }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {aiModels.length > 0 && (
+            <select
+              value={aiModel}
+              onChange={e => setAiModel(e.target.value)}
+              style={{ fontSize: 11, padding: '4px 8px', background: 'var(--bg)', border: ruleStrong, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', cursor: 'pointer', borderRadius: 3 }}
+              title="AI model for remediation"
+            >
+              {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
           <button
             onClick={openImportModal}
             disabled={!projectId}
@@ -834,7 +865,48 @@ interface DetailProps {
 
 function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onDelete, onClose }: DetailProps) {
   const [aiOpen, setAiOpen] = useState(false)
+  const [aiModels, setAiModels] = useState<string[]>([])
+  const [aiModel, setAiModel] = useState('')
+  const [aiResult, setAiResult] = useState<string | null>(null)
+  const [aiGenerating, setAiGenerating] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+
+  useEffect(() => {
+    if (!aiOpen || aiModels.length > 0) return
+    fetch(`${getApiBase()}/settings/ai`)
+      .then(r => r.json())
+      .then(async cfg => {
+        const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
+        const r2 = await fetch(`${base}/api/tags`)
+        const d = await r2.json()
+        const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name)
+        setAiModels(models)
+        if (models.length && !aiModel) setAiModel(models[0])
+      })
+      .catch(() => {})
+  }, [aiOpen])
+
+  async function generateRemediation() {
+    if (!aiModel) return
+    setAiGenerating(true)
+    setAiResult(null)
+    try {
+      const cfg = await fetch(`${getApiBase()}/settings/ai`).then(r => r.json())
+      const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
+      const prompt = `You are a cybersecurity expert. Provide concise, actionable remediation steps for this vulnerability:\n\nTitle: ${finding.title}\nSeverity: ${finding.severity}\nCVE: ${finding.cve_id ?? 'N/A'}\nTarget: ${finding.target ?? 'N/A'}\nDescription: ${finding.description ?? 'No description'}\n\nProvide:\n1. Immediate mitigation\n2. Long-term remediation\n3. Verification command`
+      const res = await fetch(`${base}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: aiModel, prompt, stream: false }),
+      })
+      const data = await res.json()
+      setAiResult(data.response ?? 'No response from model.')
+    } catch {
+      setAiResult('Could not reach Ollama. Check Settings → AI for the endpoint configuration.')
+    } finally {
+      setAiGenerating(false)
+    }
+  }
   const fTags = (finding.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
   const fStatus = (finding.status || 'open') as FindingStatus
   const ss = STATUS_STYLES[fStatus] ?? STATUS_STYLES.open
@@ -963,20 +1035,51 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
         </div>
 
         {/* AI Remediation */}
-        <div style={{ border: `1px solid ${aiOpen ? 'var(--accent)' : 'var(--rule)'}` }}>
+        <div style={{ border: `1px solid ${aiOpen ? 'rgba(168,85,247,0.5)' : 'var(--rule)'}`, background: aiOpen ? 'rgba(168,85,247,0.03)' : 'transparent' }}>
           <div className="sec-h">
-            <span className="title">AI REMEDIATION · LOCAL LLM</span>
-            <button onClick={() => setAiOpen(v => !v)} className="btn btn-sm" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
-              {aiOpen ? <><Icon name="check" size={9} /> ready</> : <><Icon name="bolt" size={9} /> Generate</>}
+            <span className="title" style={{ color: aiOpen ? '#a855f7' : undefined }}>AI REMEDIATION · LOCAL LLM</span>
+            <button onClick={() => setAiOpen(v => !v)} className="btn btn-sm" style={{ borderColor: 'rgba(168,85,247,0.4)', color: '#a855f7' }}>
+              {aiOpen ? <><X size={9} /> Close</> : <><Brain size={9} /> Generate</>}
             </button>
           </div>
-          <div style={{ padding: 12 }}>
-            <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0, lineHeight: 1.55 }}>
-              {aiOpen
-                ? 'AI remediation requires a connected Ollama endpoint. Configure it in Settings → AI.'
-                : 'One-click remediation guidance routed through your local Ollama endpoint. No external API calls.'}
-            </p>
-          </div>
+          {!aiOpen && (
+            <div style={{ padding: '8px 12px' }}>
+              <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0, lineHeight: 1.5 }}>
+                One-click remediation guidance via local Ollama. No external API calls.
+              </p>
+            </div>
+          )}
+          {aiOpen && (
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {aiModels.length > 0 ? (
+                  <select
+                    value={aiModel}
+                    onChange={e => setAiModel(e.target.value)}
+                    style={{ flex: 1, fontSize: 11, padding: '4px 8px', background: 'var(--bg)', border: '1px solid rgba(168,85,247,0.3)', color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', borderRadius: 3, cursor: 'pointer' }}
+                  >
+                    {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ flex: 1, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                    {aiGenerating ? 'Loading models…' : 'No models found — check Settings → AI'}
+                  </span>
+                )}
+                <button
+                  onClick={generateRemediation}
+                  disabled={!aiModel || aiGenerating}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '4px 12px', borderRadius: 3, background: aiModel && !aiGenerating ? 'rgba(168,85,247,0.15)' : 'var(--bg)', border: '1px solid rgba(168,85,247,0.35)', color: aiModel && !aiGenerating ? '#a855f7' : 'var(--fg-4)', cursor: aiModel && !aiGenerating ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}
+                >
+                  <Sparkles size={10} /> {aiGenerating ? 'Generating…' : 'Run'}
+                </button>
+              </div>
+              {aiResult && (
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.65, whiteSpace: 'pre-wrap', borderLeft: '2px solid rgba(168,85,247,0.5)', paddingLeft: 10, fontFamily: 'var(--font-sans)' }}>
+                  {aiResult}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action buttons */}
