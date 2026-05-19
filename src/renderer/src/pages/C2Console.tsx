@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import {
-  Terminal as TerminalIcon, Package, Radio, Database,
-  Wifi, WifiOff, RefreshCw, Trash2, Play,
-  Copy, Check, Download, ChevronRight,
-  Shield, Zap, Eye, EyeOff, X, Crosshair,
-  ListChecks, Network, Camera, ArrowUpCircle, KeyRound, BookOpen
-} from 'lucide-react'
+import Icon from '@/components/Icon'
 import Terminal, { TerminalHandle } from '../components/Terminal'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
@@ -218,7 +212,7 @@ function SliverPanel() {
     <div style={{ background: 'var(--bg-2)', border: sliverBorder, borderRadius: 4, overflow: 'hidden' }}>
       <div style={{ padding: '10px 16px', borderBottom: sliverBorder, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Crosshair size={13} style={{ color: '#a78bfa' }} /> Sliver C2
+          <Icon name="target" size={13} style={{ color: '#a78bfa' }} /> Sliver C2
           {status?.available && status.connected && (
             <span style={{ fontSize: 10, fontWeight: 400, color: '#a78bfa', background: 'rgba(167,139,250,0.15)', padding: '1px 6px', borderRadius: 4 }}>{status.version}</span>
           )}
@@ -230,7 +224,7 @@ function SliverPanel() {
             </span>
           )}
           <button onClick={refresh} disabled={loading} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size={12} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -252,7 +246,7 @@ function SliverPanel() {
               <input value={lhostIn} onChange={e => setLhostIn(e.target.value)} placeholder="LHOST" style={inputCls} />
               <input value={lportIn} onChange={e => setLportIn(e.target.value)} placeholder="Port" style={inputCls} />
               <button onClick={startListener} disabled={startingListener || !lhostIn} style={{ padding: '6px 10px', borderRadius: 4, background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)', fontSize: 11, color: '#a78bfa', cursor: (startingListener || !lhostIn) ? 'not-allowed' : 'pointer', opacity: (startingListener || !lhostIn) ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                {startingListener ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />} Start
+                {startingListener ? <Icon name="refresh" size={10} className="animate-spin" /> : <Icon name="play" size={10} />} Start
               </button>
             </div>
             {listeners.length === 0 ? (
@@ -265,7 +259,7 @@ function SliverPanel() {
                 </span>
                 <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-2)' }}>{l.protocol}:{l.port}</span>
                 <span style={{ color: 'var(--fg-3)', fontSize: 10 }}>#{l.job_id}</span>
-                <button onClick={() => stopListener(l.job_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}><X size={11} /></button>
+                <button onClick={() => stopListener(l.job_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}><Icon name="x" size={11} /></button>
               </div>
             ))}
           </div>
@@ -327,7 +321,7 @@ function SliverPanel() {
               disabled={generating || !genForm.lhost}
               style={{ width: '100%', padding: '6px 0', borderRadius: 4, background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)', fontSize: 11, color: '#a78bfa', cursor: (generating || !genForm.lhost) ? 'not-allowed' : 'pointer', opacity: (generating || !genForm.lhost) ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
-              {generating ? <RefreshCw size={11} className="animate-spin" /> : <Package size={11} />}
+              {generating ? <Icon name="refresh" size={11} className="animate-spin" /> : <Icon name="layers" size={11} />}
               Generate
             </button>
             {genResult && (
@@ -1010,8 +1004,8 @@ export default function C2Console() {
         <div style={{ background: 'var(--bg-2)', border: msfStatus.connected ? '1px solid rgba(84,175,97,0.2)' : '1px solid rgba(232,64,64,0.2)', borderRadius: 4, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             {msfStatus.connected
-              ? <Wifi size={16} style={{ color: 'var(--ok)' }} />
-              : <WifiOff size={16} style={{ color: 'var(--crit)' }} />
+              ? <Icon name="wifi" size={16} style={{ color: 'var(--ok)' }} />
+              : <Icon name="wifi" size={16} style={{ color: 'var(--crit)' }} />
             }
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-2)' }}>Metasploit RPC</span>
             {msfStatus.connected && (
@@ -1063,13 +1057,13 @@ export default function C2Console() {
           <div style={{ padding: '12px 16px', borderBottom: rule, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sessions</span>
             <button onClick={handleSync} disabled={loading || !msfStatus.connected} title="Sync from MSF" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 4, opacity: (loading || !msfStatus.connected) ? 0.4 : 1 }}>
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              <Icon name="refresh" size={13} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {sessions.length === 0 ? (
               <div style={{ textAlign: 'center', color: 'var(--fg-4)', padding: '32px 16px', fontSize: 11 }}>
-                <Shield size={28} style={{ margin: '0 auto 8px', opacity: 0.2 }} />
+                <Icon name="shield" size={28} style={{ margin: '0 auto 8px', opacity: 0.2 }} />
                 No sessions yet. Sync from MSF or add manually.
               </div>
             ) : sessions.map(s => (
@@ -1082,7 +1076,7 @@ export default function C2Console() {
                   background: activeSession?.id === s.id ? 'rgba(240,168,58,0.05)' : 'none',
                 }}
               >
-                <TerminalIcon size={14} style={{ marginTop: 2, flexShrink: 0, color: s.status === 'active' && s.live ? 'var(--ok)' : s.status === 'lost' ? 'var(--crit)' : 'var(--fg-4)' }} />
+                <Icon name="terminal" size={14} style={{ marginTop: 2, flexShrink: 0, color: s.status === 'active' && s.live ? 'var(--ok)' : s.status === 'lost' ? 'var(--crit)' : 'var(--fg-4)' }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1096,7 +1090,7 @@ export default function C2Console() {
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}
                         title="Kill & delete session"
                       >
-                        <X size={12} />
+                        <Icon name="x" size={12} />
                       </button>
                     </div>
                   </div>
@@ -1115,13 +1109,13 @@ export default function C2Console() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexShrink: 0 }}>
           <div style={{ display: 'flex', borderBottom: rule }}>
             {([
-              { id: 'sessions', icon: <TerminalIcon size={13} />, label: 'Console' },
-              { id: 'payloads', icon: <Package size={13} />, label: 'Payloads' },
-              { id: 'listeners', icon: <Radio size={13} />, label: 'Listeners' },
-              { id: 'attack', icon: <Crosshair size={13} />, label: 'Attack Plan' },
-              { id: 'loot', icon: <Database size={13} />, label: `Loot (${loot.length})` },
-              { id: 'postex', icon: <ListChecks size={13} />, label: 'Post-Ex' },
-              { id: 'lotl', icon: <BookOpen size={13} />, label: 'LOTL' },
+              { id: 'sessions', icon: <Icon name="terminal" size={13} />, label: 'Console' },
+              { id: 'payloads', icon: <Icon name="layers" size={13} />, label: 'Payloads' },
+              { id: 'listeners', icon: <Icon name="radio" size={13} />, label: 'Listeners' },
+              { id: 'attack', icon: <Icon name="target" size={13} />, label: 'Attack Plan' },
+              { id: 'loot', icon: <Icon name="layers" size={13} />, label: `Loot (${loot.length})` },
+              { id: 'postex', icon: <Icon name="check" size={13} />, label: 'Post-Ex' },
+              { id: 'lotl', icon: <Icon name="book" size={13} />, label: 'LOTL' },
             ] as const).map(tab => (
               <button
                 key={tab.id}
@@ -1146,7 +1140,7 @@ export default function C2Console() {
               <span style={{ color: 'var(--fg-4)' }}>·</span>
               <span style={{ color: 'var(--fg-3)' }}>{activeSession.session_type}</span>
               <button onClick={() => handleKillSession(activeSession)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, marginLeft: 8 }} title="Kill session">
-                <X size={14} />
+                <Icon name="x" size={14} />
               </button>
             </div>
           )}
@@ -1175,13 +1169,13 @@ export default function C2Console() {
                       />
                     </div>
                     <button onClick={sendCommand} style={{ padding: '0 12px', borderRadius: 4, background: 'var(--accent)', border: 'none', cursor: 'pointer', color: '#0d0c0a', flexShrink: 0 }}>
-                      <ChevronRight size={16} />
+                      <Icon name="chev_r" size={16} />
                     </button>
                   </div>
                 </>
               ) : (
                 <div style={{ flex: 1, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-4)' }}>
-                  <TerminalIcon size={40} style={{ marginBottom: 12, opacity: 0.2 }} />
+                  <Icon name="terminal" size={40} style={{ marginBottom: 12, opacity: 0.2 }} />
                   <p style={{ fontSize: 13 }}>Select a session from the left to open a console</p>
                   <p style={{ fontSize: 11, marginTop: 4, color: 'var(--fg-4)' }}>or sync active sessions from Metasploit</p>
                 </div>
@@ -1196,7 +1190,7 @@ export default function C2Console() {
                   <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ padding: '8px 12px', borderBottom: rule, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Shield size={10} style={{ color: 'var(--accent)' }} /> Host Info
+                        <Icon name="shield" size={10} style={{ color: 'var(--accent)' }} /> Host Info
                       </span>
                       {activeSession.sysinfo.is_admin && (
                         <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '1px 6px', borderRadius: 3 }}>ADMIN</span>
@@ -1253,8 +1247,8 @@ export default function C2Console() {
                           style={{ width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 4, fontSize: 11, color: 'var(--fg-2)', background: 'none', border: ruleStrong, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, opacity: isRunning ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
                         >
                           {isRunning
-                            ? <RefreshCw size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} className="animate-spin" />
-                            : <Zap size={11} style={{ color: 'var(--fg-4)', flexShrink: 0 }} />}
+                            ? <Icon name="refresh" size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} className="animate-spin" />
+                            : <Icon name="bolt" size={11} style={{ color: 'var(--fg-4)', flexShrink: 0 }} />}
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mod.label}</span>
                         </button>
                       )
@@ -1268,7 +1262,7 @@ export default function C2Console() {
                     <div style={{ padding: '8px 12px', borderBottom: rule, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Results</span>
                       <button onClick={() => setPostHistory([])} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }} title="Clear history">
-                        <X size={11} />
+                        <Icon name="x" size={11} />
                       </button>
                     </div>
                     <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -1283,7 +1277,7 @@ export default function C2Console() {
                             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                           >
                             {entry.running
-                              ? <RefreshCw size={10} style={{ color: 'var(--accent)', flexShrink: 0 }} className="animate-spin" />
+                              ? <Icon name="refresh" size={10} style={{ color: 'var(--accent)', flexShrink: 0 }} className="animate-spin" />
                               : entry.error
                                 ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--crit)', flexShrink: 0 }} />
                                 : <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ok)', flexShrink: 0 }} />}
@@ -1317,7 +1311,7 @@ export default function C2Console() {
                                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, flexShrink: 0 }}
                                                   title="Copy module path"
                                                 >
-                                                  {copied === module ? <span style={{ fontSize: 9, color: 'var(--ok)' }}>✓</span> : <Copy size={9} />}
+                                                  {copied === module ? <span style={{ fontSize: 9, color: 'var(--ok)' }}>✓</span> : <Icon name="copy" size={9} />}
                                                 </button>
                                               </div>
                                             )}
@@ -1353,7 +1347,7 @@ export default function C2Console() {
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Package size={14} style={{ color: 'var(--accent)' }} /> Generate Payload (msfvenom)
+                <Icon name="layers" size={14} style={{ color: 'var(--accent)' }} /> Generate Payload (msfvenom)
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -1457,7 +1451,7 @@ export default function C2Console() {
                       fontFamily: 'var(--font-sans)',
                     }}
                   >
-                    {generatingPayload ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+                    {generatingPayload ? <Icon name="refresh" size={14} className="animate-spin" /> : <Icon name="download" size={14} />}
                     {generatingPayload ? 'Generating...' : 'Download Payload'}
                   </button>
                 </div>
@@ -1476,7 +1470,7 @@ export default function C2Console() {
                       <span style={{ fontSize: 10, color: 'var(--fg-4)', width: 112, flexShrink: 0 }}>{item.label}</span>
                       <code style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.cmd}</code>
                       <button onClick={() => copyText(item.cmd, item.label)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', flexShrink: 0, padding: 0 }}>
-                        {copied === item.label ? <Check size={12} style={{ color: 'var(--ok)' }} /> : <Copy size={12} />}
+                        {copied === item.label ? <Icon name="check" size={12} style={{ color: 'var(--ok)' }} /> : <Icon name="copy" size={12} />}
                       </button>
                     </div>
                   ))}
@@ -1492,7 +1486,7 @@ export default function C2Console() {
             {/* Start listener form */}
             <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Radio size={14} style={{ color: 'var(--accent)' }} /> Start Listener (multi/handler)
+                <Icon name="radio" size={14} style={{ color: 'var(--accent)' }} /> Start Listener (multi/handler)
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, alignItems: 'flex-end' }}>
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -1521,7 +1515,7 @@ export default function C2Console() {
                     fontFamily: 'var(--font-sans)',
                   }}
                 >
-                  {startingListener ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                  {startingListener ? <Icon name="refresh" size={14} className="animate-spin" /> : <Icon name="play" size={14} />}
                   Start
                 </button>
               </div>
@@ -1543,11 +1537,11 @@ export default function C2Console() {
                       style={{ fontSize: 11, color: 'var(--crit)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-sans)' }}
                       title="Kill all MSF jobs"
                     >
-                      <X size={11} /> Kill All
+                      <Icon name="x" size={11} /> Kill All
                     </button>
                   )}
                   <button onClick={loadListeners} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}>
-                    <RefreshCw size={13} />
+                    <Icon name="refresh" size={13} />
                   </button>
                 </div>
               </div>
@@ -1567,7 +1561,7 @@ export default function C2Console() {
                   </div>
                   <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>Job #{l.job_id}</span>
                   <button onClick={() => handleStopListener(l.job_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}>
-                    <X size={14} />
+                    <Icon name="x" size={14} />
                   </button>
                 </div>
               ))}
@@ -1585,7 +1579,7 @@ export default function C2Console() {
             <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0 }}>
               <div>
                 <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Crosshair size={14} style={{ color: 'var(--crit)' }} /> Attack Plan
+                  <Icon name="target" size={14} style={{ color: 'var(--crit)' }} /> Attack Plan
                 </h3>
                 <p style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2 }}>
                   Maps scan findings to Metasploit modules using CVE lookups and service fingerprinting.
@@ -1610,8 +1604,8 @@ export default function C2Console() {
                   }}
                 >
                   {generatingAttack
-                    ? <><RefreshCw size={13} className="animate-spin" /> Scanning...</>
-                    : <><Crosshair size={13} /> {attackPlan ? 'Refresh' : 'Analyze'}</>
+                    ? <><Icon name="refresh" size={13} className="animate-spin" /> Scanning...</>
+                    : <><Icon name="target" size={13} /> {attackPlan ? 'Refresh' : 'Analyze'}</>
                   }
                 </button>
               </div>
@@ -1623,7 +1617,7 @@ export default function C2Console() {
 
             {attackPlan && attackPlan.recommendations.length === 0 && (
               <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', color: 'var(--fg-4)' }}>
-                <Shield size={36} style={{ marginBottom: 12, opacity: 0.2 }} />
+                <Icon name="shield" size={36} style={{ marginBottom: 12, opacity: 0.2 }} />
                 <p style={{ fontSize: 13 }}>No matching modules found</p>
                 <p style={{ fontSize: 11, marginTop: 4, color: 'var(--fg-4)' }}>Run nmap/nikto scans to discover services and vulnerabilities first</p>
               </div>
@@ -1660,7 +1654,7 @@ export default function C2Console() {
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', flexShrink: 0, padding: 0 }}
                       title="Copy module path"
                     >
-                      {copied === `mod-${i}` ? <Check size={13} style={{ color: 'var(--ok)' }} /> : <Copy size={13} />}
+                      {copied === `mod-${i}` ? <Icon name="check" size={13} style={{ color: 'var(--ok)' }} /> : <Icon name="copy" size={13} />}
                     </button>
                   </div>
 
@@ -1722,8 +1716,8 @@ export default function C2Console() {
                         title={!msfStatus.connected ? 'Connect to Metasploit first' : 'Run this module'}
                       >
                         {runningModule === i
-                          ? <><RefreshCw size={11} className="animate-spin" /> Running...</>
-                          : <><Play size={11} /> Run</>
+                          ? <><Icon name="refresh" size={11} className="animate-spin" /> Running...</>
+                          : <><Icon name="play" size={11} /> Run</>
                         }
                       </button>
                       {moduleResults[i] && (
@@ -1797,7 +1791,7 @@ export default function C2Console() {
 
             {!attackPlan && !generatingAttack && (
               <div style={{ flex: 1, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-4)', padding: '64px 0' }}>
-                <Crosshair size={40} style={{ marginBottom: 12, opacity: 0.2, color: 'var(--crit)' }} />
+                <Icon name="target" size={40} style={{ marginBottom: 12, opacity: 0.2, color: 'var(--crit)' }} />
                 <p style={{ fontSize: 13 }}>Select a project and click Analyze</p>
                 <p style={{ fontSize: 11, marginTop: 4, color: 'var(--fg-4)' }}>Works best after running nmap and nikto scans</p>
               </div>
@@ -1810,7 +1804,7 @@ export default function C2Console() {
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {loot.length === 0 ? (
               <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-4)' }}>
-                <Database size={40} style={{ marginBottom: 12, opacity: 0.2, color: 'var(--accent)' }} />
+                <Icon name="layers" size={40} style={{ marginBottom: 12, opacity: 0.2, color: 'var(--accent)' }} />
                 <p style={{ fontSize: 13 }}>No loot captured yet</p>
                 <p style={{ fontSize: 11, marginTop: 4, color: 'var(--fg-4)' }}>Run post-exploitation modules to capture credentials, hashes, and files</p>
               </div>
@@ -1831,15 +1825,15 @@ export default function C2Console() {
                       {item.content && (
                         <>
                           <button onClick={() => copyText(item.content, item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 4 }}>
-                            {copied === item.id ? <Check size={13} style={{ color: 'var(--ok)' }} /> : <Copy size={13} />}
+                            {copied === item.id ? <Icon name="check" size={13} style={{ color: 'var(--ok)' }} /> : <Icon name="copy" size={13} />}
                           </button>
                           <button onClick={() => setShowLootContent(showLootContent === item.id ? null : item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 4 }}>
-                            {showLootContent === item.id ? <EyeOff size={13} /> : <Eye size={13} />}
+                            {showLootContent === item.id ? <Icon name="eye_off" size={13} /> : <Icon name="eye" size={13} />}
                           </button>
                         </>
                       )}
                       <button onClick={async () => { await fetch(`${getApiBase()}/c2/loot/${item.id}`, { method: 'DELETE' }); loadLoot() }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 4 }}>
-                        <Trash2 size={13} />
+                        <Icon name="trash" size={13} />
                       </button>
                     </div>
                   </div>
@@ -1858,7 +1852,7 @@ export default function C2Console() {
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {!activeSession ? (
               <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-4)' }}>
-                <ListChecks size={36} style={{ marginBottom: 12, opacity: 0.2 }} />
+                <Icon name="check" size={36} style={{ marginBottom: 12, opacity: 0.2 }} />
                 <p style={{ fontSize: 13 }}>Select a session to view post-exploitation tools</p>
               </div>
             ) : (
@@ -1866,7 +1860,7 @@ export default function C2Console() {
                 {/* Quick actions */}
                 <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Zap size={14} style={{ color: 'var(--accent)' }} /> Quick Actions
+                    <Icon name="bolt" size={14} style={{ color: 'var(--accent)' }} /> Quick Actions
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{activeSession.remote_host} · {activeSession.session_type}</span>
                   </h3>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -1875,7 +1869,7 @@ export default function C2Console() {
                       disabled={probing}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.2)', fontSize: 11, color: 'var(--fg-2)', cursor: probing ? 'not-allowed' : 'pointer', opacity: probing ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
                     >
-                      <RefreshCw size={12} className={probing ? 'animate-spin' : ''} />
+                      <Icon name="refresh" size={12} className={probing ? 'animate-spin' : ''} />
                       {probing ? 'Probing…' : 'Auto-Probe'}
                     </button>
                     <button
@@ -1883,7 +1877,7 @@ export default function C2Console() {
                       disabled={harvesting}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.2)', fontSize: 11, color: 'var(--accent)', cursor: harvesting ? 'not-allowed' : 'pointer', opacity: harvesting ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
                     >
-                      {harvesting ? <RefreshCw size={12} className="animate-spin" /> : <KeyRound size={12} />}
+                      {harvesting ? <Icon name="refresh" size={12} className="animate-spin" /> : <Icon name="key" size={12} />}
                       Harvest Creds
                     </button>
                     <button
@@ -1892,7 +1886,7 @@ export default function C2Console() {
                       title={!activeSession.session_type.includes('meterpreter') ? 'Requires Meterpreter' : ''}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(180,130,60,0.08)', border: '1px solid rgba(180,130,60,0.2)', fontSize: 11, color: 'var(--med)', cursor: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 'not-allowed' : 'pointer', opacity: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 0.4 : 1, fontFamily: 'var(--font-sans)' }}
                     >
-                      {screenshotting ? <RefreshCw size={12} className="animate-spin" /> : <Camera size={12} />}
+                      {screenshotting ? <Icon name="refresh" size={12} className="animate-spin" /> : <Icon name="eye" size={12} />}
                       Screenshot
                     </button>
                     <button
@@ -1901,7 +1895,7 @@ export default function C2Console() {
                       title={activeSession.session_type.includes('meterpreter') ? 'Already Meterpreter' : 'Upgrade shell → Meterpreter'}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', fontSize: 11, color: '#a78bfa', cursor: (upgrading || activeSession.session_type.includes('meterpreter')) ? 'not-allowed' : 'pointer', opacity: (upgrading || activeSession.session_type.includes('meterpreter')) ? 0.4 : 1, fontFamily: 'var(--font-sans)' }}
                     >
-                      {upgrading ? <RefreshCw size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}
+                      {upgrading ? <Icon name="refresh" size={12} className="animate-spin" /> : <Icon name="upload" size={12} />}
                       Upgrade Shell
                     </button>
                   </div>
@@ -1918,7 +1912,7 @@ export default function C2Console() {
                 <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ padding: '10px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Shield size={13} /> Parse Sysinfo
+                      <Icon name="shield" size={13} /> Parse Sysinfo
                     </span>
                     {activeSession.sysinfo?.hostname && (
                       <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
@@ -1965,7 +1959,7 @@ export default function C2Console() {
                       disabled={parsingSysinfo || !sysinfoRaw.trim()}
                       style={{ width: '100%', padding: '6px 0', borderRadius: 4, background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.2)', fontSize: 11, color: 'var(--accent)', cursor: (parsingSysinfo || !sysinfoRaw.trim()) ? 'not-allowed' : 'pointer', opacity: (parsingSysinfo || !sysinfoRaw.trim()) ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'var(--font-sans)' }}
                     >
-                      {parsingSysinfo ? <RefreshCw size={11} className="animate-spin" /> : <Shield size={11} />}
+                      {parsingSysinfo ? <Icon name="refresh" size={11} className="animate-spin" /> : <Icon name="shield" size={11} />}
                       Parse & Save
                     </button>
                   </div>
@@ -1975,7 +1969,7 @@ export default function C2Console() {
                 <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ padding: '10px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ListChecks size={13} /> Post-Ex Checklist
+                      <Icon name="check" size={13} /> Post-Ex Checklist
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>
@@ -2033,14 +2027,14 @@ export default function C2Console() {
                 <div style={{ background: 'var(--bg-2)', border: '1px solid rgba(240,168,58,0.2)', borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ padding: '10px 16px', borderBottom: '1px solid rgba(240,168,58,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Network size={13} style={{ color: 'var(--accent)' }} /> Lateral Movement
+                      <Icon name="network" size={13} style={{ color: 'var(--accent)' }} /> Lateral Movement
                     </span>
                     <button
                       onClick={handleLateralDiscover}
                       disabled={discoveringLateral}
                       style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 4, background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.2)', fontSize: 10, color: 'var(--accent)', cursor: discoveringLateral ? 'not-allowed' : 'pointer', opacity: discoveringLateral ? 0.4 : 1, fontFamily: 'var(--font-sans)' }}
                     >
-                      {discoveringLateral ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
+                      {discoveringLateral ? <Icon name="refresh" size={10} className="animate-spin" /> : <Icon name="bolt" size={10} />}
                       {lateralResult ? 'Re-Analyse' : 'Analyse'}
                     </button>
                   </div>
@@ -2072,7 +2066,7 @@ export default function C2Console() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {lateralResult.techniques.map(t => (
                             <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, borderRadius: 4, background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.15)' }}>
-                              <Crosshair size={10} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
+                              <Icon name="target" size={10} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 500, color: 'var(--fg)' }}>{t.label}</div>
                                 <div style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2 }}>{t.description}</div>
@@ -2083,7 +2077,7 @@ export default function C2Console() {
                                       onClick={() => navigator.clipboard.writeText(t.msf_module!)}
                                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}
                                     >
-                                      <Copy size={9} />
+                                      <Icon name="copy" size={9} />
                                     </button>
                                   </div>
                                 )}
@@ -2100,7 +2094,7 @@ export default function C2Console() {
                           <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: rule }}>
                             <code style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</code>
                             <button onClick={() => navigator.clipboard.writeText(m.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0, flexShrink: 0 }}>
-                              <Copy size={9} />
+                              <Icon name="copy" size={9} />
                             </button>
                           </div>
                         ))}
@@ -2116,7 +2110,7 @@ export default function C2Console() {
                 {/* Pivot Routes */}
                 <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ padding: '10px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Network size={13} style={{ color: 'var(--accent)' }} />
+                    <Icon name="network" size={13} style={{ color: 'var(--accent)' }} />
                     <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pivot Routes</span>
                     {pivotRoutes.length > 0 && <span style={{ fontSize: 11, color: 'var(--accent)', marginLeft: 4 }}>({pivotRoutes.length})</span>}
                   </div>
@@ -2147,7 +2141,7 @@ export default function C2Console() {
                         disabled={addingRoute || !newRouteSubnet}
                         style={{ padding: '8px 16px', borderRadius: 4, background: 'var(--accent)', border: 'none', color: '#0d0c0a', fontSize: 13, fontWeight: 600, cursor: (addingRoute || !newRouteSubnet) ? 'not-allowed' : 'pointer', opacity: (addingRoute || !newRouteSubnet) ? 0.4 : 1, flexShrink: 0, display: 'flex', alignItems: 'center', fontFamily: 'var(--font-sans)' }}
                       >
-                        {addingRoute ? <RefreshCw size={14} className="animate-spin" /> : 'Add'}
+                        {addingRoute ? <Icon name="refresh" size={14} className="animate-spin" /> : 'Add'}
                       </button>
                     </div>
                   </div>
@@ -2162,7 +2156,7 @@ export default function C2Console() {
                           <code style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{r.subnet}/{r.netmask}</code>
                           <span style={{ fontSize: 10, color: 'var(--fg-4)', marginRight: 8 }}>via session {r.session_id}</span>
                           <button onClick={() => handleRemoveRoute(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}>
-                            <X size={13} />
+                            <Icon name="x" size={13} />
                           </button>
                         </div>
                       ))}
@@ -2180,7 +2174,7 @@ export default function C2Console() {
             <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <BookOpen size={14} style={{ color: 'var(--accent)' }} /> Living-off-the-Land Command Library
+                  <Icon name="book" size={14} style={{ color: 'var(--accent)' }} /> Living-off-the-Land Command Library
                 </h3>
                 <input
                   style={{ flex: 1, minWidth: 160, background: 'var(--bg)', border: rule, borderRadius: 4, padding: '4px 12px', fontSize: 11, color: 'var(--fg)', outline: 'none' }}
@@ -2233,7 +2227,7 @@ export default function C2Console() {
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}
                               title="Copy command"
                             >
-                              {lotlCopied === cmd.id ? <Check size={12} style={{ color: 'var(--ok)' }} /> : <Copy size={12} />}
+                              {lotlCopied === cmd.id ? <Icon name="check" size={12} style={{ color: 'var(--ok)' }} /> : <Icon name="copy" size={12} />}
                             </button>
                           </div>
                         </div>

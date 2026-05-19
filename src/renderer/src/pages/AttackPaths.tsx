@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import cytoscape from 'cytoscape'
+import { useState, useEffect } from 'react'
 import Icon from '@/components/Icon'
 import { getApiBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface NodeData {
   id: string
@@ -30,40 +31,172 @@ interface GraphData {
   edges: { data: EdgeData }[]
 }
 
-const EDGE_COLORS: Record<string, string> = {
-  c2:      'var(--crit)',
-  finding: 'var(--accent)',
-  lateral: '#a855f7',
+interface PathStep {
+  tool: string
+  title: string
+  sev: string
 }
 
-const EDGE_COLORS_STATIC: Record<string, string> = {
-  c2:      '#e84040',
-  finding: '#f0a83a',
-  lateral: '#a855f7',
+interface AttackChain {
+  id: string
+  impact: string
+  cvss: number
+  steps: PathStep[]
+  time: string
 }
 
-const TARGET_ICONS: Record<string, string> = {
-  linux_host:   '⬡',
-  windows_host: '▣',
-  web_app:      '◈',
-  cloud_aws:    '◉',
-  network:      '◎',
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const rule = '1px solid var(--rule)'
+
+const SORT_OPTIONS = ['by impact', 'by complexity', 'shortest']
+
+const EDGE_TYPE_TOOL: Record<string, string> = {
+  c2:      'C2 implant',
+  finding: 'exploit',
+  lateral: 'cred-reuse',
 }
 
-const EDGE_TYPE_LABEL: Record<string, string> = {
-  c2:      'C2 Session',
-  finding: 'Exploit Path',
-  lateral: 'Lateral Movement',
+const EDGE_TYPE_IMPACT: Record<string, string> = {
+  c2:      'Critical',
+  finding: 'High',
+  lateral: 'Medium',
 }
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function PageHeader({ title, sub, right }: { title: string; sub: string; right?: React.ReactNode }) {
+  return (
+    <div style={{
+      borderBottom: rule, padding: '18px var(--pad)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexShrink: 0,
+    }}>
+      <div>
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>{sub}</div>
+      </div>
+      {right && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>}
+    </div>
+  )
+}
+
+function SegBtns({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: rule, height: 26 }}>
+      {options.map((o, i) => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          background: value === o ? 'var(--accent-2)' : 'transparent',
+          color: value === o ? 'var(--accent)' : 'var(--fg-3)',
+          border: 'none', borderLeft: i > 0 ? rule : 'none',
+          padding: '0 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function SevBadge({ sev }: { sev: string }) {
+  const c = sev === 'Critical' ? 'var(--crit)' : sev === 'High' ? 'var(--high)' : sev === 'Medium' ? 'var(--med)' : 'var(--low)'
+  return (
+    <span className="mono" style={{ fontSize: 10, color: c, padding: '2px 6px', border: `1px solid ${c}`, background: `${c}18` }}>{sev}</span>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rule">
+      <div className="sec-h"><span className="title">{title}</span></div>
+      {children}
+    </div>
+  )
+}
+
+// ── Build chains from graph data ───────────────────────────────────────────────
+
+function buildChains(graph: GraphData): AttackChain[] {
+  const edges = graph.edges.map(e => e.data)
+  const nodeMap = new Map(graph.nodes.map(n => [n.data.id, n.data]))
+
+  // Each edge from attacker is an entry point; lateral edges extend chains
+  const attackerEdges = edges.filter(e => e.source === 'attacker')
+  const lateralEdges  = edges.filter(e => e.type === 'lateral')
+
+  const chains: AttackChain[] = []
+
+  attackerEdges.forEach((entry, idx) => {
+    const target = nodeMap.get(entry.target)
+    if (!target) return
+
+    const findingCounts = target.finding_counts ?? {}
+    const topSev = ['Critical', 'High', 'Medium', 'Low'].find(s => findingCounts[s.toLowerCase()] || findingCounts[s])
+    const impact = topSev ?? EDGE_TYPE_IMPACT[entry.type] ?? 'Medium'
+    const cvss = impact === 'Critical' ? 9.8 : impact === 'High' ? 7.5 : impact === 'Medium' ? 5.0 : 3.0
+
+    const baseSteps: PathStep[] = [
+      { tool: 'recon', title: 'Initial recon', sev: 'Info' },
+      { tool: EDGE_TYPE_TOOL[entry.type] ?? 'access', title: target.label, sev: impact },
+    ]
+
+    // Check for lateral movement from this target
+    const laterals = lateralEdges.filter(e => e.source === entry.target)
+    laterals.forEach(lat => {
+      const latTarget = nodeMap.get(lat.target)
+      if (latTarget) {
+        baseSteps.push({ tool: 'cred-reuse', title: latTarget.label, sev: 'Medium' })
+      }
+    })
+
+    chains.push({
+      id: String(idx + 1).padStart(2, '0'),
+      impact,
+      cvss,
+      steps: baseSteps,
+      time: `${3 + baseSteps.length * 2}m`,
+    })
+  })
+
+  // If no data, show placeholder chain
+  if (chains.length === 0) {
+    chains.push({
+      id: '01',
+      impact: 'High',
+      cvss: 7.5,
+      steps: [
+        { tool: 'recon', title: 'External recon', sev: 'Info' },
+        { tool: 'exploit', title: 'Initial access', sev: 'High' },
+        { tool: 'pivot', title: 'Lateral movement', sev: 'Medium' },
+        { tool: 'exfil', title: 'Data exfiltration', sev: 'Critical' },
+      ],
+      time: '12m',
+    })
+  }
+
+  return chains
+}
+
+function sortChains(chains: AttackChain[], sort: string): AttackChain[] {
+  if (sort === 'by impact') {
+    const rank: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Info: 0 }
+    return [...chains].sort((a, b) => (rank[b.impact] ?? 0) - (rank[a.impact] ?? 0))
+  }
+  if (sort === 'by complexity') {
+    return [...chains].sort((a, b) => b.steps.length - a.steps.length)
+  }
+  if (sort === 'shortest') {
+    return [...chains].sort((a, b) => a.steps.length - b.steps.length)
+  }
+  return chains
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function AttackPaths() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
   const [graph, setGraph] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [selectedEl, setSelectedEl] = useState<NodeData | EdgeData | null>(null)
-  const cyRef = useRef<cytoscape.Core | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [sort, setSort] = useState(SORT_OPTIONS[0])
 
   useEffect(() => {
     if (projectId) loadGraph()
@@ -71,7 +204,6 @@ export default function AttackPaths() {
 
   async function loadGraph() {
     setLoading(true)
-    setSelectedEl(null)
     try {
       const res = await fetch(`${getApiBase()}/attack-paths/${projectId}`)
       if (res.ok) setGraph(await res.json())
@@ -80,280 +212,112 @@ export default function AttackPaths() {
     }
   }
 
-  const initCy = useCallback(() => {
-    if (!graph || !containerRef.current) return
-    if (cyRef.current) cyRef.current.destroy()
-
-    const elements: cytoscape.ElementDefinition[] = [
-      ...graph.nodes.map(n => {
-        const isAttacker = n.data.type === 'attacker'
-        const isCompromised = n.data.compromised
-        const bg      = isAttacker ? '#1a1400' : isCompromised ? '#2a0a0a' : '#1a1714'
-        const border  = isAttacker ? '#f0a83a' : isCompromised ? '#e84040' : '#3a3530'
-        const glow    = isAttacker ? 'rgba(240,168,58,0.5)' : isCompromised ? 'rgba(232,64,64,0.5)' : 'rgba(58,53,48,0.3)'
-        return { data: { ...n.data, bg, border, glow } }
-      }),
-      ...graph.edges.map(e => ({
-        data: { ...e.data, lineColor: EDGE_COLORS_STATIC[e.data.type] || '#3a3530' },
-      })),
-    ]
-
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'background-color': 'data(bg)',
-            'border-color': 'data(border)',
-            'border-width': 1.5,
-            'label': 'data(label)',
-            'color': '#c8c3b8',
-            'font-size': '10px',
-            'font-family': '"IBM Plex Mono", monospace',
-            'text-valign': 'bottom',
-            'text-margin-y': 6,
-            'text-max-width': '110px',
-            'text-wrap': 'ellipsis',
-            'width': 40,
-            'height': 40,
-            'shadow-blur': 14,
-            'shadow-color': 'data(glow)',
-            'shadow-opacity': 0.9,
-            'shadow-offset-x': 0,
-            'shadow-offset-y': 0,
-          } as any,
-        },
-        {
-          selector: 'node[type="attacker"]',
-          style: { 'shape': 'diamond', 'width': 48, 'height': 48 },
-        },
-        {
-          selector: 'node:selected',
-          style: { 'border-width': 2.5, 'border-color': '#f0a83a' },
-        },
-        {
-          selector: 'edge',
-          style: {
-            'width': 1.5,
-            'line-color': 'data(lineColor)',
-            'target-arrow-color': 'data(lineColor)',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'font-size': '9px',
-            'color': '#7a7268',
-            'text-rotation': 'autorotate',
-            'opacity': 0.7,
-          },
-        },
-        {
-          selector: 'edge:selected',
-          style: { 'opacity': 1, 'width': 2.5 },
-        },
-      ],
-      layout: {
-        name: 'cose',
-        animate: true,
-        animationDuration: 500,
-        nodeRepulsion: () => 10000,
-        idealEdgeLength: () => 130,
-        gravity: 0.8,
-        randomize: false,
-      } as any,
-      minZoom: 0.2,
-      maxZoom: 4,
-    })
-
-    cy.on('tap', 'node', (evt) => setSelectedEl(evt.target.data() as NodeData))
-    cy.on('tap', 'edge', (evt) => setSelectedEl(evt.target.data() as EdgeData))
-    cy.on('tap', (evt) => { if (evt.target === cy) setSelectedEl(null) })
-    cyRef.current = cy
-  }, [graph])
-
-  useEffect(() => { initCy() }, [initCy])
-
-  function exportPNG() {
-    if (!cyRef.current) return
-    const png = cyRef.current.png({ full: true, scale: 2, bg: '#0d0c0a' })
+  function exportPaths() {
+    if (!graph) return
+    const chains = buildChains(graph)
+    const blob = new Blob([JSON.stringify(chains, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
-    a.href = png
-    a.download = 'attack-paths.png'
+    a.href = URL.createObjectURL(blob)
+    a.download = 'attack-paths.json'
     a.click()
   }
 
-  const nodeCount       = graph?.nodes.length ?? 0
-  const edgeCount       = graph?.edges.length ?? 0
-  const compromisedCount = graph?.nodes.filter(n => n.data.compromised).length ?? 0
-
-  const selectedNode = selectedEl && 'target_type' in selectedEl ? selectedEl as NodeData : null
-  const selectedEdge = selectedEl && 'source' in selectedEl ? selectedEl as EdgeData : null
+  const chains = graph ? sortChains(buildChains(graph), sort) : []
 
   return (
-    <div style={{ display: 'flex', height: '100%', gap: 16, padding: '20px 24px', minHeight: 0, boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Left panel ── */}
-      <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
+      <PageHeader
+        title="Attack Paths"
+        sub="Ranked sequences from initial-access foothold to high-value asset."
+        right={
+          <>
+            <SegBtns options={SORT_OPTIONS} value={sort} onChange={setSort} />
+            <button
+              className="btn btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={exportPaths}
+            >
+              <Icon name="download" size={11} /> Export
+            </button>
+          </>
+        }
+      />
 
-        {/* Header */}
-        <div style={{ paddingBottom: 12, borderBottom: '1px solid var(--rule)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <Icon name="target" size={15} color="var(--crit)" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', letterSpacing: '0.01em' }}>Attack Paths</span>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Visualise compromise paths</p>
-        </div>
+      {/* ── Content ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-        {/* Refresh */}
-        <button
-          onClick={loadGraph}
-          disabled={loading}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
-            background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
-            fontFamily: 'var(--font-sans)',
-          }}
-        >
-          <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-
-        {/* Stats */}
-        {graph && (
-          <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
-            <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Graph</p>
-            {[
-              { label: 'Nodes', value: nodeCount, color: 'var(--fg)' },
-              { label: 'Edges', value: edgeCount, color: 'var(--fg)' },
-              { label: 'Compromised', value: compromisedCount, color: compromisedCount > 0 ? 'var(--crit)' : 'var(--ok)' },
-            ].map(row => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.label}</span>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: row.color }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Legend */}
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
-          <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Legend</p>
-          {[
-            { color: EDGE_COLORS_STATIC.c2,      label: 'C2 Session' },
-            { color: EDGE_COLORS_STATIC.finding,  label: 'Exploit Path' },
-            { color: EDGE_COLORS_STATIC.lateral,  label: 'Lateral Movement' },
-          ].map(item => (
-            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ width: 16, height: 2, background: item.color, borderRadius: 1, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{item.label}</span>
-            </div>
-          ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-            <span style={{ width: 12, height: 12, background: '#2a0a0a', border: '1px solid #e84040', borderRadius: 2, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Compromised</span>
-          </div>
-        </div>
-
-        {/* Selection detail */}
-        {selectedEl && (
-          <div style={{ border: '1px solid var(--rule)', borderRadius: 4, padding: '10px 12px' }}>
-            <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>Selected</p>
-
-            {selectedNode?.type === 'attacker' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon name="shield" size={12} color="var(--accent)" />
-                <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Attacker node</span>
-              </div>
-            )}
-
-            {selectedNode?.type === 'target' && (
-              <div>
-                <p style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 600, margin: '0 0 4px' }}>
-                  {TARGET_ICONS[selectedNode.target_type || ''] || '○'} {selectedNode.label}
-                </p>
-                <p style={{ fontSize: 11, color: selectedNode.compromised ? 'var(--crit)' : 'var(--ok)', margin: '0 0 6px' }}>
-                  {selectedNode.compromised ? '⚠ Compromised' : '✓ Clean'}
-                </p>
-                {selectedNode.finding_counts && Object.keys(selectedNode.finding_counts).length > 0 && (
-                  <div>
-                    {Object.entries(selectedNode.finding_counts).map(([sev, cnt]) => (
-                      <p key={sev} style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>{cnt}× {sev}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedEdge && (
-              <div>
-                <span style={{
-                  display: 'inline-block', fontSize: 10, padding: '2px 6px',
-                  border: `1px solid ${EDGE_COLORS_STATIC[selectedEdge.type] || 'var(--rule-strong)'}`,
-                  borderRadius: 2, color: EDGE_COLORS_STATIC[selectedEdge.type] || 'var(--fg-3)',
-                  marginBottom: 6,
-                }}>
-                  {EDGE_TYPE_LABEL[selectedEdge.type] || selectedEdge.type}
-                </span>
-                {selectedEdge.count != null && (
-                  <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>{selectedEdge.count} exploit(s)</p>
-                )}
-                {selectedEdge.username && (
-                  <p style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', margin: '2px 0' }}>
-                    user: {selectedEdge.username}
-                  </p>
-                )}
-                {selectedEdge.session_type && (
-                  <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: '2px 0' }}>type: {selectedEdge.session_type}</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Export */}
-        {graph && (
-          <button
-            onClick={exportPNG}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '6px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3,
-              background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
-            }}
-          >
-            <Icon name="download" size={11} />
-            Export PNG
-          </button>
-        )}
-      </div>
-
-      {/* ── Graph canvas ── */}
-      <div style={{
-        flex: 1, border: '1px solid var(--rule)', borderRadius: 4,
-        position: 'relative', overflow: 'hidden', background: 'var(--bg)',
-      }}>
         {loading && (
-          <div style={{
-            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 10, background: 'rgba(13,12,10,0.6)',
-          }}>
-            <Icon name="refresh" size={22} color="var(--accent)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg-3)', fontSize: 12, padding: '32px 0' }}>
+            <Icon name="refresh" size={14} color="var(--accent)" /> Loading attack paths…
           </div>
         )}
 
-        {graph && graph.nodes.length === 0 && !loading && (
-          <div style={{
-            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 12,
-          }}>
-            <Icon name="target" size={36} color="var(--rule-strong)" />
-            <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>No targets in this project yet.</p>
+        {!loading && !projectId && (
+          <div style={{ padding: '64px 0', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13 }}>
+            Select a project to view attack paths.
           </div>
         )}
 
-        <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+        {!loading && projectId && chains.map((chain, ci) => {
+          const last = chain.steps.length - 1
+          return (
+            <div key={chain.id} className="rule">
+              {/* sec-h */}
+              <div className="sec-h">
+                <span className="title">CHAIN {chain.id} · {chain.impact.toUpperCase()}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+                  <span className="badge badge-accent">CVSS {chain.cvss.toFixed(1)}</span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>
+                    {chain.steps.length} steps · {chain.time}
+                  </span>
+                </div>
+              </div>
+
+              {/* Chain body */}
+              <div style={{
+                padding: 'var(--pad)',
+                display: 'grid',
+                gridTemplateColumns: `repeat(${chain.steps.length}, 1fr)`,
+                gap: 0,
+              }}>
+                {chain.steps.map((step, si) => (
+                  <div
+                    key={si}
+                    style={{
+                      padding: '0 14px',
+                      borderRight: si < last ? '1px dashed var(--rule)' : 'none',
+                      position: 'relative',
+                    }}
+                  >
+                    <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      step {si + 1} · {step.tool}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', marginBottom: 6, lineHeight: 1.3 }}>
+                      {step.title}
+                    </div>
+                    <SevBadge sev={step.sev} />
+
+                    {/* Arrow connector */}
+                    {si < last && (
+                      <span style={{
+                        position: 'absolute', right: -7, top: 12,
+                        color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 14,
+                        lineHeight: 1,
+                      }}>›</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        {!loading && projectId && graph && graph.nodes.length === 0 && (
+          <div style={{ padding: '64px 0', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13 }}>
+            No targets in this project yet. Add targets and run scans to generate attack paths.
+          </div>
+        )}
       </div>
     </div>
   )

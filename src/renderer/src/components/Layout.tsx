@@ -48,7 +48,7 @@ const NAV_GROUPS = [
       { to: '/audit',     label: 'Audit Builder', icon: 'shield' },
       { to: '/agents',    label: 'Agents',        icon: 'cpu' },
       { to: '/listeners', label: 'Listeners',     icon: 'radio' },
-      { to: '/vulns',     label: 'Vuln Tracker',  icon: 'flag' },
+      { to: '/findings',  label: 'Vuln Tracker',  icon: 'flag' },
       { to: '/cve-watch', label: 'CVE Watch',     icon: 'eye' },
       { to: '/timeline',  label: 'Timeline',      icon: 'clock' },
       { to: '/logs',      label: 'Log Analysis',  icon: 'history' },

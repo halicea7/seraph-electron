@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import cytoscape from 'cytoscape'
+import { useState, useEffect, useCallback } from 'react'
 import Icon from '@/components/Icon'
 import { getApiBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface GraphNode {
   id: string
@@ -23,313 +24,562 @@ interface GraphData {
   edges: GraphEdge[]
 }
 
-const SEVERITY_COLOR: Record<string, { bg: string; border: string; glow: string }> = {
-  critical: { bg: '#2a0a0a', border: '#e84040', glow: 'rgba(232,64,64,0.6)' },
-  high:     { bg: '#2a1500', border: '#f97316', glow: 'rgba(249,115,22,0.5)' },
-  medium:   { bg: '#1f1600', border: '#f0a83a', glow: 'rgba(240,168,58,0.4)' },
-  low:      { bg: '#0a2010', border: '#54af61', glow: 'rgba(84,175,97,0.4)' },
-  info:     { bg: '#0a1520', border: 'var(--med)', glow: 'rgba(180,130,60,0.4)' },
-  none:     { bg: '#1a1714', border: '#3a3530', glow: 'rgba(58,53,48,0.3)' },
+// Positioned node (layout computed client-side)
+interface PNode extends GraphNode {
+  x: number
+  y: number
+  owned: boolean
+  flagged: boolean
 }
 
-const SEV_INLINE: Record<string, { color: string; border: string; bg: string }> = {
-  critical: { color: 'var(--crit)',   border: 'rgba(232,64,64,0.4)',  bg: 'rgba(232,64,64,0.08)' },
-  high:     { color: '#f97316',       border: 'rgba(249,115,22,0.4)', bg: 'rgba(249,115,22,0.08)' },
-  medium:   { color: 'var(--accent)', border: 'rgba(240,168,58,0.4)', bg: 'rgba(240,168,58,0.08)' },
-  low:      { color: 'var(--ok)',     border: 'rgba(84,175,97,0.4)',  bg: 'rgba(84,175,97,0.08)' },
-  info:     { color: 'var(--med)',     border: 'rgba(180,130,60,0.4)',  bg: 'rgba(180,130,60,0.08)' },
-  none:     { color: 'var(--fg-3)',   border: 'var(--rule-strong)',   bg: 'transparent' },
-}
-
-const TARGET_ICONS: Record<string, string> = {
-  linux_host:   '⬡',
-  windows_host: '▣',
-  web_app:      '◈',
-  cloud_aws:    '◉',
-  cloud_azure:  '◉',
-  cloud_gcp:    '◉',
-  network:      '◎',
-  api_endpoint: '⊕',
-}
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const rule = '1px solid var(--rule)'
 
-export default function NetworkMap() {
-  const { selectedProject: sp } = useAppStore()
-  const projectId = sp?.id ?? ''
-  const [graph, setGraph] = useState<GraphData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
-  const cyRef = useRef<cytoscape.Core | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+const SEV_RANK: Record<string, number> = {
+  critical: 5, high: 4, medium: 3, low: 2, info: 1,
+}
 
-  useEffect(() => {
-    if (projectId) loadGraph()
-  }, [projectId])
+// "owned" = critical severity, "flagged" = high severity
+function nodeOwned(n: GraphNode): boolean {
+  return n.severity === 'critical'
+}
+function nodeFlagged(n: GraphNode): boolean {
+  return n.severity === 'high'
+}
 
-  async function loadGraph() {
-    setLoading(true)
-    setSelectedNode(null)
-    const res = await fetch(`${getApiBase()}/network/graph?project_id=${projectId}`)
-    const data = await res.json()
-    setGraph(data)
-    setLoading(false)
+// Stable layout: root on left perimeter zone, targets spread across canvas
+function computeLayout(data: GraphData): PNode[] {
+  const W = 820
+  const H = 400
+  const centerY = H / 2
+
+  const targets = data.nodes.filter(n => n.type === 'target')
+  const root    = data.nodes.find(n => n.type === 'root')
+
+  const positioned: PNode[] = []
+
+  if (root) {
+    positioned.push({ ...root, x: 60, y: centerY, owned: false, flagged: false })
   }
 
-  const initCy = useCallback(() => {
-    if (!graph || !containerRef.current) return
-    if (cyRef.current) cyRef.current.destroy()
+  // Sort by severity so critical nodes cluster at centre
+  const sorted = [...targets].sort((a, b) => {
+    const ra = SEV_RANK[a.severity ?? ''] ?? 0
+    const rb = SEV_RANK[b.severity ?? ''] ?? 0
+    return rb - ra
+  })
 
-    const elements: cytoscape.ElementDefinition[] = [
-      ...graph.nodes.map(n => {
-        const col = n.type === 'root'
-          ? { bg: '#1a1400', border: '#f0a83a', glow: 'rgba(240,168,58,0.7)' }
-          : SEVERITY_COLOR[n.severity || 'none']
-        return { data: { ...n, ...col } }
-      }),
-      ...graph.edges.map((e, i) => ({
-        data: { id: `e${i}`, source: e.source, target: e.target },
-      })),
-    ]
+  const count = sorted.length
+  if (count === 0) return positioned
 
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'background-color': 'data(bg)',
-            'border-color': 'data(border)',
-            'border-width': 1.5,
-            'label': 'data(label)',
-            'color': '#c8c3b8',
-            'font-size': '10px',
-            'font-family': '"IBM Plex Mono", monospace',
-            'text-valign': 'bottom',
-            'text-margin-y': 6,
-            'text-max-width': '110px',
-            'text-wrap': 'ellipsis',
-            'width': 40,
-            'height': 40,
-            'shadow-blur': 14,
-            'shadow-color': 'data(glow)',
-            'shadow-opacity': 0.9,
-            'shadow-offset-x': 0,
-            'shadow-offset-y': 0,
-          } as any,
-        },
-        {
-          selector: 'node[type="root"]',
-          style: { 'shape': 'diamond', 'width': 48, 'height': 48 },
-        },
-        {
-          selector: 'node:selected',
-          style: { 'border-width': 2.5, 'border-color': '#f0a83a' },
-        },
-        {
-          selector: 'edge',
-          style: {
-            'width': 1,
-            'line-color': '#2a2520',
-            'target-arrow-color': '#2a2520',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'opacity': 0.6,
-          },
-        },
-        {
-          selector: 'edge:selected',
-          style: { 'line-color': '#f0a83a', 'target-arrow-color': '#f0a83a', 'opacity': 1 },
-        },
-      ],
-      layout: {
-        name: 'cose',
-        animate: true,
-        animationDuration: 500,
-        nodeRepulsion: () => 8000,
-        idealEdgeLength: () => 120,
-        gravity: 0.8,
-        randomize: false,
-      } as any,
-      minZoom: 0.2,
-      maxZoom: 4,
+  // Distribute across two columns: perimeter (x≈160-380) and internal (x≈440-760)
+  // Split roughly in half
+  const half = Math.ceil(count / 2)
+  sorted.forEach((n, i) => {
+    let x: number, y: number
+    if (i < half) {
+      // Left column (perimeter)
+      const rows = half
+      const spacing = Math.min(60, (H - 60) / Math.max(rows, 1))
+      x = 200 + (i % 2) * 60
+      y = 50 + i * spacing
+    } else {
+      // Right column (internal)
+      const j = i - half
+      const rows = count - half
+      const spacing = Math.min(60, (H - 60) / Math.max(rows, 1))
+      x = 480 + (j % 3) * 70
+      y = 50 + j * spacing
+    }
+    positioned.push({
+      ...n,
+      x,
+      y,
+      owned: nodeOwned(n),
+      flagged: nodeFlagged(n),
     })
+  })
 
-    cy.on('tap', 'node', (evt) => {
-      const nodeData = evt.target.data() as GraphNode & { bg: string; border: string; glow: string }
-      setSelectedNode(nodeData)
-    })
-    cy.on('tap', (evt) => { if (evt.target === cy) setSelectedNode(null) })
-    cyRef.current = cy
-  }, [graph])
+  return positioned
+}
 
-  useEffect(() => { initCy() }, [initCy])
+// Edge kind heuristic based on severity of target node
+function edgeKind(edge: GraphEdge, nodeMap: Map<string, PNode>): string {
+  const target = nodeMap.get(edge.target)
+  if (!target) return 'recon'
+  if (target.owned) return 'attack'
+  if (target.flagged) return 'cred'
+  return 'recon'
+}
 
-  function exportPNG() {
-    if (!cyRef.current) return
-    const png = cyRef.current.png({ full: true, scale: 2, bg: '#0d0c0a' })
-    const a = document.createElement('a')
-    a.href = png
-    a.download = 'network-map.png'
-    a.click()
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function PageHeader({
+  breadcrumb, title, sub, right,
+}: {
+  breadcrumb: string
+  title: string
+  sub: string
+  right?: React.ReactNode
+}) {
+  return (
+    <div style={{
+      padding: '18px var(--pad)',
+      borderBottom: '1px solid var(--rule)',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 16,
+      flexShrink: 0,
+    }}>
+      <div>
+        <div className="smcap" style={{ marginBottom: 4 }}>{breadcrumb}</div>
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>{sub}</div>
+      </div>
+      {right && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>
+      )}
+    </div>
+  )
+}
+
+function SegBtns({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: rule, height: 26 }}>
+      {options.map((o, i) => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          background: value === o ? 'var(--accent-2)' : 'transparent',
+          color: value === o ? 'var(--accent)' : 'var(--fg-3)',
+          border: 'none', borderLeft: i > 0 ? rule : 'none',
+          padding: '0 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function Pill({ tone, children }: { tone: 'fail' | 'warn' | 'pass' | 'info'; children: React.ReactNode }) {
+  const styles: Record<string, { color: string; bg: string; border: string }> = {
+    fail: { color: 'var(--crit)',   bg: 'rgba(232,64,64,0.1)',   border: 'rgba(232,64,64,0.35)' },
+    warn: { color: 'var(--accent)', bg: 'rgba(240,168,58,0.1)',  border: 'rgba(240,168,58,0.35)' },
+    pass: { color: 'var(--ok)',     bg: 'rgba(84,175,97,0.1)',   border: 'rgba(84,175,97,0.35)' },
+    info: { color: 'var(--fg-3)',   bg: 'rgba(120,120,120,0.1)', border: 'rgba(120,120,120,0.3)' },
+  }
+  const s = styles[tone]
+  return (
+    <span className="mono" style={{
+      fontSize: 9, padding: '2px 7px', fontWeight: 700, textTransform: 'uppercase',
+      letterSpacing: '0.08em', color: s.color, background: s.bg, border: `1px solid ${s.border}`,
+    }}>{children}</span>
+  )
+}
+
+function LegendItem({
+  color, dashed, solid, label,
+}: {
+  color?: string; dashed?: boolean; solid?: boolean; label: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {color
+        ? <div style={{ width: 10, height: 10, background: color, flexShrink: 0 }} />
+        : dashed
+        ? <div style={{ width: 16, height: 0, borderTop: '1px dashed var(--fg-3)', flexShrink: 0 }} />
+        : <div style={{ width: 16, height: 0, borderTop: '1px solid var(--crit)', flexShrink: 0 }} />
+      }
+      <span className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
+    </div>
+  )
+}
+
+// ── NodeDetail right pane ─────────────────────────────────────────────────────
+
+function NodeDetail({ node, edges, nodeMap }: { node: PNode | null; edges: GraphEdge[]; nodeMap: Map<string, PNode> }) {
+  if (!node) {
+    return (
+      <div style={{
+        background: 'var(--bg-2)', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 10, padding: 'var(--pad)',
+      }}>
+        <Icon name="target" size={28} color="var(--rule-strong)" />
+        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          select a node
+        </span>
+      </div>
+    )
   }
 
-  const targets = graph?.nodes.filter(n => n.type === 'target') ?? []
+  const nodeEdges = edges.filter(e => e.source === node.id || e.target === node.id)
+
+  const kindTone = (k: string): 'fail' | 'warn' | 'pass' | 'info' => {
+    if (k === 'attack' || k === 'pivot') return 'fail'
+    if (k === 'cred') return 'warn'
+    return 'info'
+  }
+
+  const sevTone = (sev: string | null): 'fail' | 'warn' | 'pass' | 'info' => {
+    if (sev === 'critical') return 'fail'
+    if (sev === 'high') return 'warn'
+    if (sev === 'medium' || sev === 'low') return 'pass'
+    return 'info'
+  }
+
+  const kvItems = [
+    { k: 'type',     v: node.target_type?.replace(/_/g, ' ') ?? '—' },
+    { k: 'severity', v: node.severity ?? 'none' },
+    { k: 'findings', v: String(node.finding_count) },
+    { k: 'subnet',   v: node.type === 'root' ? 'internal / seraph' : '10.40.0.0/16' },
+  ]
 
   return (
-    <div style={{ display: 'flex', height: '100%', gap: 16, padding: '20px 24px', minHeight: 0, boxSizing: 'border-box' }}>
-
-      {/* ── Left panel ── */}
-      <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
-
-        {/* Header */}
-        <div style={{ paddingBottom: 12, borderBottom: rule }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <Icon name="network" size={15} color="var(--accent)" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Network Map</span>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>Target topology visualisation</p>
+    <div style={{ overflowY: 'auto', background: 'var(--bg-2)' }}>
+      {/* Header */}
+      <div style={{ padding: '18px var(--pad)', borderBottom: '1px solid var(--rule)' }}>
+        <div className="smcap" style={{ color: 'var(--fg-3)', marginBottom: 4 }}>node · {node.id}</div>
+        <h2 style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono)', fontWeight: 500, fontSize: 22, color: 'var(--fg)' }}>
+          {node.label}
+        </h2>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          {node.owned && <Pill tone="fail">compromised</Pill>}
+          {node.flagged && <Pill tone="warn">flagged</Pill>}
+          <Pill tone="info">{node.type}</Pill>
+          {node.severity && <Pill tone={sevTone(node.severity)}>{node.severity}</Pill>}
         </div>
+      </div>
 
-        {/* Refresh */}
-        <button
-          onClick={loadGraph}
-          disabled={!projectId || loading}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '5px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3, background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer', opacity: (!projectId || loading) ? 0.5 : 1 }}
-        >
-          <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-
-        {/* Legend */}
-        <div style={{ border: rule, borderRadius: 4, padding: '10px 12px' }}>
-          <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, margin: '0 0 8px' }}>Legend</p>
-          {(['critical','high','medium','low','info','none'] as const).map(sev => {
-            const c = SEVERITY_COLOR[sev]
-            return (
-              <div key={sev} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', flexShrink: 0, background: c.bg, border: `1.5px solid ${c.border}`, boxShadow: `0 0 5px ${c.glow}` }} />
-                <span style={{ fontSize: 11, color: 'var(--fg-3)', textTransform: 'capitalize' }}>{sev === 'none' ? 'No findings' : sev}</span>
-              </div>
-            )
-          })}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-            <div style={{ width: 12, height: 12, flexShrink: 0, background: '#1a1400', border: '1.5px solid #f0a83a', transform: 'rotate(45deg)', boxShadow: '0 0 5px rgba(240,168,58,0.6)' }} />
-            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Seraph (root)</span>
-          </div>
-        </div>
-
-        {/* Selected node detail */}
-        {selectedNode && selectedNode.type === 'target' && (() => {
-          const sev = selectedNode.severity || 'none'
-          const ss = SEV_INLINE[sev]
-          return (
-            <div style={{ border: rule, borderRadius: 4, padding: '10px 12px' }}>
-              <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, margin: '0 0 8px' }}>Selected</p>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)', margin: '0 0 8px', wordBreak: 'break-all' }}>{selectedNode.label}</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                  <span style={{ color: 'var(--fg-3)', width: 50, flexShrink: 0 }}>Risk</span>
-                  <span style={{ padding: '1px 6px', borderRadius: 2, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: ss.color, border: `1px solid ${ss.border}`, background: ss.bg }}>
-                    {sev === 'none' ? 'clean' : sev}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                  <span style={{ color: 'var(--fg-3)', width: 50, flexShrink: 0 }}>Type</span>
-                  <span style={{ color: 'var(--fg-2)' }}>{TARGET_ICONS[selectedNode.target_type || ''] || '○'} {(selectedNode.target_type || '').replace(/_/g, ' ')}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                  <span style={{ color: 'var(--fg-3)', width: 50, flexShrink: 0 }}>Findings</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}>{selectedNode.finding_count}</span>
-                </div>
-              </div>
+      {/* Body */}
+      <div style={{ padding: 'var(--pad)' }}>
+        {/* KV grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 18 }}>
+          {kvItems.map(({ k, v }) => (
+            <div key={k} style={{
+              display: 'flex', alignItems: 'baseline', gap: 8,
+              padding: '6px 0', borderBottom: '1px solid var(--rule)',
+            }}>
+              <span className="mono" style={{
+                fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase',
+                letterSpacing: '0.08em', width: 72, flexShrink: 0,
+              }}>{k}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)' }}>{v}</span>
             </div>
-          )
-        })()}
+          ))}
+        </div>
 
-        {/* Stats */}
-        {graph && (
-          <div style={{ border: rule, borderRadius: 4, padding: '10px 12px' }}>
-            <p style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, margin: '0 0 8px' }}>Stats</p>
-            {[
-              { label: 'Targets', value: targets.length, color: 'var(--fg)' },
-              { label: 'Connections', value: graph.edges.length, color: 'var(--fg)' },
-            ].map(row => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.label}</span>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: row.color }}>{row.value}</span>
-              </div>
-            ))}
-            {(['critical','high','medium'] as const).map(sev => {
-              const count = graph.nodes.filter(n => n.severity === sev).length
-              if (!count) return null
+        {/* Edges */}
+        {nodeEdges.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div className="smcap" style={{ marginBottom: 8, color: 'var(--fg-3)' }}>
+              Edges · {nodeEdges.length}
+            </div>
+            {nodeEdges.map((e, i) => {
+              const isOut = e.source === node.id
+              const otherId = isOut ? e.target : e.source
+              const other = nodeMap.get(otherId)
+              const k = edgeKind(e, nodeMap)
               return (
-                <div key={sev} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: 'var(--fg-3)', textTransform: 'capitalize' }}>{sev}</span>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: SEV_INLINE[sev].color }}>{count}</span>
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 0', borderBottom: '1px dashed var(--rule)',
+                }}>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                    {isOut ? '→ ' : '← '}{other?.label ?? otherId}
+                  </span>
+                  <Pill tone={kindTone(k)}>{k}</Pill>
                 </div>
               )
             })}
           </div>
         )}
 
-        {/* Export */}
-        {graph && (
-          <button
-            onClick={exportPNG}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 10px', border: '1px solid var(--rule-strong)', borderRadius: 3, background: 'transparent', color: 'var(--fg-2)', fontSize: 11, cursor: 'pointer' }}
-          >
-            <Icon name="download" size={11} /> Export PNG
-          </button>
+        {/* Quick actions */}
+        {node.type === 'target' && (
+          <div>
+            <div className="smcap" style={{ marginBottom: 8, color: 'var(--fg-3)' }}>Quick actions</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {[
+                { icon: 'terminal', label: 'Open shell' },
+                { icon: 'target',   label: 'Re-scan' },
+                { icon: 'key',      label: 'Spray creds' },
+                { icon: 'flag',     label: 'Tag' },
+              ].map(({ icon, label }) => (
+                <button key={icon} className="btn btn-sm" style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  justifyContent: 'center',
+                }}>
+                  <Icon name={icon} size={9} />{label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
+    </div>
+  )
+}
 
-      {/* ── Graph canvas ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-        {/* Toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginBottom: 12, flexShrink: 0 }}>
-          {[
-            { icon: 'plus',    title: 'Zoom in',  action: () => cyRef.current?.zoom((cyRef.current?.zoom() ?? 1) * 1.2) },
-            { icon: 'minus',   title: 'Zoom out', action: () => cyRef.current?.zoom((cyRef.current?.zoom() ?? 1) / 1.2) },
-            { icon: 'eye',     title: 'Fit all',  action: () => cyRef.current?.fit(undefined, 40) },
-          ].map(btn => (
-            <button
-              key={btn.icon}
-              onClick={btn.action}
-              title={btn.title}
-              style={{ padding: '5px 7px', border: '1px solid var(--rule-strong)', borderRadius: 3, background: 'transparent', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex' }}
-            >
-              <Icon name={btn.icon} size={13} />
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function NetworkMap() {
+  const { selectedProject: sp } = useAppStore()
+  const projectId = sp?.id ?? ''
+
+  const [graph,   setGraph]   = useState<GraphData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [layout,  setLayout]  = useState('attack-path')
+  const [selId,   setSelId]   = useState<string | null>(null)
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+
+  const loadGraph = useCallback(async () => {
+    if (!projectId) return
+    setLoading(true)
+    setSelId(null)
+    try {
+      const res  = await fetch(`${getApiBase()}/network/graph?project_id=${projectId}`)
+      const data = await res.json()
+      setGraph(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => { loadGraph() }, [loadGraph])
+
+  // ── Derived layout ─────────────────────────────────────────────────────────
+
+  const pNodes: PNode[] = graph ? computeLayout(graph) : []
+  const nodeMap = new Map(pNodes.map(n => [n.id, n]))
+  const edges   = graph?.edges ?? []
+  const selNode = selId ? (nodeMap.get(selId) ?? null) : null
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <PageHeader
+        breadcrumb={`${sp?.name ?? 'no project'} · network`}
+        title="Network Map · Attack Paths"
+        sub="Discovered hosts, exploit chains, and credential reuse. Click a node to inspect its neighbourhood and pivot ledger."
+        right={(
+          <>
+            <SegBtns
+              options={['attack-path', 'subnet', 'risk-heat']}
+              value={layout}
+              onChange={setLayout}
+            />
+            <button className="btn" onClick={loadGraph} disabled={!projectId || loading}>
+              <Icon name="refresh" size={11} />{loading ? ' Loading…' : ' Re-scan'}
             </button>
-          ))}
-        </div>
+            <button className="btn btn-primary" style={{ color: '#1a1408' }}>
+              <Icon name="download" size={11} color="#1a1408" /> Export graphml
+            </button>
+          </>
+        )}
+      />
 
-        {/* Canvas */}
-        <div style={{ flex: 1, minHeight: 0, border: rule, borderRadius: 4, position: 'relative', overflow: 'hidden', background: '#0d0c0a' }}>
-          <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', flex: 1, minHeight: 0 }}>
+        {/* ── Left: canvas pane ── */}
+        <div style={{ position: 'relative', overflow: 'hidden', borderRight: '1px solid var(--rule)', background: 'var(--bg)' }}>
 
+          {/* Dot grid */}
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            backgroundImage: 'linear-gradient(var(--rule-2) 1px, transparent 1px), linear-gradient(90deg, var(--rule-2) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+          }} />
+
+          {/* Annotations */}
+          <div style={{ position: 'absolute', top: 20, left: 30, pointerEvents: 'none' }}>
+            <div className="smcap" style={{ color: 'var(--fg-3)' }}>PERIMETER · /24 EXTERNAL</div>
+          </div>
+          <div style={{ position: 'absolute', top: 20, left: 440, pointerEvents: 'none' }}>
+            <div className="smcap" style={{ color: 'var(--fg-3)' }}>INTERNAL · CORP.ARGENT.LOCAL</div>
+          </div>
+
+          {/* Zoom/pan HUD */}
+          <div className="mono" style={{
+            position: 'absolute', top: 12, right: 16, pointerEvents: 'none',
+            fontSize: 9.5, color: 'var(--fg-4)', letterSpacing: '0.1em', textTransform: 'uppercase',
+          }}>
+            zoom 1.0 · pan 0,0 · nodes {pNodes.length} · edges {edges.length}
+          </div>
+
+          {/* Legend */}
+          <div style={{
+            position: 'absolute', bottom: 16, right: 24,
+            display: 'flex', gap: 14, alignItems: 'center',
+            background: 'var(--bg)', padding: '8px 12px', border: '1px solid var(--rule)',
+          }}>
+            <LegendItem color="var(--crit)"   label="compromised" />
+            <LegendItem color="var(--accent)" label="flagged" />
+            <LegendItem color="var(--fg-3)"   label="seen" />
+            <span style={{ width: 1, height: 14, background: 'var(--rule)', flexShrink: 0 }} />
+            <LegendItem dashed label="recon" />
+            <LegendItem solid  label="exploit" />
+          </div>
+
+          {/* Blast-radius overlay */}
+          {graph && pNodes.length > 0 && (() => {
+            const critNodes = pNodes.filter(n => n.owned)
+            if (critNodes.length === 0) return null
+            return (
+              <div style={{
+                position: 'absolute', bottom: 70, left: 24,
+                padding: '10px 14px', border: '1px solid var(--rule)',
+                background: 'var(--bg-2)', maxWidth: 340,
+              }}>
+                <div className="smcap" style={{ color: 'var(--crit)', marginBottom: 6 }}>
+                  BLAST RADIUS · CHAIN A
+                </div>
+                <div className="mono" style={{ fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.65 }}>
+                  {critNodes.slice(0, 5).map((n, i) => (
+                    <span key={n.id} style={{ display: 'block' }}>
+                      <span style={{ color: i === critNodes.length - 1 ? 'var(--crit)' : 'var(--fg-3)' }}>
+                        ({i + 1})
+                      </span>{' '}{n.label} · compromised
+                    </span>
+                  ))}
+                </div>
+                <div className="mono" style={{
+                  fontSize: 10, color: 'var(--accent)', marginTop: 8,
+                  textTransform: 'uppercase', letterSpacing: '0.12em',
+                }}>
+                  nodes compromised · {critNodes.length}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* SVG graph */}
+          <svg
+            width="100%" height="100%"
+            viewBox="0 0 820 400"
+            style={{ position: 'absolute', inset: 0, cursor: 'default' }}
+            onClick={() => setSelId(null)}
+          >
+            <defs>
+              <marker id="arrow-accent" viewBox="0 -3 6 6" refX="5" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 -2 L 5 0 L 0 2" fill="var(--accent)" />
+              </marker>
+              <marker id="arrow-crit" viewBox="0 -3 6 6" refX="5" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 -2 L 5 0 L 0 2" fill="var(--crit)" />
+              </marker>
+            </defs>
+
+            {/* Edges */}
+            {edges.map((e, i) => {
+              const a = nodeMap.get(e.source)
+              const b = nodeMap.get(e.target)
+              if (!a || !b) return null
+              const k = edgeKind(e, nodeMap)
+              const isAttack = k === 'attack' || k === 'pivot'
+              const isCred   = k === 'cred'
+              const color    = isAttack ? 'var(--crit)' : isCred ? 'var(--accent)' : 'var(--fg-4)'
+              return (
+                <line
+                  key={i}
+                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  stroke={color}
+                  strokeWidth={isAttack ? 1.5 : 1}
+                  strokeDasharray={!isAttack && !isCred ? '3 4' : undefined}
+                  markerEnd={isAttack ? 'url(#arrow-crit)' : isCred ? 'url(#arrow-accent)' : undefined}
+                  opacity={isAttack ? 0.95 : isCred ? 0.85 : 0.5}
+                />
+              )
+            })}
+
+            {/* Vertical divider — perimeter vs internal */}
+            <line x1="410" y1="40" x2="410" y2="370" stroke="var(--rule-strong)" strokeDasharray="2 6" />
+
+            {/* Nodes */}
+            {pNodes.map(n => {
+              const isSel = selId === n.id
+              return (
+                <g
+                  key={n.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={ev => { ev.stopPropagation(); setSelId(n.id) }}
+                >
+                  {/* Selection halo */}
+                  {isSel && (
+                    <rect
+                      x={n.x - 38} y={n.y - 18} width={76} height={36}
+                      fill="none"
+                      stroke="var(--accent)"
+                      strokeWidth="1"
+                      strokeDasharray="3 3"
+                    />
+                  )}
+                  {/* Node body */}
+                  <rect
+                    x={n.x - 34} y={n.y - 14} width={68} height={28}
+                    fill={n.owned ? 'rgba(232,92,78,0.12)' : 'var(--bg-2)'}
+                    stroke={n.owned ? 'var(--crit)' : n.flagged ? 'var(--accent)' : 'var(--fg-4)'}
+                    strokeWidth="1.2"
+                  />
+                  {/* Status dot */}
+                  <circle
+                    cx={n.x - 28} cy={n.y - 8} r="2.4"
+                    fill={n.owned ? 'var(--crit)' : n.flagged ? 'var(--accent)' : 'var(--fg-4)'}
+                  />
+                  {/* Label */}
+                  <text
+                    x={n.x} y={n.y + 4}
+                    textAnchor="middle"
+                    className="mono"
+                    style={{ fontSize: 10.5, fill: 'var(--fg)', letterSpacing: '0.04em' }}
+                  >
+                    {n.label.length > 10 ? n.label.slice(0, 9) + '…' : n.label}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+
+          {/* Empty / loading overlays */}
           {!graph && !loading && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+              pointerEvents: 'none',
+            }}>
               <Icon name="network" size={36} color="var(--rule-strong)" />
-              <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>Select a project to visualize its network</p>
+              <p className="mono" style={{ fontSize: 12, color: 'var(--fg-4)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                select a project to visualise
+              </p>
             </div>
           )}
-
           {loading && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              pointerEvents: 'none',
+            }}>
               <Icon name="refresh" size={18} color="var(--accent)" />
-              <span style={{ fontSize: 13, color: 'var(--fg-3)' }}>Building graph…</span>
+              <span className="mono" style={{ fontSize: 12, color: 'var(--fg-3)', letterSpacing: '0.08em' }}>
+                BUILDING GRAPH…
+              </span>
             </div>
           )}
-
-          {graph && targets.length === 0 && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          {graph && pNodes.filter(n => n.type === 'target').length === 0 && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+              pointerEvents: 'none',
+            }}>
               <Icon name="shield" size={36} color="var(--rule-strong)" />
-              <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>No targets found in this project</p>
+              <p className="mono" style={{ fontSize: 12, color: 'var(--fg-4)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                no targets in this project
+              </p>
             </div>
           )}
         </div>
+
+        {/* ── Right: node detail pane ── */}
+        <NodeDetail node={selNode} edges={edges} nodeMap={nodeMap} />
       </div>
     </div>
   )

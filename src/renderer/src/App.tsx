@@ -19,7 +19,6 @@ import NetworkMap from '@/pages/NetworkMap'
 import PasswordAuditing from '@/pages/PasswordAuditing'
 import Playbooks from '@/pages/Playbooks'
 import Guide from '@/pages/Guide'
-import VulnTracker from '@/pages/VulnTracker'
 import LogAnalysis from '@/pages/LogAnalysis'
 import AllScans from '@/pages/AllScans'
 import AllFindings from '@/pages/AllFindings'
@@ -59,7 +58,7 @@ function ProtectedRoutes() {
           <Route path="cracking" element={<PasswordAuditing />} />
           <Route path="playbooks" element={<Playbooks />} />
           <Route path="guide" element={<Guide />} />
-          <Route path="vulns" element={<VulnTracker />} />
+          <Route path="vulns" element={<Navigate to="/findings" replace />} />
           <Route path="logs" element={<LogAnalysis />} />
           <Route path="scans" element={<AllScans />} />
           <Route path="findings" element={<AllFindings />} />

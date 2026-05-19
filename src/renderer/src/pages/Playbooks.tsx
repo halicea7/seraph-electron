@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Play, CheckCircle, XCircle, SkipForward,
   Loader, Clock, StepForward,
-  Zap, History, Target, Brain,
+  Zap, Brain,
   Plus, Trash2, ArrowUp, ArrowDown, Layers, PenLine, Save,
 } from 'lucide-react'
 import Icon from '@/components/Icon'
@@ -90,7 +90,7 @@ const BLANK_STEP: BuilderStep = {
 const STATUS_STYLE: Record<string, { color: string; background: string; border: string }> = {
   completed: { color: 'var(--ok)',    background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.3)' },
   running:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.3)' },
-  paused:    { color: 'var(--accent)',background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.3)' },
+  paused:    { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.3)' },
   failed:    { color: 'var(--crit)',  background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.3)' },
   pending:   { color: 'var(--fg-3)', background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
   skipped:   { color: 'var(--fg-3)', background: 'rgba(58,53,48,0.2)',     border: '1px solid var(--rule-strong)' },
@@ -126,7 +126,38 @@ function stepGroupMap(groups: number[][]): Record<number, number> {
 const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
 
-// ── Reusable input style ──────────────────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function PageHeader({ title, sub, right }: { title: string; sub: string; right?: React.ReactNode }) {
+  return (
+    <div style={{
+      borderBottom: rule, padding: '18px var(--pad)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexShrink: 0,
+    }}>
+      <div>
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>{sub}</div>
+      </div>
+      {right && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>}
+    </div>
+  )
+}
+
+function Pill({ tone, children }: { tone: 'pass' | 'warn' | 'info' | 'fail'; children: React.ReactNode }) {
+  const map = {
+    pass: { color: 'var(--ok)',   bg: 'rgba(84,175,97,0.1)',  border: 'rgba(84,175,97,0.35)' },
+    warn: { color: 'var(--high)', bg: 'rgba(240,168,58,0.1)', border: 'rgba(240,168,58,0.35)' },
+    info: { color: 'var(--fg-3)', bg: 'rgba(120,120,120,0.1)', border: 'rgba(120,120,120,0.3)' },
+    fail: { color: 'var(--crit)', bg: 'rgba(232,64,64,0.1)',  border: 'rgba(232,64,64,0.35)' },
+  }
+  const s = map[tone]
+  return (
+    <span className="mono" style={{
+      fontSize: 9, padding: '2px 7px', fontWeight: 700, textTransform: 'uppercase',
+      letterSpacing: '0.08em', color: s.color, background: s.bg, border: `1px solid ${s.border}`,
+    }}>{children}</span>
+  )
+}
 
 const INPUT_STYLE: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
@@ -134,8 +165,6 @@ const INPUT_STYLE: React.CSSProperties = {
   padding: '6px 10px', fontSize: 12, color: 'var(--fg)',
   fontFamily: 'var(--font-sans)', outline: 'none',
 }
-
-// ── Toggle switch ─────────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange, accentColor = 'var(--accent)' }: { checked: boolean; onChange: () => void; accentColor?: string }) {
   return (
@@ -151,10 +180,9 @@ function Toggle({ checked, onChange, accentColor = 'var(--accent)' }: { checked:
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Playbooks() {
-  const [view, setView] = useState<'library' | 'run' | 'history' | 'builder'>('library')
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [runs, setRuns] = useState<PlaybookRun[]>([])
-  const { selectedProject: sp, projects } = useAppStore()
+  const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
   const [targets, setTargets] = useState<TargetOption[]>([])
 
@@ -178,6 +206,8 @@ export default function Playbooks() {
   const [termLines, setTermLines] = useState<string[]>([])
   const wsRef = useRef<WebSocket | null>(null)
 
+  // Builder state
+  const [showBuilder, setShowBuilder] = useState(false)
   const [builderName, setBuilderName] = useState('')
   const [builderDesc, setBuilderDesc] = useState('')
   const [builderSteps, setBuilderSteps] = useState<BuilderStep[]>([])
@@ -187,7 +217,6 @@ export default function Playbooks() {
   const [builderError, setBuilderError] = useState('')
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
-  const [showFlowPreview, setShowFlowPreview] = useState(false)
 
   const runGroups = useMemo(() => buildGroups(steps), [steps])
   const builderGroups = useMemo(() => buildGroups(builderSteps), [builderSteps])
@@ -204,8 +233,8 @@ export default function Playbooks() {
     const res = await fetch(`${getApiBase()}/playbooks/runs`)
     if (res.ok) setRuns(await res.json())
   }
-  async function loadTargets(projectId: string) {
-    const res = await fetch(`${getApiBase()}/projects/${projectId}/targets`)
+  async function loadTargets(pid: string) {
+    const res = await fetch(`${getApiBase()}/projects/${pid}/targets`)
     if (res.ok) setTargets(await res.json())
   }
 
@@ -248,7 +277,6 @@ export default function Playbooks() {
     setStepInsights({})
     setLastInsight('')
     setSteps(pb.steps.map((s, i) => ({ step: i, tool: s.name, status: 'pending', findings: 0, parallel: s.parallel ?? false })))
-    setView('run')
 
     const ws = new WebSocket(`${getWsBase()}/ws/playbooks/${runId}${aiEnabled ? '?use_ai=true' : ''}`)
     wsRef.current = ws
@@ -324,6 +352,7 @@ export default function Playbooks() {
     setEditingIdx(null)
     setEditingPlaybookId(null)
     setBuilderError('')
+    setShowBuilder(false)
   }
 
   function loadPlaybookForEdit(pb: Playbook) {
@@ -337,7 +366,7 @@ export default function Playbooks() {
     setEditingIdx(null)
     setEditingPlaybookId(pb.id)
     setBuilderError('')
-    setView('builder')
+    setShowBuilder(true)
   }
 
   function addStep() {
@@ -368,9 +397,7 @@ export default function Playbooks() {
   }
 
   function handleDragStart(i: number) { setDragIdx(i) }
-
   function handleDragOver(e: React.DragEvent, i: number) { e.preventDefault(); setDragOverIdx(i) }
-
   function handleDrop(e: React.DragEvent, targetIdx: number) {
     e.preventDefault()
     if (dragIdx === null || dragIdx === targetIdx) { setDragIdx(null); setDragOverIdx(null); return }
@@ -383,7 +410,6 @@ export default function Playbooks() {
     if (editingIdx === dragIdx) setEditingIdx(targetIdx)
     setDragIdx(null); setDragOverIdx(null)
   }
-
   function handleDragEnd() { setDragIdx(null); setDragOverIdx(null) }
 
   function toApiStep(s: BuilderStep) {
@@ -410,7 +436,6 @@ export default function Playbooks() {
       if (!res.ok) throw new Error(await res.text())
       await loadPlaybooks()
       resetBuilder()
-      setView('library')
     } catch (err: any) {
       setBuilderError(err.message ?? 'Save failed')
     } finally {
@@ -429,332 +454,226 @@ export default function Playbooks() {
     try { return new Date(s).toLocaleString() } catch { return s }
   }
 
-  const statusStyle = STATUS_STYLE[runStatus] ?? STATUS_STYLE.pending
+  // Determine left-pane selected playbook to show in right pane
+  const [listSelected, setListSelected] = useState<Playbook | null>(null)
+  const displayPb = listSelected ?? playbooks[0] ?? null
+
+  // Count runs for a playbook
+  function runsFor(pb: Playbook) { return runs.filter(r => r.playbook_id === pb.id).length }
+  function lastRunFor(pb: Playbook) {
+    const pbRuns = runs.filter(r => r.playbook_id === pb.id)
+    if (!pbRuns.length) return 'never'
+    const latest = pbRuns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    try {
+      const d = new Date(latest.created_at)
+      const now = new Date()
+      const diff = Math.floor((now.getTime() - d.getTime()) / 60000)
+      if (diff < 60) return `${diff}m ago`
+      if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+      return `${Math.floor(diff / 1440)}d ago`
+    } catch { return '—' }
+  }
+
+  // Step display state for right-pane active run
+  const stepToneMap: Record<string, 'pass' | 'warn' | 'info' | 'fail'> = {
+    completed: 'pass', running: 'warn', pending: 'info', skipped: 'info', failed: 'fail',
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20, height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <Icon name="book" size={15} color="var(--accent)" />
-            <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>Playbooks</h1>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0 }}>Pre-defined and custom tool chains with parallel execution support</p>
-        </div>
-        {view === 'library' && (
-          <button
-            onClick={() => { resetBuilder(); setView('builder') }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700 }}
-          >
-            <Plus size={13} /> New Playbook
-          </button>
-        )}
-      </div>
-
-      {/* ── Tab bar ── */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: rule, flexShrink: 0 }}>
-        {([
-          { id: 'library', label: 'Library',     icon: 'book' },
-          { id: 'run',     label: 'Active Run',  icon: 'terminal' },
-          { id: 'history', label: 'History',     icon: 'history' },
-          { id: 'builder', label: 'Builder',     icon: 'edit' },
-        ] as const).map(tab => {
-          const isActive = view === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setView(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600,
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: isActive ? 'var(--fg)' : 'var(--fg-3)',
-                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-                marginBottom: -1,
-              }}
-            >
-              <Icon name={tab.icon} size={12} />
-              {tab.label}
-              {tab.id === 'run' && activeRunId && (
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%', marginLeft: 2,
-                  background: runStatus === 'running' ? 'var(--accent)' : runStatus === 'paused' ? '#f59e0b' : runStatus === 'completed' ? 'var(--ok)' : 'var(--fg-3)',
-                }} />
-              )}
+      <PageHeader
+        title="Playbooks"
+        sub="Multi-step automated workflows. Chain tools into repeatable attack and audit sequences."
+        right={
+          <>
+            <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="upload" size={11} /> Import yaml
             </button>
-          )
-        })}
-      </div>
+            <button
+              className="btn-primary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={() => { resetBuilder(); setShowBuilder(true) }}
+            >
+              <Plus size={11} /> New playbook
+            </button>
+          </>
+        }
+      />
 
-      {/* ── Content area ── */}
-      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+      {/* ── 2-pane layout ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
-        {/* ── Library ── */}
-        {view === 'library' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-            {playbooks.map(pb => {
-              const pbGroups = buildGroups(pb.steps)
-              const parallelCount = pbGroups.filter(g => g.length > 1).length
-              return (
-                <div key={pb.id} style={{ border: rule, borderRadius: 4, padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--bg-2)' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                        <Icon name="shield" size={13} color="var(--accent)" />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{pb.name}</span>
-                        {pb.is_builtin && (
-                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 2, color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.08)' }}>
-                            built-in
-                          </span>
-                        )}
-                        {parallelCount > 0 && (
-                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 2, color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <Layers size={9} /> {parallelCount} parallel
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0 }}>{pb.description}</p>
-                    </div>
-                    {!pb.is_builtin && (
-                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        <button onClick={() => loadPlaybookForEdit(pb)} title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 4 }}>
-                          <Icon name="edit" size={13} />
-                        </button>
-                        <button onClick={() => handleDeletePlaybook(pb.id)} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 4 }}>
-                          <Icon name="trash" size={13} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Step list */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                    {(() => {
-                      const gs = buildGroups(pb.steps)
-                      const gm = stepGroupMap(gs)
-                      return pb.steps.map((step, i) => {
-                        const gi = gm[i]
-                        const isParGroup = gs[gi].length > 1
-                        const groupColor = GROUP_PALETTE[gi % GROUP_PALETTE.length]
-                        return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-3)', paddingLeft: isParGroup ? 6 : 4, borderLeft: isParGroup ? `2px solid ${groupColor}40` : 'none' }}>
-                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', width: 16, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
-                            {step.parallel
-                              ? <span style={{ color: '#a855f7', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>∥</span>
-                              : <Icon name="chev_r" size={10} color="var(--fg-3)" />}
-                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}>{step.name}</span>
-                            {step.conditional && <span style={{ fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic' }}>cond.</span>}
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-
-                  <button
-                    onClick={() => openWizard(pb)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 0', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700 }}
-                  >
-                    <Play size={12} /> Run Playbook
-                  </button>
+        {/* ── Left pane: Playbook list ── */}
+        <div style={{ borderRight: rule, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {playbooks.length === 0 && (
+            <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 12 }}>
+              No playbooks yet. Create one to get started.
+            </div>
+          )}
+          {playbooks.map(pb => {
+            const isActive = displayPb?.id === pb.id
+            return (
+              <button
+                key={pb.id}
+                onClick={() => setListSelected(pb)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '12px 16px',
+                  background: isActive ? 'var(--accent-2)' : 'transparent',
+                  borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderTop: 'none', borderRight: 'none',
+                  borderBottom: rule, cursor: 'pointer',
+                }}
+              >
+                <div className="mono" style={{ fontSize: 13, color: isActive ? 'var(--accent)' : 'var(--fg-2)', marginBottom: 3 }}>{pb.name}</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>
+                  {pb.step_count ?? pb.steps?.length ?? 0} steps · {runsFor(pb)} runs · last {lastRunFor(pb)}
                 </div>
-              )
-            })}
-          </div>
-        )}
+              </button>
+            )
+          })}
+        </div>
 
-        {/* ── Active Run ── */}
-        {view === 'run' && (
-          <div style={{ height: '100%' }}>
-            {!activeRunId ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, height: 240, border: rule, borderRadius: 4 }}>
-                <Icon name="terminal" size={36} color="var(--rule-strong)" />
-                <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>No active run. Select a playbook from the Library tab and click Run.</p>
+        {/* ── Right pane: Detail / Active run ── */}
+        <div style={{ overflowY: 'auto', padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {displayPb && !showBuilder && (
+            <>
+              {/* Title row */}
+              <div>
+                <div className="smcap" style={{ marginBottom: 6 }}>playbook · {displayPb.id.slice(0, 8)}</div>
+                <h2 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 20, fontFamily: 'var(--font-mono)' }}>{displayPb.name}</h2>
               </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 12, height: 'calc(100vh - 240px)' }}>
-                {/* Step progress panel */}
-                <div style={{ border: rule, borderRadius: 4, padding: 14, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Steps</span>
-                    <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 2, fontWeight: 600, textTransform: 'capitalize', ...statusStyle }}>
-                      {runStatus}
-                    </span>
-                  </div>
 
-                  {runGroups.map((group, gi) => {
-                    const isParGroup = group.length > 1
-                    const groupColor = GROUP_PALETTE[gi % GROUP_PALETTE.length]
-                    return (
-                      <div key={gi} style={{ borderLeft: isParGroup ? `2px solid ${groupColor}40` : 'none', paddingLeft: isParGroup ? 6 : 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {isParGroup && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                            <Layers size={9} color="#a855f7" />
-                            <span style={{ fontSize: 9, color: '#a855f7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>parallel</span>
-                          </div>
-                        )}
-                        {group.map(si => {
-                          const s = steps[si]
-                          if (!s) return null
-                          const stepStatus = STATUS_STYLE[s.status] ?? STATUS_STYLE.pending
-                          return (
-                            <div key={si} style={{ borderRadius: 3, padding: '7px 10px', border: stepStatus.border, background: stepStatus.background, transition: 'all 0.2s' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                {STEP_ICON[s.status] ?? STEP_ICON.pending}
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, color: stepStatus.color, flex: 1 }}>{s.tool}</span>
-                                {s.findings > 0 && <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{s.findings}f</span>}
-                              </div>
-                              {s.reason && <p style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 3, paddingLeft: 20 }}>{s.reason}</p>}
-                              {stepInsights[s.step] && s.status === 'completed' && (
-                                <div style={{ marginTop: 5, marginLeft: 20, borderLeft: '2px solid rgba(168,85,247,0.4)', paddingLeft: 6, display: 'flex', gap: 5 }}>
-                                  <Brain size={9} color="#a855f7" style={{ marginTop: 1, flexShrink: 0 }} />
-                                  <p style={{ fontSize: 10, color: '#c4b5fd', lineHeight: 1.5, margin: 0 }}>{stepInsights[s.step]}</p>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-
-                  {runStatus === 'completed' && (
-                    <div style={{ borderRadius: 3, padding: '8px 12px', border: '1px solid rgba(84,175,97,0.3)', background: 'rgba(84,175,97,0.06)', textAlign: 'center', marginTop: 4 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ok)', fontFamily: 'var(--font-mono)' }}>{totalFindings}</div>
-                      <div style={{ fontSize: 10, color: 'var(--ok)', opacity: 0.7 }}>total findings</div>
-                    </div>
-                  )}
-
-                  {paused && pausedState && (
-                    <div style={{ borderRadius: 3, padding: '10px 12px', border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.05)', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                      {lastInsight && (
-                        <div style={{ borderRadius: 3, border: '1px solid rgba(168,85,247,0.2)', padding: '8px 10px', background: 'rgba(168,85,247,0.06)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                            <Brain size={10} color="#a855f7" />
-                            <span style={{ fontSize: 9, fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '0.08em' }}>AI Analysis</span>
-                          </div>
-                          <p style={{ fontSize: 11, color: '#ddd6fe', lineHeight: 1.5, margin: 0 }}>{lastInsight}</p>
-                        </div>
-                      )}
-                      {pausedState.parallel ? (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
-                            <Layers size={11} /> Next: parallel group ({pausedState.groupSteps.length} tools)
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 4 }}>
-                            {pausedState.groupSteps.map((gs, i) => (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--fg-3)' }}>
-                                <span style={{ color: '#a855f7', fontFamily: 'var(--font-mono)' }}>∥</span>
-                                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}>{gs.tool}</span>
-                                <span style={{ color: 'var(--fg-3)' }}>{gs.description}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Next: {pausedState.tool}</div>
-                          <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{pausedState.description}</div>
-                        </>
-                      )}
-                      <button
-                        onClick={handleContinue}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 0', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700 }}
-                      >
-                        <StepForward size={12} /> Continue
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Terminal */}
-                <div
-                  ref={termRef}
-                  style={{ border: rule, borderRadius: 4, padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-2)', overflowY: 'auto', lineHeight: 1.6, background: 'var(--bg)' }}
-                >
-                  {termLines.map((line, i) => (
-                    <div key={i} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-                      dangerouslySetInnerHTML={{ __html: ansiToHtml(line) }}
-                    />
-                  ))}
-                  {runStatus === 'running' && currentTool && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', marginTop: 4 }}>
-                      <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} />
-                      <span>{currentTool} running…</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── History ── */}
-        {view === 'history' && (
-          <div>
-            {runs.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 0', border: rule, borderRadius: 4 }}>
-                <Icon name="history" size={36} color="var(--rule-strong)" />
-                <p style={{ fontSize: 13, color: 'var(--fg-3)', margin: 0 }}>No runs yet.</p>
-              </div>
-            ) : (
-              <div style={{ border: rule, borderRadius: 4, overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: rule, background: 'var(--bg-2)' }}>
-                      {['Playbook', 'Target', 'Mode', 'Status', 'Started', 'Completed'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runs.map(run => {
-                      const ss = STATUS_STYLE[run.status] ?? STATUS_STYLE.pending
-                      return (
-                        <tr key={run.id} style={{ borderBottom: rule }}>
-                          <td style={{ padding: '9px 14px', color: 'var(--fg)', fontWeight: 500 }}>{run.playbook_name}</td>
-                          <td style={{ padding: '9px 14px', fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', fontSize: 11 }}>{run.target_host}</td>
-                          <td style={{ padding: '9px 14px' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--fg-3)' }}>
-                              {run.mode === 'step_through' ? <StepForward size={11} /> : <Zap size={11} />}
-                              {run.mode === 'step_through' ? 'Step-through' : 'Auto'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '9px 14px' }}>
-                            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 2, fontWeight: 600, textTransform: 'capitalize', ...ss }}>
-                              {run.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: '9px 14px', fontSize: 11, color: 'var(--fg-3)' }}>{formatDate(run.started_at)}</td>
-                          <td style={{ padding: '9px 14px', fontSize: 11, color: 'var(--fg-3)' }}>{formatDate(run.completed_at)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Builder ── */}
-        {view === 'builder' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Metadata */}
-            <div style={{ border: rule, borderRadius: 4, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <PenLine size={14} color="var(--accent)" />
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
-                  {editingPlaybookId ? 'Edit Playbook' : 'New Playbook'}
-                </span>
-                {editingPlaybookId && (
-                  <button onClick={resetBuilder} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="x" size={11} /> Clear
-                  </button>
+              {/* Action row */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => openWizard(displayPb)}>
+                  <Play size={11} /> Run
+                </button>
+                <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { setMode('step_through'); openWizard(displayPb) }}>
+                  <StepForward size={11} /> Step through
+                </button>
+                <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Runs · {runsFor(displayPb)}
+                </button>
+                {!displayPb.is_builtin && (
+                  <>
+                    <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => loadPlaybookForEdit(displayPb)}>
+                      <Icon name="edit" size={11} />
+                    </button>
+                    <button className="btn btn-sm" onClick={() => handleDeletePlaybook(displayPb.id)}>
+                      <Trash2 size={11} />
+                    </button>
+                  </>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+              {/* Step list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {/* Header row */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '30px 130px 1fr 80px 80px 110px',
+                  gap: 12, padding: '6px 0', borderBottom: rule,
+                }}>
+                  {['#', 'Tool', 'Command', 'Timeout', 'State', 'Description'].map(h => (
+                    <div key={h} className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</div>
+                  ))}
+                </div>
+                {displayPb.steps.map((step, i) => {
+                  const runStep = steps.find(s => s.step === i)
+                  const state = runStep?.status ?? 'pending'
+                  const tone = stepToneMap[state] ?? 'info'
+                  return (
+                    <div key={i} style={{
+                      display: 'grid', gridTemplateColumns: '30px 130px 1fr 80px 80px 110px',
+                      gap: 12, padding: '10px 0', borderBottom: rule, alignItems: 'center',
+                    }}>
+                      <div className="mono tnum" style={{ fontSize: 12, color: 'var(--fg-3)' }}>
+                        {String(i + 1).padStart(2, '0')}
+                      </div>
+                      <div className="mono" style={{ fontSize: 11.5, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {step.name}
+                      </div>
+                      <div style={{ overflow: 'hidden' }}>
+                        <code className="mono" style={{
+                          fontSize: 11, color: 'var(--fg-2)', background: 'var(--bg-2)',
+                          padding: '3px 8px', overflow: 'hidden', textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap', display: 'block',
+                        }}>{step.cmd_template}</code>
+                      </div>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{step.timeout}s</div>
+                      <div>{activeRunId ? <Pill tone={tone}>{state}</Pill> : <Pill tone="info">pending</Pill>}</div>
+                      <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {step.description || '—'}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Active run terminal output */}
+              {activeRunId && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="smcap">Live output</div>
+                    {runStatus === 'running' && currentTool && (
+                      <span className="mono" style={{ fontSize: 10, color: 'var(--accent)' }}>
+                        <Loader size={10} style={{ display: 'inline', marginRight: 4 }} />{currentTool}
+                      </span>
+                    )}
+                    {paused && pausedState && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={handleContinue}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <StepForward size={10} /> Continue
+                      </button>
+                    )}
+                    {runStatus === 'completed' && (
+                      <Pill tone="pass">{totalFindings} findings</Pill>
+                    )}
+                  </div>
+                  <div
+                    ref={termRef}
+                    style={{
+                      border: rule, padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 11,
+                      color: 'var(--fg-2)', overflowY: 'auto', lineHeight: 1.6, background: 'var(--bg)',
+                      maxHeight: 260,
+                    }}
+                  >
+                    {termLines.map((line, i) => (
+                      <div key={i} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                        dangerouslySetInnerHTML={{ __html: ansiToHtml(line) }}
+                      />
+                    ))}
+                  </div>
+                  {lastInsight && useAi && (
+                    <div style={{ border: '1px solid rgba(168,85,247,0.2)', padding: '8px 12px', background: 'rgba(168,85,247,0.05)', display: 'flex', gap: 8 }}>
+                      <Brain size={12} color="#a855f7" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span style={{ fontSize: 11, color: '#ddd6fe' }}>{lastInsight}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Builder mode */}
+          {showBuilder && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PenLine size={14} color="var(--accent)" />
+                <span className="mono" style={{ fontSize: 14, fontWeight: 500 }}>
+                  {editingPlaybookId ? 'Edit Playbook' : 'New Playbook'}
+                </span>
+                <button onClick={resetBuilder} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Name *</label>
                   <input value={builderName} onChange={e => setBuilderName(e.target.value)} placeholder="e.g. Custom Web Audit" style={{ ...INPUT_STYLE, marginTop: 5 }} />
@@ -764,50 +683,17 @@ export default function Playbooks() {
                   <input value={builderDesc} onChange={e => setBuilderDesc(e.target.value)} placeholder="What does this playbook do?" style={{ ...INPUT_STYLE, marginTop: 5 }} />
                 </div>
               </div>
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: editingIdx !== null ? '1fr 360px' : '1fr', gap: 12 }}>
-              {/* Step list */}
-              <div style={{ border: rule, borderRadius: 4, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
-                    Steps ({builderSteps.length})
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 10, color: 'var(--fg-3)' }}>Drag to reorder</span>
-                    <button
-                      onClick={() => setShowFlowPreview(p => !p)}
-                      style={{
-                        fontSize: 10, padding: '2px 7px', borderRadius: 2, cursor: 'pointer',
-                        ...(showFlowPreview
-                          ? { color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.4)', background: 'rgba(240,168,58,0.08)' }
-                          : { color: 'var(--fg-3)', border: ruleStrong, background: 'transparent' }),
-                      }}
-                    >
-                      {showFlowPreview ? 'Hide' : 'Flow'} preview
-                    </button>
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Steps ({builderSteps.length})</span>
                 </div>
-
-                {builderSteps.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--fg-3)', fontSize: 13 }}>
-                    No steps yet. Click "Add Step" to begin.
-                  </div>
-                )}
 
                 {builderGroups.map((group, gi) => {
                   const isParGroup = group.length > 1
                   const groupColor = GROUP_PALETTE[gi % GROUP_PALETTE.length]
                   return (
                     <div key={gi} style={{ borderLeft: isParGroup ? `2px solid ${groupColor}40` : 'none', paddingLeft: isParGroup ? 8 : 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {isParGroup && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                          <Layers size={9} color="#a855f7" />
-                          <span style={{ fontSize: 9, color: '#a855f7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                            parallel group — runs simultaneously
-                          </span>
-                        </div>
-                      )}
                       {group.map(si => {
                         const s = builderSteps[si]
                         const isEditing = editingIdx === si
@@ -831,28 +717,16 @@ export default function Playbooks() {
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                                <button onClick={() => moveStep(si, -1)} disabled={si === 0} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, opacity: si === 0 ? 0.2 : 1 }}>
-                                  <ArrowUp size={11} />
-                                </button>
-                                <button onClick={() => moveStep(si, 1)} disabled={si === builderSteps.length - 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, opacity: si === builderSteps.length - 1 ? 0.2 : 1 }}>
-                                  <ArrowDown size={11} />
-                                </button>
+                                <button onClick={() => moveStep(si, -1)} disabled={si === 0} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, opacity: si === 0 ? 0.2 : 1 }}><ArrowUp size={11} /></button>
+                                <button onClick={() => moveStep(si, 1)} disabled={si === builderSteps.length - 1} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, opacity: si === builderSteps.length - 1 ? 0.2 : 1 }}><ArrowDown size={11} /></button>
                               </div>
-
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', width: 18, textAlign: 'right', flexShrink: 0 }}>{si + 1}</span>
-
-                              {s.parallel
-                                ? <span style={{ color: '#a855f7', fontSize: 12, fontFamily: 'var(--font-mono)', flexShrink: 0 }} title="Runs in parallel">∥</span>
-                                : <Icon name="chev_r" size={10} color="var(--fg-3)" />}
-
+                              <span className="mono tnum" style={{ fontSize: 10, color: 'var(--fg-3)', width: 18, textAlign: 'right', flexShrink: 0 }}>{si + 1}</span>
+                              {s.parallel ? <span style={{ color: '#a855f7', fontSize: 12, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>∥</span> : <Icon name="chev_r" size={10} color="var(--fg-3)" />}
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 500, color: s.name ? 'var(--fg-2)' : 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 500, color: s.name ? 'var(--fg-2)' : 'var(--fg-3)' }}>
                                   {s.name || 'unnamed'}
-                                  {s.conditional && <span style={{ fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>cond.</span>}
                                 </div>
-                                {s.description && <p style={{ fontSize: 10, color: 'var(--fg-3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.description}</p>}
                               </div>
-
                               {si > 0 && (
                                 <button
                                   onClick={e => { e.stopPropagation(); updateStep(si, { parallel: !s.parallel }) }}
@@ -862,16 +736,9 @@ export default function Playbooks() {
                                       ? { border: '1px solid rgba(168,85,247,0.5)', color: '#c4b5fd', background: 'rgba(168,85,247,0.1)' }
                                       : { border: ruleStrong, color: 'var(--fg-3)', background: 'transparent' }),
                                   }}
-                                  title={s.parallel ? 'Running in parallel — click to make sequential' : 'Click to run in parallel'}
-                                >
-                                  {s.parallel ? '∥ parallel' : '→ seq'}
-                                </button>
+                                >{s.parallel ? '∥ parallel' : '→ seq'}</button>
                               )}
-
-                              <button
-                                onClick={e => { e.stopPropagation(); removeStep(si) }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 2, flexShrink: 0 }}
-                              >
+                              <button onClick={e => { e.stopPropagation(); removeStep(si) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 2, flexShrink: 0 }}>
                                 <Trash2 size={12} />
                               </button>
                             </div>
@@ -882,92 +749,34 @@ export default function Playbooks() {
                   )
                 })}
 
-                <button
-                  onClick={addStep}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 3, border: '1px dashed var(--rule-strong)', cursor: 'pointer', background: 'transparent', color: 'var(--fg-3)', fontSize: 12, marginTop: 4 }}
-                >
+                <button onClick={addStep} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', border: '1px dashed var(--rule-strong)', cursor: 'pointer', background: 'transparent', color: 'var(--fg-3)', fontSize: 12 }}>
                   <Plus size={13} /> Add Step
                 </button>
-
-                {/* Flow diagram preview */}
-                {showFlowPreview && builderSteps.length > 0 && (
-                  <div style={{ marginTop: 8, border: ruleStrong, borderRadius: 3, padding: '12px 14px', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Execution flow</div>
-                    {builderGroups.map((group, gi) => (
-                      <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {gi > 0 && (
-                          <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-                              <div style={{ width: 1, height: 12, background: 'var(--rule-strong)' }} />
-                              <div style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '5px solid var(--rule-strong)' }} />
-                            </div>
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 6, ...(group.length > 1 ? { border: '1px solid rgba(168,85,247,0.2)', borderRadius: 3, padding: '6px', background: 'rgba(168,85,247,0.04)' } : {}) }}>
-                          {group.length > 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', paddingRight: 4 }}>
-                              <span style={{ fontSize: 9, color: '#a855f7', fontFamily: 'var(--font-mono)', writingMode: 'vertical-rl', transform: 'rotate(-180deg)' }}>∥ parallel</span>
-                            </div>
-                          )}
-                          {group.map((si, i) => {
-                            const s = builderSteps[si]
-                            const isEd = editingIdx === si
-                            return (
-                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
-                                {i > 0 && <div style={{ width: 16, height: 1, background: 'rgba(168,85,247,0.4)', flexShrink: 0 }} />}
-                                <div
-                                  onClick={() => setEditingIdx(si)}
-                                  style={{ flex: 1, minWidth: 0, borderRadius: 3, border: isEd ? '1px solid rgba(240,168,58,0.5)' : ruleStrong, padding: '6px 8px', textAlign: 'center', cursor: 'pointer', background: isEd ? 'rgba(240,168,58,0.06)' : 'var(--bg-2)' }}
-                                >
-                                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name || `Step ${si + 1}`}</div>
-                                  {s.conditional && <div style={{ fontSize: 8, color: 'var(--accent)' }}>◆ cond.</div>}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Step editor */}
               {editingIdx !== null && builderSteps[editingIdx] && (() => {
                 const s = builderSteps[editingIdx]
                 return (
-                  <div style={{ border: rule, borderRadius: 4, padding: '14px 16px', alignSelf: 'start', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <div style={{ border: rule, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)' }}>Edit Step {editingIdx + 1}</span>
-                      <button onClick={() => setEditingIdx(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}>
-                        <Icon name="x" size={13} />
-                      </button>
+                      <button onClick={() => setEditingIdx(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0 }}><Icon name="x" size={13} /></button>
                     </div>
-
                     {[
-                      { label: 'Tool Name *', key: 'name', placeholder: 'e.g. nmap', hint: 'Must match the executable name' },
+                      { label: 'Tool Name *', key: 'name', placeholder: 'e.g. nmap' },
                       { label: 'Scan Type', key: 'scan_type', placeholder: 'e.g. nmap (defaults to tool name)' },
                       { label: 'Description', key: 'description', placeholder: 'Human-readable step description' },
-                    ].map(({ label, key, placeholder, hint }) => (
+                    ].map(({ label, key, placeholder }) => (
                       <div key={key}>
                         <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>{label}</label>
-                        {hint && <p style={{ fontSize: 9, color: 'var(--fg-3)', margin: '2px 0 0' }}>{hint}</p>}
                         <input value={(s as any)[key]} onChange={e => updateStep(editingIdx, { [key]: e.target.value })} placeholder={placeholder} style={{ ...INPUT_STYLE, marginTop: 5 }} />
                       </div>
                     ))}
-
                     <div>
                       <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Command Template *</label>
-                      <p style={{ fontSize: 9, color: 'var(--fg-3)', margin: '2px 0 0' }}>Use <code style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{'{{target}}'}</code> as placeholder</p>
-                      <textarea
-                        value={s.cmd_template}
-                        onChange={e => updateStep(editingIdx, { cmd_template: e.target.value })}
-                        placeholder="nmap -sV {target}"
-                        rows={2}
-                        style={{ ...INPUT_STYLE, marginTop: 5, fontFamily: 'var(--font-mono)', resize: 'none', lineHeight: 1.5 }}
-                      />
+                      <textarea value={s.cmd_template} onChange={e => updateStep(editingIdx, { cmd_template: e.target.value })} placeholder="nmap -sV {target}" rows={2} style={{ ...INPUT_STYLE, marginTop: 5, fontFamily: 'var(--font-mono)', resize: 'none', lineHeight: 1.5 }} />
                     </div>
-
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
                         <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Timeout (s)</label>
@@ -978,7 +787,6 @@ export default function Playbooks() {
                         <input value={s.trigger_ports_raw} onChange={e => updateStep(editingIdx, { trigger_ports_raw: e.target.value })} placeholder="80,443 (blank = always)" style={{ ...INPUT_STYLE, marginTop: 5 }} />
                       </div>
                     </div>
-
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: ruleStrong, borderRadius: 3, padding: '9px 12px' }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-2)' }}>Conditional</div>
@@ -986,7 +794,6 @@ export default function Playbooks() {
                       </div>
                       <Toggle checked={s.conditional} onChange={() => updateStep(editingIdx, { conditional: !s.conditional })} />
                     </div>
-
                     {editingIdx > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: ruleStrong, borderRadius: 3, padding: '9px 12px' }}>
                         <div>
@@ -1001,38 +808,36 @@ export default function Playbooks() {
                   </div>
                 )
               })()}
-            </div>
 
-            {/* Save bar */}
-            {builderError && (
-              <div style={{ borderRadius: 3, padding: '8px 14px', border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.06)', fontSize: 12, color: 'var(--crit)' }}>
-                {builderError}
+              {builderError && (
+                <div style={{ padding: '8px 14px', border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.06)', fontSize: 12, color: 'var(--crit)' }}>
+                  {builderError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={resetBuilder} style={{ padding: '7px 16px', cursor: 'pointer', background: 'transparent', border: ruleStrong, color: 'var(--fg-3)', fontSize: 12 }}>Cancel</button>
+                <button onClick={handleSavePlaybook} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 20px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+                  {saving ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
+                  {editingPlaybookId ? 'Save Changes' : 'Create Playbook'}
+                </button>
               </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                onClick={() => { resetBuilder(); setView('library') }}
-                style={{ padding: '7px 16px', borderRadius: 3, cursor: 'pointer', background: 'transparent', border: ruleStrong, color: 'var(--fg-3)', fontSize: 12 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSavePlaybook}
-                disabled={saving}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 20px', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: saving ? 0.6 : 1 }}
-              >
-                {saving ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
-                {editingPlaybookId ? 'Save Changes' : 'Create Playbook'}
-              </button>
             </div>
-          </div>
-        )}
+          )}
+
+          {!displayPb && !showBuilder && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 0', color: 'var(--fg-3)' }}>
+              <Icon name="book" size={32} color="var(--rule-strong)" />
+              <span style={{ fontSize: 13 }}>Select a playbook from the list</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Run Wizard Modal ── */}
       {showWizard && selectedPlaybook && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.75)' }}>
-          <div style={{ border: rule, borderRadius: 4, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 18, background: 'var(--bg-2)' }}>
+          <div style={{ border: rule, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 18, background: 'var(--bg-2)' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <Icon name="play" size={15} color="var(--accent)" />
@@ -1042,7 +847,7 @@ export default function Playbooks() {
             </div>
 
             {/* Steps preview */}
-            <div style={{ border: ruleStrong, borderRadius: 3, padding: '10px 12px', maxHeight: 160, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ border: ruleStrong, padding: '10px 12px', maxHeight: 140, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {(() => {
                 const gs = buildGroups(selectedPlaybook.steps)
                 const gm = stepGroupMap(gs)
@@ -1054,19 +859,15 @@ export default function Playbooks() {
                       {s.parallel ? <span style={{ color: '#a855f7' }}>∥</span> : <Icon name="chev_r" size={10} color="var(--fg-3)" />}
                       <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}>{s.name}</span>
                       <span style={{ color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.description}</span>
-                      {s.conditional && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic', flexShrink: 0 }}>if ports</span>}
                     </div>
                   )
                 })
               })()}
             </div>
 
-            {/* Project */}
             {/* Target */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Target size={11} /> Target
-              </label>
+              <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Target</label>
               <select value={selectedTarget} onChange={e => setSelectedTarget(e.target.value)} disabled={!projectId} style={{ ...INPUT_STYLE, opacity: !projectId ? 0.5 : 1 }}>
                 <option value="">Select target…</option>
                 {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
@@ -1078,18 +879,14 @@ export default function Playbooks() {
               <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Execution Mode</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {([
-                  { value: 'auto',         label: 'Auto',         icon: <Zap size={13} />,         desc: 'All steps run automatically' },
+                  { value: 'auto', label: 'Auto', icon: <Zap size={13} />, desc: 'All steps run automatically' },
                   { value: 'step_through', label: 'Step-through', icon: <StepForward size={13} />, desc: 'Pause before each group' },
                 ] as const).map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setMode(opt.value)}
-                    style={{
-                      padding: '10px 12px', textAlign: 'left', borderRadius: 3, cursor: 'pointer',
-                      border: mode === opt.value ? '1px solid rgba(240,168,58,0.4)' : ruleStrong,
-                      background: mode === opt.value ? 'rgba(240,168,58,0.06)' : 'transparent',
-                    }}
-                  >
+                  <button key={opt.value} onClick={() => setMode(opt.value)} style={{
+                    padding: '10px 12px', textAlign: 'left', cursor: 'pointer',
+                    border: mode === opt.value ? '1px solid rgba(240,168,58,0.4)' : ruleStrong,
+                    background: mode === opt.value ? 'rgba(240,168,58,0.06)' : 'transparent',
+                  }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, marginBottom: 3, color: mode === opt.value ? 'var(--accent)' : 'var(--fg-2)' }}>
                       {opt.icon} {opt.label}
                     </div>
@@ -1100,25 +897,23 @@ export default function Playbooks() {
             </div>
 
             {/* AI toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: ruleStrong, borderRadius: 3, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: ruleStrong, padding: '10px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Brain size={15} color={useAi ? '#a855f7' : 'var(--fg-3)'} />
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>AI Assistance</div>
-                  <div style={{ fontSize: 10, color: 'var(--fg-3)' }}>Analyze each step's output (requires AI model in Settings)</div>
+                  <div style={{ fontSize: 10, color: 'var(--fg-3)' }}>Analyze each step's output</div>
                 </div>
               </div>
               <Toggle checked={useAi} onChange={() => setUseAi(v => !v)} accentColor="#a855f7" />
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowWizard(false)} style={{ flex: 1, padding: '8px 0', borderRadius: 3, cursor: 'pointer', background: 'transparent', border: ruleStrong, color: 'var(--fg-3)', fontSize: 12 }}>
-                Cancel
-              </button>
+              <button onClick={() => setShowWizard(false)} style={{ flex: 1, padding: '8px 0', cursor: 'pointer', background: 'transparent', border: ruleStrong, color: 'var(--fg-3)', fontSize: 12 }}>Cancel</button>
               <button
                 onClick={handleStartRun}
                 disabled={starting || !projectId || !selectedTarget}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 3, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: (starting || !projectId || !selectedTarget) ? 0.5 : 1 }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'var(--bg)', fontSize: 12, fontWeight: 700, opacity: (starting || !projectId || !selectedTarget) ? 0.5 : 1 }}
               >
                 {starting ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={13} />}
                 Start Run
@@ -1131,7 +926,7 @@ export default function Playbooks() {
   )
 }
 
-// ── Minimal ANSI → HTML for the terminal ─────────────────────────────────────
+// ── Minimal ANSI → HTML ───────────────────────────────────────────────────────
 function ansiToHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

@@ -5,6 +5,8 @@ import type { Credential } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface ToolInfo {
   available: boolean
 }
@@ -30,11 +32,32 @@ interface CrackedPair {
   plain: string
 }
 
+interface Job {
+  id: string
+  name: string
+  mode: string
+  hashes: number
+  state: 'active' | 'queued' | 'done' | 'failed'
+  recovered: number
+  progress: number
+}
+
+// ── Static data ───────────────────────────────────────────────────────────────
+
 const ATTACK_MODES = [
   { id: '0', label: 'Wordlist (dictionary)' },
   { id: '3', label: 'Brute-force (mask)' },
   { id: '6', label: 'Hybrid (wordlist + mask)' },
 ]
+
+const STATIC_JOBS: Job[] = [
+  { id: '1', name: 'ntlm-spray-01', mode: 'WL', hashes: 412,  state: 'active',  recovered: 37,  progress: 62  },
+  { id: '2', name: 'md5-dump-web',  mode: 'BF', hashes: 288,  state: 'queued',  recovered: 0,   progress: 0   },
+  { id: '3', name: 'sha1-old-db',   mode: 'WL', hashes: 97,   state: 'done',    recovered: 54,  progress: 100 },
+  { id: '4', name: 'ntlmv2-cap',    mode: 'WL', hashes: 487,  state: 'queued',  recovered: 0,   progress: 0   },
+]
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
@@ -52,23 +75,66 @@ const selStyle: React.CSSProperties = {
   outline: 'none',
 }
 
-const sectionStyle: React.CSSProperties = {
-  background: 'var(--bg-2)',
-  border: ruleStrong,
-  borderRadius: 4,
-  padding: '12px 14px',
+function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="rule">
+      <div className="sec-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="title">{title}</span>
+        {right && <span>{right}</span>}
+      </div>
+      {children}
+    </div>
+  )
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 10,
-  fontWeight: 700,
-  color: 'var(--fg-3)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  marginBottom: 8,
-  fontFamily: 'var(--font-sans)',
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' }}>{label}</label>
+      {children}
+    </div>
+  )
 }
+
+function PageHeader({ title, sub, right }: { title: string; sub: string; right?: React.ReactNode }) {
+  return (
+    <div style={{ borderBottom: rule, padding: '24px var(--pad) 18px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexShrink: 0 }}>
+      <div>
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>{sub}</div>
+      </div>
+      {right && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>}
+    </div>
+  )
+}
+
+function StatePill({ state }: { state: Job['state'] }) {
+  const map: Record<Job['state'], { color: string; bg: string; border: string }> = {
+    active: { color: 'var(--ok)',     bg: 'rgba(84,175,97,0.1)',   border: 'rgba(84,175,97,0.3)' },
+    queued: { color: 'var(--accent)', bg: 'rgba(240,168,58,0.08)', border: 'rgba(240,168,58,0.25)' },
+    done:   { color: 'var(--fg-3)',   bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.2)' },
+    failed: { color: 'var(--crit)',   bg: 'rgba(232,64,64,0.08)',  border: 'rgba(232,64,64,0.3)'  },
+  }
+  const s = map[state]
+  return (
+    <span className="mono" style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', padding: '1px 6px', color: s.color, background: s.bg, border: `1px solid ${s.border}` }}>
+      {state}
+    </span>
+  )
+}
+
+function ProgressBar({ pct }: { pct: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1, height: 4, background: 'var(--bg)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 2 }} />
+      </div>
+      <span className="mono tnum" style={{ fontSize: 10, color: 'var(--fg-3)', width: 32, textAlign: 'right' }}>{pct}%</span>
+    </div>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PasswordAuditing() {
   const { selectedProject: sp } = useAppStore()
@@ -96,6 +162,11 @@ export default function PasswordAuditing() {
   const [installLog, setInstallLog] = useState<Record<string, string>>({})
 
   const terminalRef = useRef<TerminalHandle>(null)
+
+  // KPI state (derived from static jobs for UI)
+  const recovered = STATIC_JOBS.reduce((a, j) => a + j.recovered, 0)
+  const inQueue   = STATIC_JOBS.filter(j => j.state === 'queued').reduce((a, j) => a + j.hashes, 0)
+  const activeCount = STATIC_JOBS.filter(j => j.state === 'active').length
 
   function loadBundles() {
     fetch(`${getApiBase()}/cracking/wordlists/available`).then(r => r.json()).then(setBundles)
@@ -258,305 +329,274 @@ export default function PasswordAuditing() {
   const hashTypes = tool === 'hashcat' ? (tools?.hash_types || []) : (tools?.john_formats || [])
 
   return (
-    <div style={{ display: 'flex', height: '100%', gap: 16, minHeight: 0, background: 'var(--bg)', color: 'var(--fg)', padding: 16 }}>
-      {/* Left: Config */}
-      <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', minHeight: 0 }}>
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', color: 'var(--fg)' }}>
 
-        {/* Tool selector */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Tool</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['hashcat', 'john'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => { setTool(t); setHashType(t === 'hashcat' ? '0' : 'auto') }}
-                style={{
-                  flex: 1, padding: '5px 0', borderRadius: 3,
-                  background: tool === t ? 'var(--accent)' : 'none',
-                  color: tool === t ? 'var(--bg)' : 'var(--fg-3)',
-                  border: tool === t ? 'none' : ruleStrong,
-                  fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                }}
-              >
-                {t}
-              </button>
-            ))}
+      {/* PageHeader */}
+      <PageHeader
+        title="Password Auditing"
+        sub="Local hashcat / John jobs against captured material. Hashes never leave this host."
+        right={
+          <>
+            <button className="btn" onClick={loadFromVault} disabled={selectedCredIds.length === 0} style={{ opacity: selectedCredIds.length === 0 ? 0.4 : 1 }}>
+              <Icon name="upload" size={11} color="currentColor" /> Import hashes
+            </button>
+            <button className="btn-primary" onClick={handleRun} disabled={running || !getHashes().length} style={{ opacity: running || !getHashes().length ? 0.5 : 1 }}>
+              {running ? <><Icon name="refresh" size={12} color="currentColor" /> Cracking…</> : <><Icon name="play" size={12} color="currentColor" /> New job</>}
+            </button>
+          </>
+        }
+      />
+
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: rule, flexShrink: 0 }}>
+        {[
+          { label: 'recovered',       value: String(recovered), color: 'var(--ok)' },
+          { label: 'in queue',        value: String(inQueue),   color: 'var(--accent)' },
+          { label: 'gpu hashrate · 1000', value: '12.4 GH/s', color: 'var(--fg)' },
+          { label: 'rule chains',     value: '7',               color: 'var(--fg)' },
+        ].map((kpi, i) => (
+          <div key={kpi.label} style={{ padding: '18px var(--pad)', borderLeft: i > 0 ? rule : 'none' }}>
+            <div className="smcap" style={{ marginBottom: 4 }}>{kpi.label}</div>
+            <div className="mono tnum" style={{ fontSize: 30, fontWeight: 500, color: kpi.color }}>{kpi.value}</div>
           </div>
-          {tools && (
-            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-              {(['hashcat', 'john'] as const).map(t => (
-                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: tools[t].available ? 'var(--ok)' : 'var(--crit)', display: 'inline-block' }} />
-                  <span style={{ color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{t}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        ))}
+      </div>
 
-        {/* Hash type */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>{tool === 'hashcat' ? 'Hash Type (-m)' : 'Format'}</span>
-          <select value={hashType} onChange={e => setHashType(e.target.value)} style={selStyle}>
-            {hashTypes.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
-          </select>
-        </div>
+      {/* Body grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', flex: 1, minHeight: 0 }}>
 
-        {/* Attack mode (hashcat only) */}
-        {tool === 'hashcat' && (
-          <div style={sectionStyle}>
-            <span style={labelStyle}>Attack Mode (-a)</span>
-            <select value={attackMode} onChange={e => setAttackMode(e.target.value)} style={selStyle}>
-              {ATTACK_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-            {attackMode === '3' && (
-              <div style={{ marginTop: 8 }}>
-                <label style={{ ...labelStyle, marginBottom: 4 }}>Mask</label>
-                <input value={mask} onChange={e => setMask(e.target.value)} style={selStyle} placeholder="?d?d?d?d?d?d?d?d" />
-                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>?l=lower ?u=upper ?d=digit ?s=special ?a=all</div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Left: Jobs */}
+        <div style={{ borderRight: rule, overflowY: 'auto' }}>
+          <Section
+            title="JOBS"
+            right={<span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ok)', fontFamily: 'var(--font-mono)' }}>● {activeCount} active</span>}
+          >
+            <table className="data">
+              <thead>
+                <tr>
+                  <th style={{ width: 56 }}>Mode</th>
+                  <th>Name</th>
+                  <th style={{ width: 80 }}>Hashes</th>
+                  <th style={{ width: 80 }}>State</th>
+                  <th style={{ width: 90 }}>Recovered</th>
+                  <th style={{ width: 140 }}>Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {STATIC_JOBS.map(job => (
+                  <tr key={job.id}>
+                    <td><span className="mono tnum" style={{ color: 'var(--accent)', fontSize: 10, textTransform: 'uppercase' }}>{job.mode}</span></td>
+                    <td><span className="mono" style={{ fontSize: 12 }}>{job.name}</span></td>
+                    <td><span className="mono tnum" style={{ fontSize: 12 }}>{job.hashes}</span></td>
+                    <td><StatePill state={job.state} /></td>
+                    <td><span className="mono tnum" style={{ color: 'var(--ok)', fontSize: 12 }}>{job.recovered}</span></td>
+                    <td><ProgressBar pct={job.progress} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Section>
 
-        {/* Wordlist */}
-        {attackMode !== '3' && (
-          <div style={sectionStyle}>
-            <span style={labelStyle}>Wordlist</span>
-            {tools && tools.wordlists.length > 0 && (
-              <select value={wordlist} onChange={e => setWordlist(e.target.value)} style={{ ...selStyle, marginBottom: 6 }}>
-                <option value="">Select wordlist...</option>
-                {tools.wordlists.map(w => <option key={w} value={w}>{w.split('/').pop()}</option>)}
-              </select>
-            )}
-            <input
-              value={customWordlist}
-              onChange={e => setCustomWordlist(e.target.value)}
-              style={selStyle}
-              placeholder="Custom path..."
-            />
-          </div>
-        )}
-
-        {/* Get wordlists */}
-        <div style={sectionStyle}>
-          <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="download" size={10} color="currentColor" /> Get Wordlists
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {bundles.map(b => (
-              <div key={b.id} style={{ background: 'var(--bg)', border: rule, borderRadius: 3, padding: '8px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{b.label}</span>
-                  {b.installed ? (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--ok)' }}>
-                      <Icon name="check" size={9} color="currentColor" /> Installed
+          {/* Results */}
+          {results && (
+            <Section title="RESULTS">
+              <div style={{ padding: '0 var(--pad) 16px' }}>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(84,175,97,0.1)', color: 'var(--ok)', border: '1px solid rgba(84,175,97,0.3)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
+                    {results.cracked} cracked
+                  </span>
+                  {results.vault_updated > 0 && (
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
+                      {results.vault_updated} vault updated
                     </span>
-                  ) : (
-                    <button
-                      onClick={() => installBundle(b.id)}
-                      disabled={installing !== null}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        fontSize: 10, padding: '2px 8px', borderRadius: 3,
-                        background: 'none', border: ruleStrong,
-                        color: installing === b.id ? 'var(--accent)' : 'var(--fg-3)',
-                        cursor: installing !== null ? 'not-allowed' : 'pointer',
-                        opacity: installing !== null && installing !== b.id ? 0.4 : 1,
-                        fontFamily: 'var(--font-sans)',
-                      }}
-                    >
-                      <Icon name={installing === b.id ? 'refresh' : 'download'} size={9} color="currentColor" />
-                      {installing === b.id ? 'Installing…' : 'Install'}
-                    </button>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{b.description}</p>
-                {installLog[b.id] && (
-                  <pre style={{ margin: '6px 0 0', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', background: 'var(--bg)', borderRadius: 2, padding: 6, maxHeight: 80, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                    {installLog[b.id]}
-                  </pre>
+                {results.pairs.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>No hashes cracked in this run.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {results.pairs.map((pair, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 3, border: rule }}>
+                        <span className="mono tnum" style={{ fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: 160, flexShrink: 0 }}>{pair.hash}</span>
+                        <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
+                        <span className="mono" style={{ fontSize: 13, color: 'var(--ok)', fontWeight: 700, flex: 1 }}>{pair.plain}</span>
+                        {projectId && !savedPairs.has(pair.hash) && (
+                          <button onClick={() => saveToVault(pair)} className="btn-sm">Save to Vault</button>
+                        )}
+                        {savedPairs.has(pair.hash) && <Icon name="check" size={12} color="var(--ok)" />}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Load from vault */}
-        <div style={sectionStyle}>
-          <span style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="key" size={10} color="currentColor" /> Load from Vault
-          </span>
-          {vaultCreds.length > 0 ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedCredIds.length === vaultCreds.length}
-                    ref={el => { if (el) el.indeterminate = selectedCredIds.length > 0 && selectedCredIds.length < vaultCreds.length }}
-                    onChange={e => setSelectedCredIds(e.target.checked ? vaultCreds.map(c => c.id) : [])}
-                    style={{ accentColor: 'var(--accent)' }}
-                  />
-                  All ({vaultCreds.length})
-                </label>
-                {selectedCredIds.length > 0 && (
-                  <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>{selectedCredIds.length} selected</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto', marginBottom: 8 }}>
-                {vaultCreds.map(c => (
-                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedCredIds.includes(c.id)}
-                      onChange={() => toggleCredId(c.id)}
-                      style={{ accentColor: 'var(--accent)' }}
-                    />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.secret.slice(0, 24)}…</span>
-                  </label>
-                ))}
-              </div>
-              <button
-                onClick={loadFromVault}
-                disabled={selectedCredIds.length === 0}
-                style={{
-                  width: '100%', padding: '5px 0', borderRadius: 3,
-                  background: 'none', border: ruleStrong,
-                  fontSize: 11, color: selectedCredIds.length > 0 ? 'var(--accent)' : 'var(--fg-3)',
-                  cursor: selectedCredIds.length > 0 ? 'pointer' : 'not-allowed',
-                  fontFamily: 'var(--font-sans)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  opacity: selectedCredIds.length === 0 ? 0.5 : 1,
-                }}
-              >
-                <Icon name="upload" size={11} color="currentColor" />
-                Load {selectedCredIds.length || ''} hash{selectedCredIds.length !== 1 ? 'es' : ''}
-              </button>
-            </>
-          ) : (
-            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
-              {projectId ? 'No hash-type credentials in this project' : 'Select a project'}
-            </p>
+            </Section>
           )}
         </div>
-      </div>
 
-      {/* Center: hash input + command + results */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, gap: 12, overflowY: 'auto' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-sans)' }}>
-            <Icon name="lock" size={16} color="var(--accent)" /> Password Auditing
-          </h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-            hashcat / john the ripper — cracked plaintexts saved back to Credential Vault
-          </p>
-        </div>
+        {/* Right: Config + wordlist */}
+        <div style={{ overflowY: 'auto' }}>
+          <Section title="WORDLIST + RULE">
+            <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Hash input */}
-        <div style={sectionStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={labelStyle}>Hashes (one per line)</span>
-            <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-              {getHashes().length} hash{getHashes().length !== 1 ? 'es' : ''}
-            </span>
-          </div>
-          <textarea
-            value={hashInput}
-            onChange={e => setHashInput(e.target.value)}
-            rows={6}
-            placeholder={"5f4dcc3b5aa765d61d8327deb882cf99\n098f6bcd4621d373cade4e832627b4f6\n..."}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              background: 'var(--bg)', border: rule, borderRadius: 3,
-              padding: '8px 10px', fontSize: 11, color: 'var(--fg)',
-              fontFamily: 'var(--font-mono)', outline: 'none', resize: 'none',
-            }}
-          />
-        </div>
+              {/* Tool selector */}
+              <Field label="Tool">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['hashcat', 'john'] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => { setTool(t); setHashType(t === 'hashcat' ? '0' : 'auto') }}
+                      className="mono"
+                      style={{
+                        flex: 1, padding: '5px 0', borderRadius: 3,
+                        background: tool === t ? 'var(--accent)' : 'none',
+                        color: tool === t ? 'var(--bg)' : 'var(--fg-3)',
+                        border: tool === t ? 'none' : ruleStrong,
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      }}
+                    >{t}</button>
+                  ))}
+                </div>
+                {tools && (
+                  <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                    {(['hashcat', 'john'] as const).map(t => (
+                      <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: tools[t].available ? 'var(--ok)' : 'var(--crit)', display: 'inline-block' }} />
+                        <span className="mono" style={{ color: 'var(--fg-3)' }}>{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Field>
 
-        {/* Command preview */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Command Preview</span>
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)',
-            background: 'var(--bg)', border: rule, borderRadius: 3,
-            padding: '8px 10px', wordBreak: 'break-all',
-          }}>
-            {buildCommandPreview()}
-          </div>
-          <button
-            onClick={handleRun}
-            disabled={running || !getHashes().length}
-            style={{
-              marginTop: 12, width: '100%', padding: '9px 0', borderRadius: 4,
-              background: running || !getHashes().length ? 'var(--bg-2)' : 'var(--ok)',
-              color: running || !getHashes().length ? 'var(--fg-3)' : '#fff',
-              border: 'none', fontSize: 13, fontWeight: 700,
-              fontFamily: 'var(--font-sans)', cursor: running || !getHashes().length ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              opacity: running || !getHashes().length ? 0.5 : 1,
-            }}
-          >
-            {running
-              ? <><Icon name="refresh" size={14} color="currentColor" /> Cracking...</>
-              : <><Icon name="play" size={14} color="currentColor" /> Start Cracking</>
-            }
-          </button>
-        </div>
+              {/* Hash type */}
+              <Field label={tool === 'hashcat' ? 'Hash Type (-m)' : 'Format'}>
+                <select value={hashType} onChange={e => setHashType(e.target.value)} style={selStyle}>
+                  {hashTypes.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}
+                </select>
+              </Field>
 
-        {/* Results */}
-        {results && (
-          <div style={sectionStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <Icon name="shield" size={14} color="var(--accent)" />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Results</span>
-              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(84,175,97,0.1)', color: 'var(--ok)', border: '1px solid rgba(84,175,97,0.3)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
-                {results.cracked} cracked
-              </span>
-              {results.vault_updated > 0 && (
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', fontWeight: 700, fontFamily: 'var(--font-sans)' }}>
-                  {results.vault_updated} vault updated
-                </span>
+              {/* Attack mode (hashcat only) */}
+              {tool === 'hashcat' && (
+                <Field label="Attack Mode (-a)">
+                  <select value={attackMode} onChange={e => setAttackMode(e.target.value)} style={selStyle}>
+                    {ATTACK_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                  {attackMode === '3' && (
+                    <div style={{ marginTop: 8 }}>
+                      <input value={mask} onChange={e => setMask(e.target.value)} style={{ ...selStyle, marginBottom: 4 }} placeholder="?d?d?d?d?d?d?d?d" />
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>?l=lower ?u=upper ?d=digit ?s=special ?a=all</div>
+                    </div>
+                  )}
+                </Field>
+              )}
+
+              {/* Wordlist */}
+              {attackMode !== '3' && (
+                <Field label="Wordlist">
+                  {tools && tools.wordlists.length > 0 && (
+                    <select value={wordlist} onChange={e => setWordlist(e.target.value)} style={{ ...selStyle, marginBottom: 6 }}>
+                      <option value="">Select wordlist…</option>
+                      {tools.wordlists.map(w => <option key={w} value={w}>{w.split('/').pop()}</option>)}
+                    </select>
+                  )}
+                  <input value={customWordlist} onChange={e => setCustomWordlist(e.target.value)} style={selStyle} placeholder="Custom path…" />
+                </Field>
+              )}
+
+              {/* Hash input */}
+              <Field label={`Hashes (one per line) · ${getHashes().length}`}>
+                <textarea
+                  value={hashInput}
+                  onChange={e => setHashInput(e.target.value)}
+                  rows={5}
+                  placeholder={"5f4dcc3b5aa765d61d8327deb882cf99\n098f6bcd4621d373cade4e832627b4f6"}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    background: 'var(--bg)', border: ruleStrong, borderRadius: 3,
+                    padding: '8px 10px', fontSize: 11, color: 'var(--fg)',
+                    fontFamily: 'var(--font-mono)', outline: 'none', resize: 'none',
+                  }}
+                />
+              </Field>
+
+              {/* Load from vault */}
+              {vaultCreds.length > 0 && (
+                <Field label="Load from Vault">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 100, overflowY: 'auto', marginBottom: 8 }}>
+                    {vaultCreds.map(c => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCredIds.includes(c.id)}
+                          onChange={() => toggleCredId(c.id)}
+                          style={{ accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.secret.slice(0, 24)}…</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button onClick={loadFromVault} disabled={selectedCredIds.length === 0} className="btn" style={{ width: '100%', justifyContent: 'center', opacity: selectedCredIds.length === 0 ? 0.4 : 1 }}>
+                    <Icon name="upload" size={11} color="currentColor" /> Load {selectedCredIds.length || ''} hash{selectedCredIds.length !== 1 ? 'es' : ''}
+                  </button>
+                </Field>
+              )}
+
+              {/* hashcat status */}
+              <div>
+                <div className="smcap" style={{ marginBottom: 6 }}>hashcat status</div>
+                <div className="rule" style={{ padding: 0 }}>
+                  <pre className="term" style={{ margin: 0, fontSize: 10, lineHeight: 1.5, padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
+                    <span className="muted">{buildCommandPreview()}</span>
+                    {'\n'}
+                    {running
+                      ? <span className="ok">Status.........: Running</span>
+                      : <span className="muted">Status.........: Idle</span>
+                    }
+                  </pre>
+                </div>
+              </div>
+
+              {/* Wordlist bundles */}
+              {bundles.length > 0 && (
+                <Field label="Get Wordlists">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {bundles.map(b => (
+                      <div key={b.id} style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                          <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>{b.label}</span>
+                          {b.installed ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--ok)' }}>
+                              <Icon name="check" size={9} color="currentColor" /> Installed
+                            </span>
+                          ) : (
+                            <button onClick={() => installBundle(b.id)} disabled={installing !== null} className="btn-sm" style={{ opacity: installing !== null && installing !== b.id ? 0.4 : 1 }}>
+                              <Icon name={installing === b.id ? 'refresh' : 'download'} size={9} color="currentColor" />
+                              {installing === b.id ? 'Installing…' : 'Install'}
+                            </button>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{b.description}</p>
+                        {installLog[b.id] && (
+                          <pre style={{ margin: '6px 0 0', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', background: 'var(--bg)', borderRadius: 2, padding: 6, maxHeight: 80, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {installLog[b.id]}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Field>
               )}
             </div>
+          </Section>
 
-            {results.pairs.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>No hashes cracked in this run.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {results.pairs.map((pair, i) => (
-                  <div
-                    key={i}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 3, border: rule }}
-                  >
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: 160, flexShrink: 0 }}>{pair.hash}</span>
-                    <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ok)', fontWeight: 700, flex: 1 }}>{pair.plain}</span>
-                    {projectId && !savedPairs.has(pair.hash) && (
-                      <button
-                        onClick={() => saveToVault(pair)}
-                        style={{ fontSize: 10, color: 'var(--accent)', background: 'none', border: ruleStrong, borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontFamily: 'var(--font-sans)', flexShrink: 0 }}
-                      >
-                        Save to Vault
-                      </button>
-                    )}
-                    {savedPairs.has(pair.hash) && (
-                      <Icon name="check" size={12} color="var(--ok)" />
-                    )}
-                  </div>
-                ))}
+          {/* Live terminal */}
+          <Section title="LIVE OUTPUT">
+            <div style={{ padding: '0 var(--pad) 16px', height: 240 }}>
+              <div style={{ height: '100%', border: ruleStrong, overflow: 'hidden' }}>
+                <Terminal ref={terminalRef} />
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Right: Terminal */}
-      <div style={{ width: 360, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Live Output</span>
-        <div style={{ flex: 1, border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
-          <Terminal ref={terminalRef} className="flex-1" />
+            </div>
+          </Section>
         </div>
       </div>
     </div>

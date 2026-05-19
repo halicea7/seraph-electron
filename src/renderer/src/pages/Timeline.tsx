@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
 import Icon from '../components/Icon'
 import { useAppStore } from '@/stores/appStore'
 import type { Project } from '@/types'
 import { getApiBase } from '@/lib/config'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TimelineEvent {
   id: string
@@ -15,65 +16,64 @@ interface TimelineEvent {
   ts: string
 }
 
-const SEV_COLOR: Record<string, string> = {
-  critical: 'var(--crit)',
-  high:     '#f97316',
-  medium:   'var(--accent)',
-  low:      'var(--ok)',
-  info:     'var(--med)',
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const rule = '1px solid var(--rule)'
+
+function PageHeader({ title, sub, right }: { title: string; sub: string; right?: React.ReactNode }) {
+  return (
+    <div style={{ borderBottom: rule, padding: '24px var(--pad) 18px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexShrink: 0 }}>
+      <div>
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>{sub}</div>
+      </div>
+      {right && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>}
+    </div>
+  )
 }
 
-const SEV_BG: Record<string, string> = {
-  critical: 'rgba(232,64,64,0.1)',
-  high:     'rgba(249,115,22,0.1)',
-  medium:   'rgba(240,168,58,0.1)',
-  low:      'rgba(84,175,97,0.1)',
-  info:     'rgba(240,168,58,0.06)',
+function SegBtns({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: rule, height: 26 }}>
+      {options.map((o, i) => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          background: value === o ? 'var(--accent-2)' : 'transparent',
+          color: value === o ? 'var(--accent)' : 'var(--fg-3)',
+          border: 'none', borderLeft: i > 0 ? rule : 'none',
+          padding: '0 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
 }
 
-const STATUS_COLORS: Record<string, { color: string; background: string; border: string }> = {
-  completed: { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',  border: '1px solid rgba(84,175,97,0.3)' },
-  running:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
-  pending:   { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
-  failed:    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',  border: '1px solid rgba(232,64,64,0.3)' },
-}
-
-function kindIcon(kind: TimelineEvent['kind']) {
-  switch (kind) {
-    case 'project':    return <Icon name="folder" size={13} color="var(--fg-2)" />
-    case 'target':     return <Icon name="target" size={13} color="#8b5cf6" />
-    case 'scan_start': return <Icon name="activity" size={13} color="var(--accent)" />
-    case 'scan_end':   return <Icon name="check" size={13} color="var(--ok)" />
-    case 'finding':    return <AlertTriangle size={13} color="var(--accent)" />
+function dotStyle(sev: string | null, kind: TimelineEvent['kind']): React.CSSProperties {
+  if (sev === 'critical') {
+    return { background: 'var(--crit)', border: '2px solid var(--bg)' }
   }
-}
-
-function kindDotColor(kind: TimelineEvent['kind']): string {
+  if (sev === 'high') {
+    return { background: 'var(--high)', border: '2px solid var(--bg)' }
+  }
   switch (kind) {
-    case 'project':    return 'var(--fg-2)'
-    case 'target':     return '#8b5cf6'
-    case 'scan_start': return 'var(--accent)'
-    case 'scan_end':   return 'var(--ok)'
-    case 'finding':    return 'var(--accent)'
+    case 'scan_start':
+    case 'finding':
+      return { background: 'var(--accent)', border: '2px solid var(--bg)' }
+    case 'scan_end':
+      return { background: 'var(--ok)', border: '2px solid var(--bg)' }
+    case 'target':
+      return { background: '#8b5cf6', border: '2px solid var(--bg)' }
+    default:
+      return { background: 'var(--fg-3)', border: '2px solid var(--bg)' }
   }
 }
 
 function fmt(ts: string) {
   const d = new Date(ts)
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
-type KindFilter = TimelineEvent['kind'] | 'all'
-const KIND_FILTERS: { label: string; value: KindFilter }[] = [
-  { label: 'All',      value: 'all' },
-  { label: 'Projects', value: 'project' },
-  { label: 'Targets',  value: 'target' },
-  { label: 'Scans',    value: 'scan_end' },
-  { label: 'Findings', value: 'finding' },
-]
-
-const rule = '1px solid var(--rule)'
-const ruleStrong = '1px solid var(--rule-strong)'
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function Timeline() {
   const { selectedProject, setSelectedProject } = useAppStore()
@@ -82,8 +82,7 @@ export default function Timeline() {
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
-  const [severityFilter, setSeverityFilter] = useState<string>('all')
+  const [timeRange, setTimeRange] = useState('7d')
 
   useEffect(() => {
     fetch(`${getApiBase()}/projects`)
@@ -108,7 +107,6 @@ export default function Timeline() {
   }
 
   const activeProjectId = localProjectId || selectedProject?.id || ''
-  const activeProjectName = projects.find(p => p.id === activeProjectId)?.name ?? selectedProject?.name ?? ''
 
   async function load(projectId: string) {
     setLoading(true); setError('')
@@ -127,180 +125,133 @@ export default function Timeline() {
     else setEvents([])
   }, [activeProjectId])
 
-  const filtered = events.filter(e => {
-    const kindOk = kindFilter === 'all'
-      || e.kind === kindFilter
-      || (kindFilter === 'scan_end' && (e.kind === 'scan_start' || e.kind === 'scan_end'))
-    const sevOk = severityFilter === 'all' || e.severity === severityFilter
-    return kindOk && sevOk
-  })
+  function exportJsonl() {
+    const lines = events.map(e => JSON.stringify(e)).join('\n')
+    const blob = new Blob([lines], { type: 'application/jsonl' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'timeline.jsonl'; a.click()
+    URL.revokeObjectURL(url)
+  }
 
-  const findingCount = events.filter(e => e.kind === 'finding').length
-  const scanCount = events.filter(e => e.kind === 'scan_end').length
-  const targetCount = events.filter(e => e.kind === 'target').length
-  const criticalCount = events.filter(e => e.severity === 'critical').length
+  // Group events by date
+  const grouped: Record<string, TimelineEvent[]> = {}
+  for (const evt of events) {
+    const day = new Date(evt.ts).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    if (!grouped[day]) grouped[day] = []
+    grouped[day].push(evt)
+  }
 
   return (
-    <div style={{ padding: 24, maxWidth: 800, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg)', color: 'var(--fg)' }}>
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', color: 'var(--fg)' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Engagement Timeline</h1>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-            {activeProjectName || 'Select a project'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <select
-            value={localProjectId}
-            onChange={e => handleProjectChange(e.target.value)}
-            style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 3, padding: '5px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none' }}
-          >
-            {projects.length === 0 && <option value="">No projects</option>}
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          {activeProjectId && (
-            <button
-              onClick={() => load(activeProjectId)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-            >
-              <Icon name="refresh" size={12} color="currentColor" /> Refresh
+      <PageHeader
+        title="Timeline"
+        sub="Reconstructed engagement timeline — events from scans, findings, and target additions."
+        right={
+          <>
+            {/* project selector */}
+            {projects.length > 1 && (
+              <select
+                value={localProjectId}
+                onChange={e => handleProjectChange(e.target.value)}
+                style={{ background: 'var(--bg)', border: rule, borderRadius: 3, padding: '4px 10px', fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none', height: 26 }}
+              >
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+            <SegBtns options={['Today', '7d', '30d', 'Engagement']} value={timeRange} onChange={setTimeRange} />
+            <button className="btn" onClick={exportJsonl} disabled={events.length === 0} style={{ opacity: events.length === 0 ? 0.4 : 1 }}>
+              <Icon name="download" size={12} color="currentColor" /> Export JSONL
             </button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {/* Summary cards */}
-      {activeProjectId && events.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {[
-            { label: 'Targets', value: targetCount, color: '#8b5cf6' },
-            { label: 'Scans run', value: scanCount, color: 'var(--med)' },
-            { label: 'Findings', value: findingCount, color: 'var(--accent)' },
-            { label: 'Critical', value: criticalCount, color: 'var(--crit)' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '12px 14px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color }}>{value}</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2, fontFamily: 'var(--font-sans)' }}>{label}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px var(--pad)' }}>
 
-      {/* Filters */}
-      {events.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <Icon name="filter" size={12} color="var(--fg-3)" />
-          <div style={{ display: 'flex', gap: 4 }}>
-            {KIND_FILTERS.map(f => {
-              const isActive = kindFilter === f.value
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => setKindFilter(f.value)}
-                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: 'var(--font-sans)', background: isActive ? 'rgba(240,168,58,0.12)' : 'none', color: isActive ? 'var(--accent)' : 'var(--fg-3)', border: isActive ? '1px solid rgba(240,168,58,0.3)' : ruleStrong }}
-                >
-                  {f.label}
-                </button>
-              )
-            })}
+        {!activeProjectId && (
+          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--fg-3)', fontSize: 13 }}>
+            Select a project to view its timeline.
           </div>
-          <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-            {['all', 'critical', 'high', 'medium', 'low'].map(sev => {
-              const isActive = severityFilter === sev
-              const sc = sev !== 'all' ? SEV_COLOR[sev] : 'var(--accent)'
-              return (
-                <button
-                  key={sev}
-                  onClick={() => setSeverityFilter(sev)}
-                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 3, cursor: 'pointer', textTransform: 'capitalize', fontFamily: 'var(--font-sans)', background: isActive ? (sev === 'all' ? 'rgba(240,168,58,0.12)' : `${sc}22`) : 'none', color: isActive ? (sev === 'all' ? 'var(--accent)' : sc) : 'var(--fg-3)', border: isActive ? (sev === 'all' ? '1px solid rgba(240,168,58,0.3)' : `1px solid ${sc}55`) : ruleStrong }}
-                >
-                  {sev === 'all' ? 'All sev.' : sev}
-                </button>
-              )
-            })}
+        )}
+
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <Icon name="refresh" size={24} color="var(--accent)" />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* States */}
-      {!activeProjectId && (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--fg-3)', fontSize: 13, fontFamily: 'var(--font-sans)' }}>
-          Select a project above to view its timeline.
-        </div>
-      )}
-      {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
-          <Icon name="refresh" size={24} color="var(--accent)" />
-        </div>
-      )}
-      {error && (
-        <div style={{ background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', borderRadius: 3, color: 'var(--crit)', padding: '10px 14px', fontSize: 13, fontFamily: 'var(--font-sans)' }}>
-          {error}
-        </div>
-      )}
+        {error && (
+          <div style={{ background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', borderRadius: 3, color: 'var(--crit)', padding: '10px 14px', fontSize: 13 }}>
+            {error}
+          </div>
+        )}
 
-      {!loading && filtered.length === 0 && activeProjectId && !error && (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--fg-3)', fontSize: 13, fontFamily: 'var(--font-sans)' }}>
-          No events match the current filters.
-        </div>
-      )}
+        {!loading && !error && activeProjectId && events.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--fg-3)', fontSize: 13 }}>
+            No events in this project yet.
+          </div>
+        )}
 
-      {/* Timeline */}
-      {!loading && filtered.length > 0 && (
-        <div style={{ position: 'relative' }}>
-          {/* Vertical line */}
-          <div style={{ position: 'absolute', left: 19, top: 0, bottom: 0, width: 1, background: 'var(--rule)' }} />
+        {!loading && events.length > 0 && (
+          <div style={{ position: 'relative', paddingLeft: 80 }}>
+            {/* Vertical line */}
+            <div style={{ position: 'absolute', left: 76, top: 0, bottom: 0, width: 1, background: 'var(--rule-strong)' }} />
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {filtered.map(event => {
-              const dotColor = kindDotColor(event.kind)
-              const statusSty = event.status ? STATUS_COLORS[event.status] : null
-              return (
-                <div key={event.id} style={{ position: 'relative', display: 'flex', gap: 14 }}>
+            {events.map(event => (
+              <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: 16, marginBottom: 18 }}>
+                {/* Time */}
+                <div className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', textAlign: 'right', paddingTop: 2 }}>
+                  {fmt(event.ts)}
+                </div>
+
+                {/* Content */}
+                <div style={{ position: 'relative', paddingLeft: 22 }}>
                   {/* Dot */}
-                  <div style={{ position: 'relative', zIndex: 1, flexShrink: 0, width: 38, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, boxShadow: `0 0 8px ${dotColor}80`, border: '2px solid var(--bg)' }} />
+                  <div style={{
+                    position: 'absolute',
+                    left: -5,
+                    top: 4,
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    ...dotStyle(event.severity, event.kind),
+                  }} />
+
+                  {/* Kind badge */}
+                  <span className="badge badge-info" style={{ textTransform: 'uppercase' }}>
+                    {event.kind.replace('_', ' ')}
+                  </span>
+
+                  {/* Title */}
+                  <div style={{ fontSize: 13, color: 'var(--fg)', marginTop: 6, lineHeight: 1.5 }}>
+                    {event.title}
                   </div>
 
-                  {/* Card */}
-                  <div style={{ flex: 1, marginBottom: 10, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '10px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                        {kindIcon(event.kind)}
-                        <span style={{ fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-sans)' }}>{event.title}</span>
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--fg-3)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{fmt(event.ts)}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  {/* Meta */}
+                  {(event.target || event.severity || event.status) && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                       {event.target && (
-                        <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{event.target}</span>
+                        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{event.target}</span>
                       )}
                       {event.severity && (
-                        <span style={{
-                          fontSize: 10, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', fontWeight: 600,
-                          color: SEV_COLOR[event.severity] ?? 'var(--fg-3)',
-                          background: SEV_BG[event.severity] ?? 'rgba(100,116,139,0.08)',
-                          border: `1px solid ${SEV_COLOR[event.severity] ?? 'var(--fg-3)'}40`,
-                        }}>
-                          {event.severity}
-                        </span>
-                      )}
-                      {event.status && statusSty && (
-                        <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', color: statusSty.color, background: statusSty.background, border: statusSty.border }}>
-                          {event.status}
-                        </span>
+                        <span className="mono" style={{
+                          fontSize: 10,
+                          color: event.severity === 'critical' ? 'var(--crit)'
+                            : event.severity === 'high' ? 'var(--high)'
+                            : event.severity === 'medium' ? 'var(--accent)'
+                            : 'var(--ok)',
+                        }}>{event.severity}</span>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

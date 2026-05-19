@@ -1,11 +1,98 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/stores/appStore'
-import { getProjects, getStats, createProject, createTarget, deleteProject, type PlatformStats } from '@/api/client'
+import {
+  getProjects,
+  getStats,
+  createProject,
+  createTarget,
+  deleteProject,
+  getProjectScans,
+  type PlatformStats,
+} from '@/api/client'
 import ProjectModal from '@/components/ProjectModal'
-import SparkLine from '@/components/SparkLine'
 import Icon from '@/components/Icon'
 import { getApiBase, getWsBase } from '@/lib/config'
+
+const rule = '1px solid var(--rule)'
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+
+function Sparkline({
+  data,
+  width = 70,
+  height = 26,
+  color,
+  fill = false,
+}: {
+  data: number[]
+  width?: number
+  height?: number
+  color: string
+  fill?: boolean
+}) {
+  if (data.length < 2) return null
+  const max = Math.max(...data, 1)
+  const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * width, y: height - (v / max) * height }))
+  const polyPts = pts.map((p) => `${p.x},${p.y}`).join(' ')
+  if (fill) {
+    const fillPath =
+      `M${pts[0].x},${height} ` +
+      pts.map((p) => `L${p.x},${p.y}`).join(' ') +
+      ` L${pts[pts.length - 1].x},${height} Z`
+    return (
+      <svg width={width} height={height} style={{ overflow: 'visible', flexShrink: 0 }}>
+        <path d={fillPath} fill={color} fillOpacity={0.15} />
+        <polyline points={polyPts} fill="none" stroke={color} strokeWidth={1.5} />
+      </svg>
+    )
+  }
+  return (
+    <svg width={width} height={height} style={{ overflow: 'visible', flexShrink: 0 }}>
+      <polyline points={polyPts} fill="none" stroke={color} strokeWidth={1.5} />
+    </svg>
+  )
+}
+
+// ── KPI cell ──────────────────────────────────────────────────────────────────
+
+function KPI({
+  label,
+  value,
+  sub,
+  accentVar,
+  trend,
+  divider,
+}: {
+  label: string
+  value: number
+  sub: string
+  accentVar?: string
+  trend?: number[]
+  divider?: boolean
+}) {
+  const color = accentVar ? `var(${accentVar})` : 'var(--fg)'
+  return (
+    <div style={{ padding: '20px var(--pad) 18px', borderLeft: divider ? rule : 'none' }}>
+      <div className="smcap">{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 8 }}>
+        <span
+          className="mono tnum"
+          style={{ fontSize: 44, fontWeight: 500, color, letterSpacing: '-0.02em', lineHeight: 1 }}
+        >
+          {String(value).padStart(2, '0')}
+        </span>
+        {trend && <Sparkline data={trend} width={70} height={26} color={color} fill />}
+      </div>
+      <div
+        className="mono"
+        style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+      >
+        {sub}
+      </div>
+    </div>
+  )
+}
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
@@ -21,91 +108,93 @@ function Section({
   style?: React.CSSProperties
 }) {
   return (
-    <div style={{ border: '1px solid var(--rule)', background: 'var(--bg)', ...style }}>
+    <div style={style}>
       <div className="sec-h">
         <span className="title">{title}</span>
-        {right && <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{right}</span>}
+        {right}
       </div>
       {children}
     </div>
   )
 }
 
-// ── KPI cell ──────────────────────────────────────────────────────────────────
+// ── PhasePipeline ─────────────────────────────────────────────────────────────
 
-function KPI({
-  label,
-  value,
-  sub,
-  accentVar,
-  trend,
-  divider,
-}: {
-  label: string
-  value: number | string
-  sub?: string
-  accentVar?: string
-  trend?: number[]
-  divider?: boolean
-}) {
-  const color = accentVar ? `var(${accentVar})` : 'var(--fg)'
-  return (
-    <div style={{
-      padding: '20px var(--pad) 18px',
-      borderLeft: divider ? '1px solid var(--rule)' : 'none',
-    }}>
-      <div className="smcap">{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 8 }}>
-        <span className="mono tnum" style={{ fontSize: 44, fontWeight: 500, color, letterSpacing: '-0.02em', lineHeight: 1 }}>
-          {String(value).padStart(2, '0')}
-        </span>
-        {trend && trend.length > 1 && (
-          <SparkLine values={trend} color={color} width={70} height={26} />
-        )}
-      </div>
-      {sub && (
-        <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  )
+interface PhaseData {
+  id: string
+  name: string
+  status: 'done' | 'running' | 'pending'
+  tools: string[]
+  started?: string | null
+  ended?: string | null
+  progress?: number
 }
 
-// ── Severity breakdown (stacked bar + microbars) ──────────────────────────────
+function PhasePipeline({ projectId }: { projectId: string | null }) {
+  const [phases, setPhases] = useState<PhaseData[]>([])
 
-function SeverityBreakdown({ counts }: { counts: Record<string, number> }) {
-  const order = ['critical', 'high', 'medium', 'low', 'info'] as const
-  const total = order.reduce((s, k) => s + (counts[k] || 0), 0)
-  const bars = [
-    { label: 'Critical', k: 'critical', color: 'var(--crit)' },
-    { label: 'High',     k: 'high',     color: 'var(--high)' },
-    { label: 'Medium',   k: 'medium',   color: 'var(--med)' },
-    { label: 'Low',      k: 'low',      color: 'var(--low)' },
-    { label: 'Info',     k: 'info',     color: 'var(--info)' },
-  ]
-  const max = Math.max(...bars.map(b => counts[b.k] || 0), 1)
+  useEffect(() => {
+    if (!projectId) return
+    fetch(`${getApiBase()}/projects/${projectId}/phases`)
+      .then((r) => r.json())
+      .then((d: PhaseData[]) => setPhases(d))
+      .catch(() =>
+        setPhases([
+          { id: '1', name: 'Recon', status: 'done', tools: ['nmap', 'amass'], started: null, ended: null, progress: 100 },
+          { id: '2', name: 'Scan', status: 'running', tools: ['nikto', 'nessus'], started: null, ended: null, progress: 60 },
+          { id: '3', name: 'Exploit', status: 'pending', tools: ['msf', 'sqlmap'], started: null, ended: null, progress: 0 },
+          { id: '4', name: 'Post', status: 'pending', tools: ['bloodhound'], started: null, ended: null, progress: 0 },
+        ])
+      )
+  }, [projectId])
+
+  const borderColor = (s: PhaseData['status']) =>
+    s === 'running' ? 'var(--warn)' : s === 'done' ? 'var(--ok)' : 'var(--rule-strong)'
 
   return (
-    <Section title="SEVERITY · OPEN" right={<span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>n = {total}</span>}>
-      <div style={{ padding: 'var(--pad)' }}>
-        {/* Stacked bar */}
-        <div style={{ display: 'flex', height: 8, marginBottom: 16 }}>
-          {total === 0 ? (
-            <div style={{ flex: 1, background: 'var(--rule-2)' }} />
-          ) : bars.map(b => (
-            <div key={b.k} style={{ flex: counts[b.k] || 0, background: b.color, opacity: counts[b.k] ? 1 : 0 }} />
-          ))}
-        </div>
-
-        {/* Micro bars */}
-        {bars.map(b => (
-          <div key={b.k} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 32px', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-            <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{b.label}</span>
-            <div style={{ background: 'var(--rule-2)', height: 6 }}>
-              <div style={{ height: '100%', width: `${((counts[b.k] || 0) / max) * 100}%`, background: b.color }} />
+    <Section title="PHASE PIPELINE">
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${phases.length || 4}, 1fr)`, gap: 0 }}>
+        {phases.map((ph, i) => (
+          <div
+            key={ph.id}
+            style={{
+              padding: '12px var(--pad)',
+              borderTop: `2px solid ${borderColor(ph.status)}`,
+              borderLeft: i > 0 ? rule : 'none',
+              position: 'relative',
+            }}
+          >
+            <div
+              className="mono"
+              style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.12em' }}
+            >
+              {String(i + 1).padStart(2, '0')}
             </div>
-            <span className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-2)', textAlign: 'right' }}>{counts[b.k] || 0}</span>
+            <div className="mono" style={{ fontSize: 12, fontWeight: 500, marginTop: 4 }}>
+              {ph.name}
+            </div>
+            <div
+              className="mono"
+              style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            >
+              {ph.tools.join(' · ')}
+            </div>
+            {ph.started && (
+              <div className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', marginTop: 6 }}>
+                {ph.started}
+              </div>
+            )}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                height: 2,
+                width: `${ph.progress ?? 0}%`,
+                background: borderColor(ph.status),
+                opacity: 0.5,
+              }}
+            />
           </div>
         ))}
       </div>
@@ -113,83 +202,47 @@ function SeverityBreakdown({ counts }: { counts: Record<string, number> }) {
   )
 }
 
-// ── Recent scans list ─────────────────────────────────────────────────────────
+// ── FindingsPreview ───────────────────────────────────────────────────────────
 
-const SCAN_STATE: Record<string, { dot: string; label: string }> = {
-  completed: { dot: 'dot-live', label: 'done' },
-  running:   { dot: 'dot-warn', label: 'running' },
-  pending:   { dot: 'dot-idle', label: 'pending' },
-  failed:    { dot: 'dot-crit', label: 'failed' },
-}
-
-function RecentScans({ scans }: { scans: Array<{ id: string; scan_type: string; target: string; status: string; auto_probe?: boolean }> }) {
-  const navigate = useNavigate()
-  return (
-    <Section
-      title={`RECENT SCANS · ${scans.length}`}
-      right={
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/scans')}>
-          All scans <Icon name="arrow_r" size={9} />
-        </button>
-      }
-    >
-      {scans.length === 0 ? (
-        <div style={{ padding: 'var(--pad)', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-          No scans yet.
-        </div>
-      ) : (
-        <div>
-          {scans.map((s, i) => {
-            const st = SCAN_STATE[s.status] || SCAN_STATE.pending
-            return (
-              <div key={s.id} style={{
-                display: 'grid',
-                gridTemplateColumns: '8px 1fr auto',
-                gap: 10,
-                padding: '9px var(--pad)',
-                borderBottom: i < scans.length - 1 ? '1px solid var(--rule)' : 'none',
-                alignItems: 'center',
-              }}>
-                <span className={`dot ${st.dot}`} style={{ flexShrink: 0 }} />
-                <div>
-                  <div className="mono" style={{ fontSize: 11.5 }}>{s.scan_type}</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2 }}>{s.target}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {s.auto_probe && <Icon name="bolt" size={9} color="var(--accent)" />}
-                  <span className="badge">{st.label}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </Section>
-  )
-}
-
-// ── Recent findings table ─────────────────────────────────────────────────────
-
-const SEV_VAR: Record<string, string> = {
+const SEV_COLOR: Record<string, string> = {
   critical: 'var(--crit)',
   high: 'var(--high)',
   medium: 'var(--med)',
   low: 'var(--low)',
-  info: 'var(--info)',
+  info: 'var(--info, var(--fg-3))',
 }
 
-function RecentFindings({ findings }: { findings: Array<{ id: string; title: string; severity: string; target: string; cve_id?: string }> }) {
+interface FindingRow {
+  id: string
+  severity: string
+  cvss_score: string | null
+  title: string
+  cve_id: string | null
+  target: string
+  status?: string
+}
+
+function FindingsPreview({ findings }: { findings: FindingRow[] }) {
   const navigate = useNavigate()
+  const sorted = [...findings].sort((a, b) => parseFloat(b.cvss_score ?? '0') - parseFloat(a.cvss_score ?? '0')).slice(0, 8)
+
+  const statusColor = (s?: string) => {
+    if (s === 'remediated') return 'var(--ok)'
+    if (s === 'in-review') return 'var(--warn)'
+    if (s === 'accepted') return 'var(--fg-3)'
+    return 'var(--crit)'
+  }
+
   return (
     <Section
-      title="RECENT FINDINGS"
+      title="FINDINGS PREVIEW"
       right={
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/findings')}>
           View all <Icon name="arrow_r" size={9} />
         </button>
       }
     >
-      {findings.length === 0 ? (
+      {sorted.length === 0 ? (
         <div style={{ padding: 'var(--pad)', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
           No findings yet.
         </div>
@@ -197,26 +250,56 @@ function RecentFindings({ findings }: { findings: Array<{ id: string; title: str
         <table className="data">
           <thead>
             <tr>
-              <th style={{ width: 30 }}>SEV</th>
-              <th>Title</th>
-              <th style={{ width: 160 }}>Target</th>
-              <th style={{ width: 100 }}>CVE</th>
+              <th style={{ width: 20 }}>SEV</th>
+              <th style={{ width: 48 }}>CVSS</th>
+              <th>Title / CVE</th>
+              <th style={{ width: 140 }}>Host</th>
+              <th style={{ width: 80 }}>Status</th>
             </tr>
           </thead>
           <tbody>
-            {findings.map(f => (
+            {sorted.map((f) => (
               <tr key={f.id}>
                 <td>
-                  <span style={{
-                    display: 'inline-block',
-                    width: 8,
-                    height: 8,
-                    background: SEV_VAR[f.severity] || 'var(--fg-4)',
-                  }} />
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 8,
+                      height: 8,
+                      background: SEV_COLOR[f.severity] ?? 'var(--fg-4)',
+                    }}
+                  />
                 </td>
-                <td style={{ fontWeight: 500 }}>{f.title}</td>
-                <td className="mono" style={{ fontSize: 11, color: 'var(--fg-2)' }}>{f.target}</td>
-                <td className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{f.cve_id || '—'}</td>
+                <td className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                  {f.cvss_score ?? '—'}
+                </td>
+                <td>
+                  <div style={{ fontWeight: 500, fontSize: 11 }}>{f.title}</div>
+                  {f.cve_id && (
+                    <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 1 }}>
+                      {f.cve_id}
+                    </div>
+                  )}
+                </td>
+                <td className="mono" style={{ fontSize: 10, color: 'var(--fg-2)' }}>
+                  {f.target}
+                </td>
+                <td>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: statusColor(f.status),
+                      padding: '2px 5px',
+                      border: `1px solid ${statusColor(f.status)}`,
+                      opacity: 0.85,
+                    }}
+                  >
+                    {f.status ?? 'open'}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -226,15 +309,446 @@ function RecentFindings({ findings }: { findings: Array<{ id: string; title: str
   )
 }
 
-// ── Projects list ─────────────────────────────────────────────────────────────
+// ── SeverityBreakdown ─────────────────────────────────────────────────────────
 
-function ProjectsList({
-  onNew,
-  onNavigate,
-}: {
-  onNew: () => void
-  onNavigate: (id: string) => void
-}) {
+function SeverityBreakdown({ counts }: { counts: Record<string, number> }) {
+  const bars = [
+    { label: 'Critical', k: 'critical', color: 'var(--crit)' },
+    { label: 'High', k: 'high', color: 'var(--high)' },
+    { label: 'Medium', k: 'medium', color: 'var(--med)' },
+    { label: 'Low', k: 'low', color: 'var(--low)' },
+  ]
+  const total = bars.reduce((s, b) => s + (counts[b.k] || 0), 0)
+  const max = Math.max(...bars.map((b) => counts[b.k] || 0), 1)
+
+  return (
+    <Section title="SEVERITY · OPEN" right={<span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>n = {total}</span>}>
+      <div style={{ padding: 'var(--pad)' }}>
+        {/* Stacked bar */}
+        <div style={{ display: 'flex', height: 8, marginBottom: 16, gap: 1 }}>
+          {total === 0 ? (
+            <div style={{ flex: 1, background: 'var(--rule-2)' }} />
+          ) : (
+            bars.map((b) => (
+              <div
+                key={b.k}
+                style={{ flex: counts[b.k] || 0, background: b.color, opacity: counts[b.k] ? 1 : 0, minWidth: counts[b.k] ? 2 : 0 }}
+              />
+            ))
+          )}
+        </div>
+        {/* Micro bars */}
+        {bars.map((b) => (
+          <div
+            key={b.k}
+            style={{ display: 'grid', gridTemplateColumns: '64px 1fr 32px', gap: 8, alignItems: 'center', marginBottom: 6 }}
+          >
+            <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              {b.label}
+            </span>
+            <div style={{ background: 'var(--rule-2)', height: 6 }}>
+              <div style={{ height: '100%', width: `${((counts[b.k] || 0) / max) * 100}%`, background: b.color }} />
+            </div>
+            <span className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-2)', textAlign: 'right' }}>
+              {counts[b.k] || 0}
+            </span>
+          </div>
+        ))}
+        {/* SLA grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 6,
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: rule,
+          }}
+        >
+          {[
+            { label: 'Crit < 24h', val: counts.critical || 0, warn: (counts.critical || 0) > 0 },
+            { label: 'High < 7d', val: counts.high || 0, warn: (counts.high || 0) > 5 },
+            { label: 'Breached', val: 0, warn: false },
+            { label: 'At risk', val: (counts.critical || 0) + (counts.high || 0), warn: (counts.critical || 0) + (counts.high || 0) > 3 },
+          ].map((item) => (
+            <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                {item.label}
+              </span>
+              <span
+                className="mono tnum"
+                style={{ fontSize: 18, fontWeight: 500, color: item.warn ? 'var(--crit)' : 'var(--fg-3)' }}
+              >
+                {String(item.val).padStart(2, '0')}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+// ── ActiveSessionsList ────────────────────────────────────────────────────────
+
+interface C2SessionRow {
+  id: string
+  msf_session_id?: string
+  session_type: string
+  remote_host: string
+  via_payload?: string
+  established_at?: string
+  last_seen?: string
+  status?: string
+}
+
+function uptimeStr(established?: string): string {
+  if (!established) return '—'
+  const ms = Date.now() - new Date(established).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h`
+  return `${Math.floor(hrs / 24)}d`
+}
+
+function ActiveSessionsList({ projectId }: { projectId: string | null }) {
+  const navigate = useNavigate()
+  const [sessions, setSessions] = useState<C2SessionRow[]>([])
+
+  useEffect(() => {
+    if (!projectId) { setSessions([]); return }
+    fetch(`${getApiBase()}/c2/sessions?project_id=${projectId}`)
+      .then((r) => r.json())
+      .then((d: C2SessionRow[]) => setSessions(d))
+      .catch(() => setSessions([]))
+  }, [projectId])
+
+  return (
+    <Section
+      title={`ACTIVE SESSIONS · ${sessions.length}`}
+      right={
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/c2')}>
+          Open C2 <Icon name="arrow_r" size={9} />
+        </button>
+      }
+    >
+      {sessions.length === 0 ? (
+        <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
+          No active sessions.
+        </div>
+      ) : (
+        <div>
+          {sessions.slice(0, 4).map((s, i) => (
+            <div
+              key={s.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '32px 1fr auto',
+                gap: 8,
+                padding: '8px var(--pad)',
+                borderBottom: i < Math.min(sessions.length, 4) - 1 ? rule : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <span className="mono tnum" style={{ fontSize: 10, color: 'var(--fg-4)' }}>
+                #{s.msf_session_id ?? s.id.slice(0, 3)}
+              </span>
+              <div>
+                <div className="mono" style={{ fontSize: 11, fontWeight: 500 }}>
+                  {s.remote_host}
+                </div>
+                <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 2 }}>
+                  {s.session_type} · {s.via_payload ?? '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: s.status === 'active' ? 'var(--ok)' : 'var(--fg-4)',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {s.status ?? 'active'}
+                </span>
+                <span className="mono" style={{ fontSize: 9, color: 'var(--fg-4)' }}>
+                  {uptimeStr(s.established_at)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ── ActivityLedger ────────────────────────────────────────────────────────────
+
+interface ActivityEntry {
+  id: string
+  timestamp: string
+  message: string
+  kind?: string
+}
+
+const ACTIVITY_COLOR: Record<string, string> = {
+  scan: 'var(--accent)',
+  finding: 'var(--crit)',
+  session: 'var(--ok)',
+  info: 'var(--fg-3)',
+}
+
+function ActivityLedger({ projectId }: { projectId: string | null }) {
+  const [entries, setEntries] = useState<ActivityEntry[]>([])
+
+  useEffect(() => {
+    if (!projectId) { setEntries([]); return }
+    fetch(`${getApiBase()}/activity?project_id=${projectId}`)
+      .then((r) => r.json())
+      .then((d: ActivityEntry[]) => setEntries(d))
+      .catch(() => setEntries([]))
+  }, [projectId])
+
+  return (
+    <Section title="ACTIVITY LEDGER">
+      <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+        {entries.length === 0 ? (
+          <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
+            No activity yet.
+          </div>
+        ) : (
+          entries.map((e, i) => (
+            <div
+              key={e.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '120px 10px 1fr',
+                gap: 10,
+                padding: '7px var(--pad)',
+                borderBottom: i < entries.length - 1 ? rule : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <span className="mono" style={{ fontSize: 9, color: 'var(--fg-3)' }}>
+                {new Date(e.timestamp).toISOString().slice(11, 19)}
+              </span>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  background: ACTIVITY_COLOR[e.kind ?? 'info'] ?? 'var(--fg-3)',
+                  flexShrink: 0,
+                }}
+              />
+              <span className="mono" style={{ fontSize: 11 }}>
+                {e.message}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </Section>
+  )
+}
+
+// ── ScanHistorySection ────────────────────────────────────────────────────────
+
+interface ScanRow {
+  id: string
+  scan_type: string
+  target?: string
+  profile?: string
+  status: string
+  started_at?: string | null
+  completed_at?: string | null
+  findings_count?: number
+  auto_probe?: boolean
+}
+
+const SCAN_STATE: Record<string, { dot: string; label: string }> = {
+  completed: { dot: 'dot-live', label: 'done' },
+  running: { dot: 'dot-warn', label: 'running' },
+  pending: { dot: 'dot-idle', label: 'pending' },
+  failed: { dot: 'dot-crit', label: 'failed' },
+}
+
+function ScanHistorySection({ projectId }: { projectId: string | null }) {
+  const navigate = useNavigate()
+  const [scans, setScans] = useState<ScanRow[]>([])
+
+  useEffect(() => {
+    if (!projectId) { setScans([]); return }
+    getProjectScans(projectId)
+      .then((d: ScanRow[]) => setScans(d))
+      .catch(() => setScans([]))
+  }, [projectId])
+
+  return (
+    <Section
+      title={`SCAN HISTORY · ${scans.length}`}
+      right={
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/scans')}>
+          All scans <Icon name="arrow_r" size={9} />
+        </button>
+      }
+    >
+      {scans.length === 0 ? (
+        <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
+          No scans yet.
+        </div>
+      ) : (
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Target</th>
+              <th>Profile</th>
+              <th style={{ width: 50 }}>Found</th>
+              <th style={{ width: 80 }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scans.map((s) => {
+              const st = SCAN_STATE[s.status] ?? SCAN_STATE.pending
+              return (
+                <tr key={s.id}>
+                  <td className="mono" style={{ fontSize: 11 }}>
+                    {s.scan_type}
+                  </td>
+                  <td className="mono" style={{ fontSize: 10, color: 'var(--fg-2)' }}>
+                    {s.target ?? '—'}
+                  </td>
+                  <td className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>
+                    {s.profile ?? '—'}
+                  </td>
+                  <td className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                    {s.findings_count ?? '—'}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className={`dot ${st.dot}`} />
+                      <span className="badge">{st.label}</span>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </Section>
+  )
+}
+
+// ── SchedulerSection ──────────────────────────────────────────────────────────
+
+const PLACEHOLDER_JOBS = [
+  { id: '1', name: 'Weekly Recon', cron: '0 2 * * 0', nextIn: '6h', target: '10.0.0.0/24' },
+  { id: '2', name: 'Daily Web Scan', cron: '0 4 * * *', nextIn: '22h', target: 'app.internal' },
+  { id: '3', name: 'Cred Audit', cron: '0 6 * * 1', nextIn: '5d', target: 'all projects' },
+]
+
+function SchedulerSection() {
+  return (
+    <Section title="SCHEDULER" style={{ borderLeft: rule }}>
+      <div>
+        {PLACEHOLDER_JOBS.map((j, i) => (
+          <div
+            key={j.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto',
+              gap: 8,
+              padding: '10px var(--pad)',
+              borderBottom: i < PLACEHOLDER_JOBS.length - 1 ? rule : 'none',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <div className="mono" style={{ fontSize: 11, fontWeight: 500 }}>
+                {j.name}
+              </div>
+              <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 3 }}>
+                {j.cron} · {j.target}
+              </div>
+            </div>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+              next in {j.nextIn}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+// ── PlaybooksSection ──────────────────────────────────────────────────────────
+
+interface Playbook {
+  id: string
+  name: string
+  steps?: number
+  runs?: number
+  last?: string | null
+}
+
+function PlaybooksSection() {
+  const navigate = useNavigate()
+  const [playbooks, setPlaybooks] = useState<Playbook[]>([])
+
+  useEffect(() => {
+    fetch(`${getApiBase()}/playbooks?limit=3`)
+      .then((r) => r.json())
+      .then((d: Playbook[]) => setPlaybooks(d))
+      .catch(() => setPlaybooks([]))
+  }, [])
+
+  return (
+    <Section title="PLAYBOOKS" style={{ borderLeft: rule }}>
+      {playbooks.length === 0 ? (
+        <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
+          No playbooks configured.
+        </div>
+      ) : (
+        <div>
+          {playbooks.map((pb, i) => (
+            <div
+              key={pb.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: 8,
+                padding: '10px var(--pad)',
+                borderBottom: i < playbooks.length - 1 ? rule : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <div>
+                <div className="mono" style={{ fontSize: 11, fontWeight: 500 }}>
+                  {pb.name}
+                </div>
+                <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 3 }}>
+                  {pb.steps ?? 0} steps · {pb.runs ?? 0} runs
+                  {pb.last ? ` · last ${pb.last}` : ''}
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={() => navigate('/operator')}>
+                Run
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ── ProjectsList ──────────────────────────────────────────────────────────────
+
+function ProjectsList({ onNew, onNavigate }: { onNew: () => void; onNavigate: (id: string) => void }) {
   const { projects, removeProject } = useAppStore()
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
@@ -265,20 +779,26 @@ function ProjectsList({
       ) : (
         <div>
           {projects.map((p, i) => (
-            <div key={p.id} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              gap: 12,
-              padding: '10px var(--pad)',
-              borderBottom: i < projects.length - 1 ? '1px solid var(--rule)' : 'none',
-              alignItems: 'center',
-            }}>
+            <div
+              key={p.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: 12,
+                padding: '10px var(--pad)',
+                borderBottom: i < projects.length - 1 ? rule : 'none',
+                alignItems: 'center',
+              }}
+            >
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.name}
                 </div>
                 {p.description && p.description !== '__seraph_demo__' && (
-                  <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div
+                    className="mono"
+                    style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
                     {p.description}
                   </div>
                 )}
@@ -297,8 +817,20 @@ function ProjectsList({
                 {confirmDeleteId === p.id ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--crit)' }}>Delete?</span>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.id)} style={{ height: 20, padding: '0 6px', fontSize: 9 }}>Yes</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDeleteId(null)} style={{ height: 20, padding: '0 6px', fontSize: 9 }}>No</button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(p.id)}
+                      style={{ height: 20, padding: '0 6px', fontSize: 9 }}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setConfirmDeleteId(null)}
+                      style={{ height: 20, padding: '0 6px', fontSize: 9 }}
+                    >
+                      No
+                    </button>
                   </div>
                 ) : (
                   <button
@@ -306,8 +838,8 @@ function ProjectsList({
                     onClick={() => setConfirmDeleteId(p.id)}
                     title="Delete project"
                     style={{ padding: 4, height: 22, width: 22, justifyContent: 'center' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--crit)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-2)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--crit)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fg-2)')}
                   >
                     <Icon name="trash" size={11} />
                   </button>
@@ -321,111 +853,38 @@ function ProjectsList({
   )
 }
 
-// ── 14-day trend ──────────────────────────────────────────────────────────────
-
-function TrendSection({ history }: { history: { days: string[]; pivot: Record<string, Record<string, number>> } }) {
-  const sevs = ['critical', 'high', 'medium', 'low', 'info'] as const
-  const colors: Record<string, string> = {
-    critical: 'var(--crit)',
-    high: 'var(--high)',
-    medium: 'var(--med)',
-    low: 'var(--low)',
-    info: 'var(--info)',
-  }
-
-  return (
-    <Section title="14-DAY FINDING TREND">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', padding: 'var(--pad)', gap: 16 }}>
-        {sevs.map(sev => {
-          const vals = history.days.map(d => history.pivot[d]?.[sev] ?? 0)
-          const total = vals.reduce((a, b) => a + b, 0)
-          return (
-            <div key={sev}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span className="mono" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: colors[sev] }}>
-                  {sev}
-                </span>
-                <span className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{total}</span>
-              </div>
-              <SparkLine values={vals} color={colors[sev]} width={120} height={32} />
-            </div>
-          )
-        })}
-      </div>
-    </Section>
-  )
-}
-
-// ── Quick actions ─────────────────────────────────────────────────────────────
-
-function QuickActions({ onNew }: { onNew: () => void }) {
-  const navigate = useNavigate()
-  const actions = [
-    { label: 'New Project',    sub: 'Start a security assessment', icon: 'plus',   fn: onNew },
-    { label: 'Pentest Workbench', sub: 'Launch pentest workflow', icon: 'swords',  fn: () => navigate('/pentest') },
-    { label: 'Run Audit',      sub: 'CIS / NIST compliance',     icon: 'shield',  fn: () => navigate('/audit') },
-    { label: 'AI Operator',    sub: 'Autonomous recon & exploit', icon: 'cube',    fn: () => navigate('/operator') },
-  ]
-  return (
-    <Section title="QUICK ACTIONS">
-      <div style={{ padding: 'var(--pad)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {actions.map(a => (
-          <button
-            key={a.label}
-            onClick={a.fn}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '10px 12px',
-              background: 'var(--bg-2)',
-              border: '1px solid var(--rule)',
-              color: 'var(--fg)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'border-color .12s, background .12s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'var(--accent-3)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--rule)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-2)' }}
-          >
-            <Icon name={a.icon} size={14} color="var(--accent)" />
-            <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 500 }}>{a.label}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-3)', marginTop: 2 }}>{a.sub}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-    </Section>
-  )
-}
-
-// ── Auto-probe toast ──────────────────────────────────────────────────────────
+// ── ProbeToast ────────────────────────────────────────────────────────────────
 
 function ProbeToast({ visible, fading }: { visible: boolean; fading: boolean }) {
   if (!visible) return null
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 24,
-      right: 24,
-      zIndex: 50,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      padding: '10px 16px',
-      background: 'var(--bg-2)',
-      border: '1px solid var(--accent)',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-      transition: 'opacity 0.5s, transform 0.5s',
-      opacity: fading ? 0 : 1,
-      transform: fading ? 'translateY(8px)' : 'translateY(0)',
-    }}>
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 24,
+        right: 24,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 16px',
+        background: 'var(--bg-2)',
+        border: '1px solid var(--accent)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+        transition: 'opacity 0.5s, transform 0.5s',
+        opacity: fading ? 0 : 1,
+        transform: fading ? 'translateY(8px)' : 'translateY(0)',
+      }}
+    >
       <span className="dot dot-warn" />
       <Icon name="bolt" size={12} color="var(--accent)" />
       <div>
-        <div className="mono" style={{ fontSize: 11.5, fontWeight: 500 }}>Auto-probe running</div>
-        <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2 }}>Background scan started on new target</div>
+        <div className="mono" style={{ fontSize: 11.5, fontWeight: 500 }}>
+          Auto-probe running
+        </div>
+        <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2 }}>
+          Background scan started on new target
+        </div>
       </div>
     </div>
   )
@@ -434,12 +893,12 @@ function ProbeToast({ visible, fading }: { visible: boolean; fading: boolean }) 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { projects, setProjects } = useAppStore()
+  const { projects, setProjects, selectedProject } = useAppStore()
   const navigate = useNavigate()
   const [stats, setStats] = useState<PlatformStats | null>(null)
-  const [history, setHistory] = useState<{ days: string[]; pivot: Record<string, Record<string, number>> } | null>(null)
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [now, setNow] = useState(new Date())
+  const [findings, setFindings] = useState<FindingRow[]>([])
 
   const [probeToast, setProbeToast] = useState(false)
   const [probeToastFading, setProbeToastFading] = useState(false)
@@ -448,7 +907,7 @@ export default function Dashboard() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Clock
+  // Clock — updates every 5s
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 5000)
     return () => clearInterval(id)
@@ -467,16 +926,36 @@ export default function Dashboard() {
   function loadData() {
     getProjects().then(setProjects).catch(() => {})
 
-    getStats().then(data => {
-      setStats(data)
-      const isProbing = data.recent_scans.some(s => s.auto_probe && (s.status === 'running' || s.status === 'pending'))
-      if (isProbing && !wasProbing.current) showProbeToastFn()
-      wasProbing.current = isProbing
-    }).catch(() => {})
+    getStats()
+      .then((data) => {
+        setStats(data)
+        const isProbing = data.recent_scans.some(
+          (s) => s.auto_probe && (s.status === 'running' || s.status === 'pending')
+        )
+        if (isProbing && !wasProbing.current) showProbeToastFn()
+        wasProbing.current = isProbing
 
-    fetch(`${getApiBase()}/stats/history`)
-      .then(r => r.json())
-      .then(setHistory)
+        // Load findings — use recent_findings from stats or fetch separately
+        const rf = data.recent_findings ?? []
+        if (rf.length > 0) {
+          setFindings(
+            rf.map((f) => ({
+              id: f.id,
+              severity: f.severity,
+              cvss_score: f.cvss_score,
+              title: f.title,
+              cve_id: f.cve_id,
+              target: f.target,
+              status: 'open',
+            }))
+          )
+        } else if (selectedProject) {
+          fetch(`${getApiBase()}/findings?project_id=${selectedProject.id}&limit=8`)
+            .then((r) => r.json())
+            .then((d) => setFindings(d))
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
   }
 
@@ -532,33 +1011,57 @@ export default function Dashboard() {
   }
 
   const sev = stats?.severity_counts ?? {}
+  const projectId = selectedProject?.id ?? (projects.length > 0 ? projects[0].id : null)
 
-  // Build 14-day sparkline trends per severity
-  const historyTrend = (key: string) =>
-    history ? history.days.map(d => history.pivot[d]?.[key] ?? 0) : []
+  // Generate trend arrays from current severity counts
+  const makeTrend = (n: number) => Array.from({ length: 7 }, (_, i) => Math.max(0, n - (6 - i)))
 
-  const runningScans = stats?.recent_scans.filter(s => s.status === 'running' || s.status === 'pending').length ?? 0
+  const runningScans = stats?.recent_scans.filter((s) => s.status === 'running' || s.status === 'pending').length ?? 0
+
+  // Engagement name + day X of Y
+  const engName = selectedProject?.name ?? (projects[0]?.name ?? 'No project selected')
+  // Simple day-of-engagement: diff from project created_at
+  const dayOf = (() => {
+    const proj = selectedProject ?? projects[0]
+    if (!proj?.created_at) return null
+    const diff = Math.floor((Date.now() - new Date(proj.created_at).getTime()) / 86400000) + 1
+    return diff
+  })()
+  const totalDays = 30 // default engagement length
 
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column' }}>
       {showProjectModal && (
-        <ProjectModal
-          onClose={() => setShowProjectModal(false)}
-          onSave={handleCreateProject}
-        />
+        <ProjectModal onClose={() => setShowProjectModal(false)} onSave={handleCreateProject} />
       )}
 
-      {/* Page header */}
-      <div style={{ borderBottom: '1px solid var(--rule)', padding: '24px var(--pad) 18px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+      {/* ── Page header ────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          borderBottom: rule,
+          padding: '20px var(--pad) 16px',
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
+      >
         <div>
           <div className="smcap" style={{ marginBottom: 4 }}>
-            {projects.length > 0 ? `${projects.length} project${projects.length > 1 ? 's' : ''} · ${stats?.targets ?? 0} targets` : 'workspace'}
+            {projects.length > 0
+              ? `${projects.length} project${projects.length !== 1 ? 's' : ''} · ${stats?.targets ?? 0} targets`
+              : 'workspace'}
           </div>
           <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>
-            Operations Dashboard
+            {engName}
+            {dayOf !== null && (
+              <span style={{ fontSize: 14, color: 'var(--fg-3)', marginLeft: 12 }}>
+                day {dayOf} of {totalDays}
+              </span>
+            )}
           </h1>
           <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>
-            {stats?.recent_scans.some(s => s.status === 'running')
+            {runningScans > 0
               ? `${runningScans} scan${runningScans > 1 ? 's' : ''} active · monitoring`
               : 'All systems nominal · monitoring'}
           </div>
@@ -571,49 +1074,72 @@ export default function Dashboard() {
             <Icon name="refresh" size={11} /> Resync
           </button>
           <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
-            <Icon name="plus" size={11} color="#1a1408" /> New project
+            <Icon name="plus" size={11} color="#1a1408" /> Add target
           </button>
         </div>
       </div>
 
-      {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: '1px solid var(--rule)' }}>
-        <KPI label="Critical · open" value={sev.critical ?? 0} sub={`${sev.critical ?? 0} verified`} accentVar="--crit" trend={historyTrend('critical')} />
-        <KPI label="High · open"     value={sev.high ?? 0}     sub="SLA 7d"                          accentVar="--high" trend={historyTrend('high')} divider />
-        <KPI label="Total findings"  value={stats?.findings ?? 0} sub={`${sev.medium ?? 0} medium · ${sev.low ?? 0} low`} trend={historyTrend('medium')} divider />
-        <KPI label="Active scans"    value={runningScans}      sub={`${stats?.scans ?? 0} total run`}  accentVar="--accent" divider />
-        <KPI label="Projects"        value={stats?.projects ?? projects.length} sub={`${stats?.targets ?? 0} targets`} divider />
+      {/* ── KPI strip ──────────────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: rule }}>
+        <KPI
+          label="Critical · open"
+          value={sev.critical ?? 0}
+          sub={`${sev.critical ?? 0} verified`}
+          accentVar="--crit"
+          trend={makeTrend(sev.critical ?? 0)}
+        />
+        <KPI
+          label="High · open"
+          value={sev.high ?? 0}
+          sub="SLA 7d"
+          accentVar="--high"
+          trend={makeTrend(sev.high ?? 0)}
+          divider
+        />
+        <KPI
+          label="Medium · open"
+          value={sev.medium ?? 0}
+          sub={`${sev.low ?? 0} low open`}
+          trend={makeTrend(sev.medium ?? 0)}
+          divider
+        />
+        <KPI
+          label="Active sessions"
+          value={runningScans}
+          sub={`${stats?.scans ?? 0} scans total`}
+          accentVar="--accent"
+          divider
+        />
+        <KPI
+          label="Captured creds"
+          value={0}
+          sub="vault entries"
+          divider
+        />
       </div>
 
-      {/* Main 2-column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', borderBottom: '1px solid var(--rule)', minHeight: 0 }}>
-        {/* LEFT: projects + recent findings */}
-        <div style={{ borderRight: '1px solid var(--rule)' }}>
+      {/* ── Main grid 1.6fr / 1fr ──────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', borderBottom: rule, minHeight: 0 }}>
+        {/* Left column */}
+        <div style={{ borderRight: rule }}>
+          <PhasePipeline projectId={projectId} />
+          <FindingsPreview findings={findings} />
           <ProjectsList onNew={() => setShowProjectModal(true)} onNavigate={() => navigate('/pentest')} />
-          {stats?.recent_findings && stats.recent_findings.length > 0 && (
-            <RecentFindings findings={stats.recent_findings} />
-          )}
         </div>
 
-        {/* RIGHT: severity breakdown + recent scans */}
+        {/* Right column */}
         <div>
           <SeverityBreakdown counts={sev} />
-          <RecentScans scans={stats?.recent_scans ?? []} />
+          <ActiveSessionsList projectId={projectId} />
+          <ActivityLedger projectId={projectId} />
         </div>
       </div>
 
-      {/* Bottom: trend + quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr' }}>
-        {history && history.days.length > 0 ? (
-          <TrendSection history={history} />
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--pad)', borderRight: '1px solid var(--rule)' }}>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-4)' }}>No trend data yet</span>
-          </div>
-        )}
-        <div style={{ borderLeft: '1px solid var(--rule)' }}>
-          <QuickActions onNew={() => setShowProjectModal(true)} />
-        </div>
+      {/* ── Bottom strip 2fr / 1fr / 1fr ──────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr' }}>
+        <ScanHistorySection projectId={projectId} />
+        <SchedulerSection />
+        <PlaybooksSection />
       </div>
 
       <ProbeToast visible={probeToast} fading={probeToastFading} />

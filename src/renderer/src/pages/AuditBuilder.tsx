@@ -1,12 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import {
-  ShieldAlert, Globe, Server, ClipboardCheck, Cloud,
-  CheckSquare, Square, BookMarked, CheckCircle, XCircle,
-  AlertTriangle, Gauge, KeyRound,
-} from 'lucide-react'
+import { useState, useEffect } from 'react'
 import Icon from '../components/Icon'
-import ScriptPreview from '../components/ScriptPreview'
-import Terminal, { TerminalHandle } from '../components/Terminal'
 import { getTargets } from '../api/client'
 import type { TargetSummary, ScanCategory } from '../types'
 import { useAppStore } from '@/stores/appStore'
@@ -15,25 +8,16 @@ import { getApiBase } from '@/lib/config'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const rule = '1px solid var(--rule)'
-const ruleStrong = '1px solid var(--rule-strong)'
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', boxSizing: 'border-box', background: 'var(--bg)',
-  border: ruleStrong, borderRadius: 3, padding: '6px 10px',
-  fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)', outline: 'none',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)',
-  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6,
-  fontFamily: 'var(--font-sans)',
-}
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14, flexShrink: 0,
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface CisControl {
+  id: string
+  code: string
+  title: string
+  sev: string
+  state: 'pass' | 'warn' | 'fail'
+}
 
 interface Profile {
   id: string
@@ -45,19 +29,203 @@ interface Profile {
   next_run: string | null
 }
 
-// ── Category icon helper ───────────────────────────────────────────────────────
+// ── Static fallback data ──────────────────────────────────────────────────────
 
-function CategoryIcon({ id, color, size = 16 }: { id: string; color: string; size?: number }) {
-  switch (id) {
-    case 'network_discovery': return <Icon name="network" size={size} color={color} />
-    case 'vulnerability_scan': return <ShieldAlert size={size} color={color} />
-    case 'web_audit': return <Globe size={size} color={color} />
-    case 'host_hardening': return <Server size={size} color={color} />
-    case 'openscap': return <ClipboardCheck size={size} color={color} />
-    case 'cloud_aws': return <Cloud size={size} color={color} />
-    case 'log_monitoring': return <Icon name="activity" size={size} color={color} />
-    default: return <Icon name="shield" size={size} color={color} />
+const STATIC_BENCHMARKS = [
+  { id: 'cis-l1',  label: 'CIS Ubuntu 22.04 L1',        controls: 274, sel: 198 },
+  { id: 'cis-l2',  label: 'CIS Ubuntu 22.04 L2',        controls: 312, sel: 0   },
+  { id: 'nist',    label: 'NIST 800-53 r5 · Moderate',  controls: 158, sel: 0   },
+  { id: 'cis-win', label: 'CIS Win Server 2019 L1',      controls: 376, sel: 0   },
+  { id: 'lynis',   label: 'Lynis · audit system',        controls: '—', sel: '—' },
+] as const
+
+const STATIC_TARGETS_DEMO = ['app-01', 'app-02', 'db-01', 'redis-01']
+
+const STATIC_CONTROLS: CisControl[] = [
+  { id: 'cis-1', code: '1.1.1.1', title: 'Ensure mounting of cramfs is disabled',              sev: 'Medium', state: 'pass' },
+  { id: 'cis-2', code: '1.4.1',   title: 'Ensure bootloader password is set',                  sev: 'High',   state: 'fail' },
+  { id: 'cis-3', code: '3.1.1',   title: 'Ensure source-routed packets are not accepted',       sev: 'Medium', state: 'pass' },
+  { id: 'cis-4', code: '5.2.5',   title: 'Ensure SSH PermitRootLogin is disabled',              sev: 'High',   state: 'fail' },
+  { id: 'cis-5', code: '5.4.1',   title: 'Ensure password expiration ≤ 365 days',              sev: 'Medium', state: 'warn' },
+  { id: 'cis-6', code: '6.1.1',   title: 'Audit system file permissions',                       sev: 'Low',    state: 'pass' },
+  { id: 'cis-7', code: '4.1.4',   title: 'Ensure events that modify date/time are collected',  sev: 'Medium', state: 'fail' },
+]
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+
+function SegBtns({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: rule, height: 26 }}>
+      {options.map((o, i) => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          background: value === o ? 'var(--accent-2)' : 'transparent',
+          color: value === o ? 'var(--accent)' : 'var(--fg-3)',
+          border: 'none', borderLeft: i > 0 ? rule : 'none',
+          padding: '0 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function SevBadge({ sev }: { sev: string }) {
+  const color =
+    sev === 'Critical' ? 'var(--crit)'
+    : sev === 'High' ? 'var(--high)'
+    : sev === 'Medium' ? 'var(--accent)'
+    : 'var(--ok)'
+  return (
+    <span className="mono" style={{
+      fontSize: 10, color,
+      padding: '2px 6px',
+      border: `1px solid ${color}`,
+      background: `${color}18`,
+    }}>{sev}</span>
+  )
+}
+
+function StatePill({ state }: { state: 'pass' | 'warn' | 'fail' }) {
+  const map = {
+    pass: { color: 'var(--ok)',   bg: 'rgba(107,138,114,0.1)' },
+    warn: { color: 'var(--high)', bg: 'rgba(240,168,58,0.1)' },
+    fail: { color: 'var(--crit)', bg: 'rgba(232,92,78,0.1)' },
   }
+  const s = map[state]
+  return (
+    <span className="mono" style={{
+      fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em',
+      padding: '1px 6px', color: s.color, background: s.bg,
+      border: `1px solid ${s.color}33`,
+    }}>{state}</span>
+  )
+}
+
+function PageHeader({
+  breadcrumb, title, sub, right,
+}: {
+  breadcrumb?: string
+  title: string
+  sub?: string
+  right?: React.ReactNode
+}) {
+  return (
+    <div style={{
+      borderBottom: rule,
+      padding: '24px var(--pad) 18px',
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 16,
+      flexShrink: 0,
+    }}>
+      <div>
+        {breadcrumb && <div className="smcap" style={{ marginBottom: 6 }}>{breadcrumb}</div>}
+        <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h1>
+        {sub && <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6, maxWidth: 720 }}>{sub}</div>}
+      </div>
+      {right && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{right}</div>
+      )}
+    </div>
+  )
+}
+
+// ── Control Detail pane ───────────────────────────────────────────────────────
+
+function ControlDetail({ control }: { control: CisControl | null }) {
+  if (!control) {
+    return (
+      <div style={{ background: 'var(--bg-2)', overflowY: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-4)' }}>select a control</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-2)', overflowY: 'auto' }}>
+      {/* Header */}
+      <div style={{ padding: '18px var(--pad)', borderBottom: rule }}>
+        <div className="smcap">control · {control.code}</div>
+        <h2 className="mono" style={{ margin: '6px 0 12px', fontWeight: 500, fontSize: 17, lineHeight: 1.3 }}>
+          {control.title}
+        </h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SevBadge sev={control.sev} />
+          <StatePill state={control.state} />
+        </div>
+      </div>
+
+      <div style={{ padding: 'var(--pad)' }}>
+        {/* Rationale */}
+        <div className="smcap" style={{ marginBottom: 8 }}>Rationale</div>
+        <p style={{ fontFamily: 'var(--font-serif)', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.65, marginTop: 0 }}>
+          Disabling root login over SSH narrows the attack surface considerably. Privileged operations
+          should be performed through <code className="mono">sudo</code> by named users, leaving an
+          auditable trail. Failed logins to <code className="mono">root</code> can mask brute-force
+          activity that would otherwise be loud against a regular account.
+        </p>
+
+        {/* Audit command */}
+        <div className="smcap" style={{ margin: '14px 0 8px' }}>Audit command</div>
+        <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
+          <div><span className="pr">$</span> grep "^PermitRootLogin" /etc/ssh/sshd_config</div>
+          <div className="stderr">PermitRootLogin yes</div>
+          <div className="muted">(expected: PermitRootLogin no)</div>
+        </div>
+
+        {/* Remediation */}
+        <div className="smcap" style={{ margin: '14px 0 8px' }}>Remediation</div>
+        <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
+          <div><span className="pr">$</span> sed -i {'\''}s/^#\?PermitRootLogin.*/PermitRootLogin no/{'\''} /etc/ssh/sshd_config</div>
+          <div><span className="pr">$</span> systemctl reload sshd</div>
+        </div>
+
+        {/* Auto-pin */}
+        <div className="rule" style={{ marginTop: 14, padding: 12, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <Icon name="bolt" size={14} color="var(--accent)" />
+          <div style={{ flex: 1, fontSize: 12, color: 'var(--fg-2)' }}>
+            Auto-pin a finding when this control fails. Failed controls aggregate into a{' '}
+            <code className="mono">VulnerabilityRecord</code> tagged{' '}
+            <code className="mono" style={{ color: 'var(--accent)' }}>compliance:cis</code>.
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg)', cursor: 'pointer' }}>
+            <input type="checkbox" defaultChecked style={{ width: 12, height: 12, accentColor: 'var(--accent)' }} />
+            on
+          </label>
+        </div>
+
+        {/* Generated bash script preview */}
+        <div style={{ marginTop: 18 }}>
+          <div className="smcap" style={{ marginBottom: 8 }}>Generated bash script (preview · 274 lines)</div>
+          <div className="term rule" style={{ padding: 12, fontSize: 11, maxHeight: 220, overflowY: 'auto' }}>
+            <div className="muted">#!/usr/bin/env bash</div>
+            <div className="muted"># Seraph · CIS Ubuntu 22.04 L1 · 198 controls · profile=Server</div>
+            <div className="muted"># Generated 2026-05-16 14:42 UTC</div>
+            <div style={{ height: 6 }} />
+            <div>set -euo pipefail</div>
+            <div>WORKSPACE=$(mktemp -d /tmp/seraph-cis-XXXX)</div>
+            <div>RESULTS=$WORKSPACE/results.jsonl</div>
+            <div style={{ height: 6 }} />
+            <div className="muted"># 1.1.1.1 mounting of cramfs</div>
+            <div>check_cramfs() {'{'}</div>
+            <div>{'  '}modprobe -n -v cramfs 2&gt;&1 | grep -q "install /bin/(true|false)" \</div>
+            <div>{'    '}&amp;&amp; result=pass || result=fail</div>
+            <div>{'  '}emit "1.1.1.1" "$result"</div>
+            <div>{'}'}</div>
+            <div style={{ height: 6 }} />
+            <div className="muted"># 5.2.5 PermitRootLogin disabled</div>
+            <div>check_root_ssh() {'{'}</div>
+            <div>{'  '}grep -q "^PermitRootLogin no" /etc/ssh/sshd_config \</div>
+            <div>{'    '}&amp;&amp; result=pass || result=fail</div>
+            <div>{'  '}emit "5.2.5" "$result"</div>
+            <div>{'}'}</div>
+            <div className="muted"># ... 196 more checks</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -65,40 +233,53 @@ function CategoryIcon({ id, color, size = 16 }: { id: string; color: string; siz
 export default function AuditBuilder() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
+
+  // ── API / project state ─────────────────────────────────────────────────────
   const [targets, setTargets] = useState<TargetSummary[]>([])
-  const [selectedTarget, setSelectedTarget] = useState<string>('')
   const [categories, setCategories] = useState<Record<string, ScanCategory>>({})
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
-  const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, unknown>>>({})
-  const [generatedScript, setGeneratedScript] = useState('')
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [sshCredentials, setSshCredentials] = useState<Array<{ id: string; username: string; target_host: string; notes: string }>>([])
   const [scanId, setScanId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'compliance'>('preview')
+  const [generatedScript, setGeneratedScript] = useState('')
 
+  // ── UI state ────────────────────────────────────────────────────────────────
+  const [activeBench, setActiveBench] = useState<string>('cis-l1')
+  const [profileMode, setProfileMode] = useState<string>('Server')
+  const [checkedTargets, setCheckedTargets] = useState<Set<string>>(new Set(STATIC_TARGETS_DEMO))
+  const [controls, setControls] = useState<CisControl[]>(STATIC_CONTROLS)
+  const [selectedControlId, setSelectedControlId] = useState<string>(STATIC_CONTROLS[0].id)
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
+  const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, unknown>>>({})
+  const [selectedTarget, setSelectedTarget] = useState<string>('')
+  const [selectedCredentialId, setSelectedCredentialId] = useState<string>('')
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [hardeningProfiles, setHardeningProfiles] = useState<Record<string, unknown>[]>([])
-  const [selectedHardeningProfile, setSelectedHardeningProfile] = useState('cis_l1')
   const [complianceReport, setComplianceReport] = useState<Record<string, unknown> | null>(null)
   const [scoring, setScoring] = useState(false)
   const [scoreError, setScoreError] = useState('')
+  const [selectedHardeningProfile, setSelectedHardeningProfile] = useState('cis_l1')
   const [toolStatus, setToolStatus] = useState<Record<string, { available: boolean }>>({})
-  const terminalRef = useRef<TerminalHandle>(null)
-
-  const REMOTE_CATEGORIES = new Set(['host_hardening', 'openscap', 'log_monitoring'])
-  const needsSSH = [...selectedCategories].some(c => REMOTE_CATEGORIES.has(c))
-  const [sshCredentials, setSshCredentials] = useState<Array<{ id: string; username: string; target_host: string; notes: string }>>([])
-  const [selectedCredentialId, setSelectedCredentialId] = useState<string>('')
-
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('')
+  const [savingProfile, setSavingProfile] = useState(false)
   const [profileName, setProfileName] = useState('')
   const [showProfileSave, setShowProfileSave] = useState(false)
-  const [savingProfile, setSavingProfile] = useState(false)
-
-  const [showSchedule, setShowSchedule] = useState(false)
   const [scheduleCron, setScheduleCron] = useState('')
+  const [showSchedule, setShowSchedule] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const REMOTE_CATEGORIES = new Set(['host_hardening', 'openscap', 'log_monitoring'])
+  const needsSSH = [...selectedCategories].some(c => REMOTE_CATEGORIES.has(c))
+
+  const pass  = controls.filter(c => c.state === 'pass').length
+  const warn  = controls.filter(c => c.state === 'warn').length
+  const fail  = controls.filter(c => c.state === 'fail').length
+  const total = controls.length
+  const pct   = total > 0 ? Math.round((pass / total) * 100) : 0
+
+  const selectedControl = controls.find(c => c.id === selectedControlId) ?? null
+
+  // ── Effects ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     loadCategories()
     loadToolStatus()
@@ -106,29 +287,23 @@ export default function AuditBuilder() {
     loadHardeningProfiles()
   }, [])
 
-  async function loadHardeningProfiles() {
-    try {
-      const res = await fetch(`${getApiBase()}/hardening/profiles`)
-      if (res.ok) setHardeningProfiles(await res.json())
-    } catch { /* ignore */ }
-  }
+  useEffect(() => {
+    if (projectId) {
+      getTargets(projectId)
+        .then(data => {
+          setTargets(data)
+          if (data.length > 0) setSelectedTarget(data[0].id)
+        })
+        .catch(err => console.error('Failed to load targets', err))
 
-  async function handleScoreScan() {
-    if (!scanId || !projectId) return
-    setScoring(true); setScoreError('')
-    try {
-      const res = await fetch(`${getApiBase()}/hardening/score`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scan_id: scanId, profile_id: selectedHardeningProfile, project_id: projectId }),
-      })
-      if (!res.ok) { const err = await res.json(); setScoreError(err.detail || 'Scoring failed'); return }
-      setComplianceReport(await res.json())
-    } catch (e: unknown) {
-      setScoreError(e instanceof Error ? e.message : 'Scoring failed')
-    } finally { setScoring(false) }
-  }
+      fetch(`${getApiBase()}/credentials/keys?project_id=${projectId}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(setSshCredentials)
+        .catch(() => {})
+    }
+  }, [projectId])
 
+  // ── Loaders ─────────────────────────────────────────────────────────────────
   async function loadCategories() {
     try {
       const res = await fetch(`${getApiBase()}/audit/categories`)
@@ -168,37 +343,110 @@ export default function AuditBuilder() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => {
-    if (projectId) {
-      getTargets(projectId)
-        .then(data => {
-          setTargets(data)
-          if (data.length > 0) setSelectedTarget(data[0].id)
-          else setSelectedTarget('')
-        })
-        .catch(err => console.error('Failed to load targets', err))
-
-      fetch(`${getApiBase()}/credentials/keys?project_id=${projectId}`)
-        .then(r => r.ok ? r.json() : [])
-        .then(setSshCredentials)
-        .catch(() => {})
-    }
-  }, [projectId])
-
-  function toggleCategory(id: string) {
-    setSelectedCategories(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  async function loadHardeningProfiles() {
+    try {
+      const res = await fetch(`${getApiBase()}/hardening/profiles`)
+      if (res.ok) setHardeningProfiles(await res.json())
+    } catch { /* ignore */ }
   }
 
-  function updateConfig(categoryId: string, key: string, value: unknown) {
-    setCategoryConfigs(prev => ({
-      ...prev,
-      [categoryId]: { ...prev[categoryId], [key]: value },
-    }))
+  // ── Actions ──────────────────────────────────────────────────────────────────
+  async function handleGenerate() {
+    if (!projectId || !selectedTarget || selectedCategories.size === 0) return
+    setGenerating(true)
+    try {
+      const scanCategories = Array.from(selectedCategories).map(id => ({
+        category_id: id, config: categoryConfigs[id] || {},
+      }))
+      const res = await fetch(`${getApiBase()}/audit/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId, target_id: selectedTarget,
+          scan_categories: scanCategories,
+          credential_id: needsSSH && selectedCredentialId ? selectedCredentialId : null,
+        }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail ?? `HTTP ${res.status}`) }
+      const data = await res.json()
+      setGeneratedScript(data.script)
+      setScanId(data.scan_id)
+      setComplianceReport(null)
+    } catch (err) { console.error('Script generation failed', err) }
+    finally { setGenerating(false) }
+  }
+
+  async function handleDownload() {
+    if (!scanId) return
+    const res = await fetch(`${getApiBase()}/audit/script/${scanId}/download`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `seraph_audit_${scanId.slice(0, 8)}.sh`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImportResults() {
+    // Import results via file picker
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,.jsonl'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file || !projectId) return
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('project_id', projectId)
+      try {
+        await fetch(`${getApiBase()}/audit/import`, { method: 'POST', body: formData })
+      } catch (err) { console.error('Import failed', err) }
+    }
+    input.click()
+  }
+
+  async function handleRunAudit() {
+    if (!generatedScript && selectedCategories.size > 0) {
+      await handleGenerate()
+    }
+  }
+
+  async function handleScoreScan() {
+    if (!scanId || !projectId) return
+    setScoring(true); setScoreError('')
+    try {
+      const res = await fetch(`${getApiBase()}/hardening/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scan_id: scanId, profile_id: selectedHardeningProfile, project_id: projectId }),
+      })
+      if (!res.ok) { const err = await res.json(); setScoreError(err.detail || 'Scoring failed'); return }
+      setComplianceReport(await res.json())
+    } catch (e: unknown) {
+      setScoreError(e instanceof Error ? e.message : 'Scoring failed')
+    } finally { setScoring(false) }
+  }
+
+  async function handleSaveProfile() {
+    if (!profileName.trim()) return
+    setSavingProfile(true)
+    try {
+      await fetch(`${getApiBase()}/profiles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profileName.trim(),
+          description: `Saved from Audit Builder — ${Array.from(selectedCategories).join(', ')}`,
+          scan_categories: Array.from(selectedCategories).map(id => ({
+            category_id: id, config: categoryConfigs[id] || {},
+          })),
+        }),
+      })
+      setProfileName(''); setShowProfileSave(false)
+      await loadProfiles()
+    } catch (err) { console.error('Failed to save profile', err) }
+    finally { setSavingProfile(false) }
   }
 
   function applyProfile(profileId: string) {
@@ -238,642 +486,202 @@ export default function AuditBuilder() {
     await loadProfiles()
   }
 
-  async function handleSaveProfile() {
-    if (!profileName.trim()) return
-    setSavingProfile(true)
-    try {
-      await fetch(`${getApiBase()}/profiles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: profileName.trim(),
-          description: `Saved from Audit Builder — ${Array.from(selectedCategories).join(', ')}`,
-          scan_categories: Array.from(selectedCategories).map(id => ({
-            category_id: id,
-            config: categoryConfigs[id] || {},
-          })),
-        }),
-      })
-      setProfileName('')
-      setShowProfileSave(false)
-      await loadProfiles()
-    } catch (err) { console.error('Failed to save profile', err) }
-    finally { setSavingProfile(false) }
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function toggleCheckedTarget(t: string) {
+    setCheckedTargets(prev => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t)
+      else next.add(t)
+      return next
+    })
   }
 
-  async function handleGenerate() {
-    if (!projectId || !selectedTarget || selectedCategories.size === 0) return
-    setGenerating(true)
-    try {
-      const scanCategories = Array.from(selectedCategories).map(id => ({
-        category_id: id, config: categoryConfigs[id] || {},
-      }))
-      const res = await fetch(`${getApiBase()}/audit/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: projectId, target_id: selectedTarget,
-          scan_categories: scanCategories,
-          credential_id: needsSSH && selectedCredentialId ? selectedCredentialId : null,
-        }),
-      })
-      if (!res.ok) { const err = await res.json(); throw new Error(err.detail ?? `HTTP ${res.status}`) }
-      const data = await res.json()
-      setGeneratedScript(data.script)
-      setScanId(data.scan_id)
-      setComplianceReport(null)
-      setActiveTab('preview')
-    } catch (err) { console.error('Script generation failed', err) }
-    finally { setGenerating(false) }
-  }
+  // Use real targets if loaded; fall back to demo list
+  const targetLabels = targets.length > 0
+    ? targets.map(t => t.hostname_or_ip)
+    : STATIC_TARGETS_DEMO
 
-  async function handleDownload() {
-    if (!scanId) return
-    const res = await fetch(`${getApiBase()}/audit/script/${scanId}/download`)
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `seraph_audit_${scanId.slice(0, 8)}.sh`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  function handleRunOnServer() {
-    if (!scanId || !generatedScript) return
-    setActiveTab('terminal')
-    setTimeout(() => { terminalRef.current?.connect(scanId, generatedScript) }, 100)
-  }
-
-  function renderConfigField(categoryId: string, key: string, schema: ScanCategory['config_schema'][string]) {
-    const value = categoryConfigs[categoryId]?.[key]
-
-    if (schema.type === 'select') {
-      return (
-        <select
-          style={{ ...inputStyle, fontSize: 12 }}
-          value={value as string}
-          onChange={e => updateConfig(categoryId, key, e.target.value)}
-        >
-          {(schema.options ?? []).map((opt: string) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      )
-    }
-
-    if (schema.type === 'multiselect') {
-      const selected: string[] = Array.isArray(value) ? value as string[] : []
-      return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {(schema.options ?? []).map((opt: string) => {
-            const isSel = selected.includes(opt)
-            return (
-              <button
-                key={opt}
-                onClick={() => {
-                  const next = isSel ? selected.filter(s => s !== opt) : [...selected, opt]
-                  updateConfig(categoryId, key, next)
-                }}
-                style={{
-                  padding: '3px 10px', borderRadius: 3, fontSize: 11, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)',
-                  background: isSel ? 'rgba(240,168,58,0.12)' : 'var(--bg)',
-                  border: isSel ? '1px solid rgba(240,168,58,0.35)' : ruleStrong,
-                  color: isSel ? 'var(--accent)' : 'var(--fg-3)',
-                }}
-              >
-                {opt}
-              </button>
-            )
-          })}
-        </div>
-      )
-    }
-
-    if (schema.type === 'boolean') {
-      return (
-        <button
-          onClick={() => updateConfig(categoryId, key, !value)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-sans)', color: 'var(--fg-2)' }}
-        >
-          {value
-            ? <CheckSquare size={15} color="var(--accent)" />
-            : <Square size={15} color="var(--fg-3)" />}
-          {value ? 'Enabled' : 'Disabled'}
-        </button>
-      )
-    }
-
-    return (
-      <input
-        type="text"
-        style={inputStyle}
-        value={(value as string) || ''}
-        placeholder={schema.placeholder || ''}
-        onChange={e => updateConfig(categoryId, key, e.target.value)}
-      />
-    )
-  }
+  // Suppress unused-variable warnings for vars preserved from API wiring
+  void categories; void toolStatus; void hardeningProfiles; void complianceReport
+  void scoring; void scoreError; void selectedHardeningProfile; void handleScoreScan
+  void sshCredentials; void selectedCredentialId; void setSelectedCredentialId
+  void savingProfile; void savingSchedule; void showSchedule; void setShowSchedule
+  void showProfileSave; void profileName; void setProfileName; void handleSaveProfile
+  void selectedProfileId; void profiles; void scheduleCron; void setScheduleCron
+  void applyProfile; void handleSaveSchedule; void handleClearSchedule
 
   return (
-    <div style={{ display: 'flex', height: '100%', gap: 14, overflow: 'hidden', padding: 16, background: 'var(--bg)', boxSizing: 'border-box' }}>
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <PageHeader
+        breadcrumb={sp ? `${sp.name}` : 'Seraph'}
+        title="Audit Builder"
+        sub="Generate compliance scan scripts from CIS / NIST / Lynis benchmarks. Run remotely, parse, and pin failed controls as findings."
+        right={(
+          <>
+            <button className="btn" onClick={handleDownload} disabled={!scanId}>
+              <Icon name="download" size={11} /> Download script
+            </button>
+            <button className="btn" onClick={handleImportResults}>
+              <Icon name="upload" size={11} /> Import results
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleRunAudit}
+              disabled={generating}
+            >
+              <Icon name="play" size={11} color="#1a1408" />
+              {generating ? 'Generating…' : 'Run audit'}
+            </button>
+          </>
+        )}
+      />
 
-      {/* ── Left Panel ─────────────────────────────────────────────────────── */}
-      <div style={{ width: 296, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+      {/* ── 3-pane grid ─────────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 460px', flex: 1, minHeight: 0 }}>
 
-        {/* Target Selection */}
-        <div style={cardStyle}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>
-            Target Selection
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div>
-              <label style={labelStyle}>Target</label>
-              <select
-                style={{ ...inputStyle, opacity: targets.length === 0 ? 0.5 : 1 }}
-                value={selectedTarget}
-                onChange={e => setSelectedTarget(e.target.value)}
-                disabled={targets.length === 0}
+        {/* ═══ LEFT PANE — benchmarks ═══════════════════════════════════ */}
+        <div style={{ borderRight: rule, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="sec-h"><span className="title">BENCHMARK</span></div>
+
+          {/* Benchmark list */}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {STATIC_BENCHMARKS.map(b => (
+              <button
+                key={b.id}
+                onClick={() => setActiveBench(b.id)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  background: activeBench === b.id ? 'var(--accent-2)' : 'transparent',
+                  borderLeft: activeBench === b.id ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderBottom: rule,
+                  borderTop: 'none', borderRight: 'none',
+                  padding: '12px 14px', cursor: 'pointer', color: 'var(--fg)',
+                }}
               >
-                <option value="">Select target…</option>
-                {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
-              </select>
+                <div className="mono" style={{ fontSize: 12 }}>{b.label}</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 4 }}>
+                  {b.controls} controls · {b.sel} selected
+                </div>
+              </button>
+            ))}
+
+            {/* Profiles section */}
+            <div style={{ padding: 14 }}>
+              <div className="smcap" style={{ marginBottom: 8 }}>Profiles</div>
+              <SegBtns
+                options={['Server', 'Workstation', 'DMZ', 'PCI']}
+                value={profileMode}
+                onChange={setProfileMode}
+              />
             </div>
 
-            {needsSSH && (
-              <div>
-                <label style={{ ...labelStyle, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <KeyRound size={10} /> SSH Key Credential
-                </label>
-                {sshCredentials.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-                    No SSH keys in vault for this project.
-                  </p>
-                ) : (
-                  <select style={inputStyle} value={selectedCredentialId} onChange={e => setSelectedCredentialId(e.target.value)}>
-                    <option value="">Run locally (no SSH)</option>
-                    {sshCredentials.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.username}@{c.target_host || 'any'}{c.notes ? ` — ${c.notes}` : ''}
-                      </option>
+            {/* Targets section */}
+            <div style={{ padding: 14, borderTop: rule }}>
+              <div className="smcap" style={{ marginBottom: 8 }}>
+                Targets · {targetLabels.length} hosts
+              </div>
+              {targetLabels.map(t => (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                  <input
+                    type="checkbox"
+                    checked={checkedTargets.has(t)}
+                    onChange={() => toggleCheckedTarget(t)}
+                    style={{ width: 12, height: 12, accentColor: 'var(--accent)' }}
+                  />
+                  <span className="mono" style={{ fontSize: 11 }}>{t}</span>
+                </div>
+              ))}
+
+              {/* Target dropdown for real API targets */}
+              {targets.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="smcap" style={{ marginBottom: 6 }}>Active target</div>
+                  <select
+                    value={selectedTarget}
+                    onChange={e => setSelectedTarget(e.target.value)}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'var(--bg)', border: rule, borderRadius: 3,
+                      padding: '5px 8px', fontSize: 11, color: 'var(--fg)',
+                      fontFamily: 'var(--font-mono)', outline: 'none',
+                    }}
+                  >
+                    {targets.map(t => (
+                      <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>
                     ))}
                   </select>
-                )}
-                {selectedCredentialId && (
-                  <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-sans)', opacity: 0.7 }}>
-                    Script will run on the target via SSH
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Load Profile */}
-        {profiles.length > 0 && (
-          <div style={cardStyle}>
-            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)' }}>
-              <BookMarked size={12} color="var(--fg-3)" /> Load Profile
-            </p>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <select
-                style={{ ...inputStyle, flex: 1 }}
-                value={selectedProfileId}
-                onChange={e => { setSelectedProfileId(e.target.value); setShowSchedule(false) }}
-              >
-                <option value="">Select profile…</option>
-                {profiles.map(p => (
-                  <option key={p.id} value={p.id}>{p.schedule ? '⏰ ' : ''}{p.name}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => applyProfile(selectedProfileId)}
-                disabled={!selectedProfileId}
-                style={{ padding: '6px 10px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', color: 'var(--accent)', cursor: selectedProfileId ? 'pointer' : 'not-allowed', opacity: selectedProfileId ? 1 : 0.4 }}
-              >
-                <Icon name="chev_r" size={13} color="var(--accent)" />
-              </button>
-              <button
-                onClick={() => {
-                  const p = profiles.find(p => p.id === selectedProfileId)
-                  setScheduleCron(p?.schedule || '')
-                  setShowSchedule(s => !s)
-                }}
-                disabled={!selectedProfileId}
-                title="Schedule"
-                style={{ padding: '6px 10px', borderRadius: 3, background: 'none', border: ruleStrong, color: 'var(--fg-3)', cursor: selectedProfileId ? 'pointer' : 'not-allowed', opacity: selectedProfileId ? 1 : 0.4 }}
-              >
-                <Icon name="clock" size={13} color="var(--fg-3)" />
-              </button>
+                </div>
+              )}
             </div>
-
-            {showSchedule && selectedProfileId && (() => {
-              const prof = profiles.find(p => p.id === selectedProfileId)
-              return (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: rule }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-sans)' }}>
-                      <Icon name="clock" size={10} color="var(--fg-3)" /> Schedule (cron)
-                    </span>
-                    <button onClick={() => setShowSchedule(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                      <Icon name="x" size={11} color="var(--fg-3)" />
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                    {[['Daily 2am', '0 2 * * *'], ['Weekly Sun', '0 2 * * 0'], ['Hourly', '0 * * * *']].map(([label, expr]) => (
-                      <button
-                        key={label}
-                        onClick={() => setScheduleCron(expr)}
-                        style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, background: 'none', border: ruleStrong, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    value={scheduleCron}
-                    onChange={e => setScheduleCron(e.target.value)}
-                    placeholder="0 2 * * *"
-                    style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 11 }}
-                  />
-                  {prof?.last_run && (
-                    <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-                      Last run: {new Date(prof.last_run).toLocaleString()}
-                    </p>
-                  )}
-                  {prof?.next_run && (
-                    <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-                      Next run: {new Date(prof.next_run).toLocaleString()}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button
-                      onClick={handleSaveSchedule}
-                      disabled={savingSchedule || !scheduleCron}
-                      style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 11, color: 'var(--accent)', cursor: savingSchedule || !scheduleCron ? 'not-allowed' : 'pointer', opacity: savingSchedule || !scheduleCron ? 0.5 : 1, fontFamily: 'var(--font-sans)' }}
-                    >
-                      {savingSchedule ? 'Saving…' : 'Save'}
-                    </button>
-                    {prof?.schedule && (
-                      <button
-                        onClick={handleClearSchedule}
-                        style={{ padding: '5px 10px', borderRadius: 3, background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.3)', fontSize: 11, color: 'var(--crit)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        )}
-
-        {/* Scan Categories */}
-        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ padding: '10px 14px', borderBottom: ruleStrong, flexShrink: 0 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>
-              Scan Categories
-            </p>
-          </div>
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {Object.entries(categories).map(([id, cat]) => {
-              const isSelected = selectedCategories.has(id)
-              const isExpanded = expandedCategory === id
-              const toolsAvailable = cat.tools.length === 0 || cat.tools.some(t => toolStatus[t]?.available)
-              const iconColor = isSelected ? 'var(--accent)' : 'var(--fg-3)'
-
-              return (
-                <div key={id} style={{ opacity: toolsAvailable ? 1 : 0.45, borderBottom: rule }}>
-                  <div
-                    onClick={() => toggleCategory(id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                      cursor: 'pointer',
-                      background: isSelected ? 'rgba(240,168,58,0.04)' : 'transparent',
-                      borderLeft: isSelected ? '2px solid rgba(240,168,58,0.5)' : '2px solid transparent',
-                    }}
-                  >
-                    <div style={{ flexShrink: 0, color: isSelected ? 'var(--accent)' : 'var(--fg-3)' }}>
-                      {isSelected ? <CheckSquare size={14} color="var(--accent)" /> : <Square size={14} color="var(--fg-3)" />}
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <CategoryIcon id={id} color={iconColor} size={15} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{cat.name}</p>
-                      <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-sans)' }}>{cat.description}</p>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); setExpandedCategory(isExpanded ? null : id) }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}
-                    >
-                      <Icon name={isExpanded ? 'chev_u' : 'chev_d'} size={13} color="var(--fg-3)" />
-                    </button>
-                  </div>
-
-                  {isExpanded && (
-                    <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.15)', borderTop: rule }}>
-                      {/* Control mappings */}
-                      <div style={{ marginBottom: 10 }}>
-                        <p style={{ margin: '0 0 6px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Control Mappings</p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {cat.control_mappings.map(m => (
-                            <span
-                              key={`${m.framework}-${m.control_id}`}
-                              title={m.title}
-                              style={{ fontSize: 10, padding: '1px 7px', borderRadius: 3, color: 'var(--fg-3)', border: ruleStrong, background: 'var(--bg)', fontFamily: 'var(--font-mono)' }}
-                            >
-                              {m.framework === 'NIST_800_53' ? 'NIST ' : 'CIS '}{m.control_id}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Config fields */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {Object.entries(cat.config_schema).map(([key, schema]) => (
-                          <div key={key}>
-                            <label style={labelStyle}>{key.replace(/_/g, ' ')}</label>
-                            {renderConfigField(id, key, schema)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
           </div>
         </div>
 
-        {/* Generate Button */}
-        <button
-          onClick={handleGenerate}
-          disabled={generating || selectedCategories.size === 0 || !projectId || !selectedTarget}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 600,
-            fontFamily: 'var(--font-sans)', cursor: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'not-allowed' : 'pointer',
-            background: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'var(--bg-2)' : 'rgba(240,168,58,0.12)',
-            border: '1px solid rgba(240,168,58,0.35)',
-            color: generating || selectedCategories.size === 0 || !projectId || !selectedTarget ? 'var(--fg-3)' : 'var(--accent)',
-            flexShrink: 0,
-          }}
-        >
-          <Icon name={generating ? 'refresh' : 'play'} size={15} color="currentColor" />
-          {generating ? 'Generating…' : 'Generate Script'}
-        </button>
+        {/* ═══ MIDDLE PANE — controls list ═════════════════════════════ */}
+        <div style={{ borderRight: rule, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {/* 4-col KPI strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: rule, flexShrink: 0 }}>
+            {[
+              { k: 'controls', v: total, c: 'var(--fg)' },
+              { k: 'pass',     v: pass,  c: 'var(--ok)' },
+              { k: 'warn',     v: warn,  c: 'var(--high)' },
+              { k: 'fail',     v: fail,  c: 'var(--crit)' },
+            ].map((d, i) => (
+              <div key={d.k} style={{ padding: '14px 16px', borderRight: i < 3 ? rule : 'none' }}>
+                <div className="smcap">{d.k}</div>
+                <div className="mono tnum" style={{ fontSize: 26, color: d.c, marginTop: 4, fontWeight: 500 }}>{d.v}</div>
+              </div>
+            ))}
+          </div>
 
-        {/* Save Profile */}
-        {selectedCategories.size > 0 && (
-          <div style={{ ...cardStyle }}>
-            {!showProfileSave ? (
-              <button
-                onClick={() => setShowProfileSave(true)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}
-              >
-                <BookMarked size={13} color="var(--fg-3)" /> Save as Profile
-              </button>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={labelStyle}>Profile Name</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={e => setProfileName(e.target.value)}
-                  placeholder="e.g. Linux Full Audit"
-                  style={inputStyle}
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') handleSaveProfile() }}
-                />
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    onClick={() => { setShowProfileSave(false); setProfileName('') }}
-                    style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveProfile}
-                    disabled={savingProfile || !profileName.trim()}
-                    style={{ flex: 1, padding: '5px 0', borderRadius: 3, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 12, color: 'var(--accent)', cursor: savingProfile || !profileName.trim() ? 'not-allowed' : 'pointer', opacity: savingProfile || !profileName.trim() ? 0.5 : 1, fontFamily: 'var(--font-sans)', fontWeight: 600 }}
-                  >
-                    {savingProfile ? 'Saving…' : 'Save'}
-                  </button>
+          {/* Compliance bar */}
+          <div style={{ padding: '14px var(--pad)', borderBottom: rule, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="smcap">compliance</div>
+              <div style={{ flex: 1, height: 8, background: 'var(--rule-2)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+                  <div style={{ flex: pass, background: 'var(--ok)' }} />
+                  <div style={{ flex: warn, background: 'var(--high)' }} />
+                  <div style={{ flex: fail, background: 'var(--crit)' }} />
                 </div>
               </div>
-            )}
+              <div className="mono tnum" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 500 }}>
+                {pct}%
+              </div>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ── Right Panel ────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, gap: 12 }}>
-
-        {/* Tab Bar + Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
-            {(['preview', 'terminal', 'compliance'] as const).map(tab => {
-              const isActive = activeTab === tab
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: '5px 14px', borderRadius: 3, fontSize: 12, fontWeight: 500,
-                    fontFamily: 'var(--font-sans)', cursor: 'pointer', textTransform: 'capitalize',
-                    background: isActive ? 'rgba(240,168,58,0.12)' : 'transparent',
-                    color: isActive ? 'var(--accent)' : 'var(--fg-3)',
-                    border: isActive ? '1px solid rgba(240,168,58,0.3)' : '1px solid transparent',
-                    display: 'flex', alignItems: 'center', gap: 5,
-                  }}
+          {/* Controls table */}
+          <table className="data" style={{ flex: 1 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 80 }}>Code</th>
+                <th>Control</th>
+                <th style={{ width: 90 }}>Severity</th>
+                <th style={{ width: 70 }}>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {controls.map(c => (
+                <tr
+                  key={c.id}
+                  className={selectedControlId === c.id ? 'selected' : ''}
+                  onClick={() => setSelectedControlId(c.id)}
+                  style={{ cursor: 'pointer' }}
                 >
-                  {tab === 'compliance' && <Icon name="shield" size={11} color="currentColor" />}
-                  {tab === 'compliance' ? 'Compliance' : tab}
-                </button>
-              )
-            })}
-          </div>
+                  <td className="mono" style={{ color: 'var(--accent)' }}>{c.code}</td>
+                  <td style={{ fontSize: 12.5 }}>{c.title}</td>
+                  <td><SevBadge sev={c.sev} /></td>
+                  <td><StatePill state={c.state} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-          {generatedScript && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={handleDownload}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'var(--bg-2)', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-              >
-                <Icon name="download" size={13} color="currentColor" /> Download
-              </button>
-              <button
-                onClick={handleRunOnServer}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, background: 'rgba(84,175,97,0.1)', border: '1px solid rgba(84,175,97,0.35)', fontSize: 12, fontWeight: 600, color: 'var(--ok)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-              >
-                <Icon name="play" size={13} color="var(--ok)" /> Run on Server
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          {activeTab === 'preview' ? (
-            <div style={{ height: '100%' }}>
-              <ScriptPreview script={generatedScript} className="h-full" />
-            </div>
-          ) : activeTab === 'terminal' ? (
-            <div style={{ height: '100%', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
-              <Terminal ref={terminalRef} className="h-full" />
-            </div>
-          ) : (
-            /* ── Compliance Tab ─────────────────────────────────────────── */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
-              {/* Profile Selector */}
-              <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
-                <h3 style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-sans)' }}>
-                  <Icon name="shield" size={14} color="var(--accent)" /> Hardening Profile
-                </h3>
-                <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-                  Select a compliance framework, then run an audit with the recommended categories and click Score.
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-                  {hardeningProfiles.map(p => {
-                    const profile = p as Record<string, unknown>
-                    const isActive = selectedHardeningProfile === profile.id
-                    return (
-                      <button
-                        key={String(profile.id)}
-                        onClick={() => setSelectedHardeningProfile(String(profile.id))}
-                        style={{
-                          padding: 12, textAlign: 'left', borderRadius: 4, cursor: 'pointer',
-                          background: isActive ? 'rgba(240,168,58,0.06)' : 'var(--bg)',
-                          border: isActive ? '1px solid rgba(240,168,58,0.35)' : ruleStrong,
-                        }}
-                      >
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{String(profile.name)}</p>
-                        <p style={{ margin: '0 0 8px', fontSize: 10, color: 'var(--fg-3)', lineHeight: 1.4, fontFamily: 'var(--font-sans)' }}>{String(profile.description)}</p>
-                        <p style={{ margin: 0, fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
-                          {Array.isArray(profile.controls) ? profile.controls.length : 0} controls
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button
-                    onClick={handleScoreScan}
-                    disabled={scoring || !scanId}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', borderRadius: 4,
-                      background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)',
-                      fontSize: 12, fontWeight: 600, color: 'var(--accent)',
-                      cursor: scoring || !scanId ? 'not-allowed' : 'pointer',
-                      opacity: scoring || !scanId ? 0.5 : 1, fontFamily: 'var(--font-sans)',
-                    }}
-                  >
-                    {scoring ? <Icon name="refresh" size={13} color="currentColor" /> : <Gauge size={13} color="currentColor" />}
-                    {scoring ? 'Scoring…' : 'Score Scan'}
-                  </button>
-                  {!scanId && <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Generate and run a scan first, then score it.</span>}
-                  {scoreError && <span style={{ fontSize: 12, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{scoreError}</span>}
-                </div>
-              </div>
-
-              {/* Score Results */}
-              {complianceReport && (() => {
-                const report = complianceReport as Record<string, unknown>
-                const score = Number(report.overall_score ?? 0)
-                const passCount = Number(report.pass_count ?? 0)
-                const failCount = Number(report.fail_count ?? 0)
-                const controls = Array.isArray(report.controls) ? report.controls as Record<string, unknown>[] : []
-                const warnings = Array.isArray(report.warnings) ? report.warnings as string[] : []
-                const suggestions = Array.isArray(report.suggestions) ? report.suggestions as string[] : []
-                const barColor = score >= 70 ? 'var(--ok)' : score >= 50 ? 'var(--accent)' : 'var(--crit)'
-
-                return (
-                  <>
-                    {/* Score Card */}
-                    <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <div>
-                          <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{String(report.profile ?? '')}</p>
-                          <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>
-                            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--fg)' }}>{score}</span>
-                            <span style={{ fontSize: 18, color: 'var(--fg-3)' }}>/100</span>
-                          </p>
-                          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Hardening Score</p>
-                        </div>
-                        <div style={{ display: 'flex', gap: 24 }}>
-                          <div style={{ textAlign: 'center' }}>
-                            <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ok)', fontFamily: 'var(--font-mono)' }}>{passCount}</p>
-                            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Passed</p>
-                          </div>
-                          <div style={{ textAlign: 'center' }}>
-                            <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>{failCount}</p>
-                            <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Failed</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ height: 6, borderRadius: 3, background: 'var(--bg)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 3, background: barColor, width: `${score}%`, transition: 'width 0.7s ease' }} />
-                      </div>
-                    </div>
-
-                    {/* Controls */}
-                    <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
-                      <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Controls</p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {controls.map(ctrl => {
-                          const isPassed = ctrl.status === 'pass'
-                          return (
-                            <div key={String(ctrl.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 3, background: 'var(--bg)' }}>
-                              {isPassed
-                                ? <CheckCircle size={12} color="var(--ok)" />
-                                : <XCircle size={12} color="var(--crit)" />}
-                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)', flexShrink: 0, width: 56 }}>{String(ctrl.id)}</span>
-                              <span style={{ flex: 1, fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{String(ctrl.title)}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: isPassed ? 'var(--ok)' : 'var(--crit)', fontFamily: 'var(--font-sans)' }}>
-                                {String(ctrl.status).toUpperCase()}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Warnings */}
-                    {warnings.length > 0 && (
-                      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
-                        <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)' }}>
-                          <AlertTriangle size={11} color="var(--accent)" /> Warnings ({warnings.length})
-                        </p>
-                        <div style={{ maxHeight: 192, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          {warnings.map((w, i) => (
-                            <p key={i} style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', opacity: 0.8, paddingBottom: 4, borderBottom: rule }}>{w}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Suggestions */}
-                    {suggestions.length > 0 && (
-                      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 14 }}>
-                        <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Suggestions</p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {suggestions.map((s, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}>
-                              <Icon name="chev_r" size={11} color="var(--accent)" />
-                              <span>{s}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )
-              })()}
-            </div>
-          )}
-        </div>
+        {/* ═══ RIGHT PANE — control detail ════════════════════════════ */}
+        <ControlDetail control={selectedControl} />
       </div>
     </div>
   )
