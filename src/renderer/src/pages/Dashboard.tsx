@@ -731,7 +731,7 @@ function PlaybooksSection() {
                   {pb.name}
                 </div>
                 <div className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', marginTop: 3 }}>
-                  {pb.steps ?? 0} steps · {pb.runs ?? 0} runs
+                  {Array.isArray(pb.steps) ? pb.steps.length : (pb.steps ?? 0)} steps · {pb.runs ?? 0} runs
                   {pb.last ? ` · last ${pb.last}` : ''}
                 </div>
               </div>
