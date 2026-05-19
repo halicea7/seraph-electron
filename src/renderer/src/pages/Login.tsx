@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useState, useEffect, FormEvent } from 'react'
 import { Shield, Eye, EyeOff, Loader, UserPlus, LogIn, Fingerprint } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -153,13 +154,13 @@ export default function Login() {
   }
 
   const inputStyle: React.CSSProperties = {
-    background: 'var(--bg)',
+    background: 'rgba(13,12,10,0.6)',
     border: ruleStrong,
-    borderRadius: 4,
+    borderRadius: 8,
     color: 'var(--fg)',
     fontFamily: 'var(--font-sans)',
     fontSize: 13,
-    padding: '8px 12px',
+    padding: '9px 12px',
     width: '100%',
     outline: 'none',
     boxSizing: 'border-box',
@@ -183,18 +184,24 @@ export default function Login() {
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 4, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.25)', marginBottom: 12 }}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 16, background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.25)', marginBottom: 12 }}
           >
-            <Shield size={32} style={{ color: 'var(--accent)', filter: 'drop-shadow(0 0 8px rgba(240,168,58,0.5))' }} />
+            <Shield size={32} style={{ color: 'var(--accent)', filter: 'drop-shadow(0 0 8px rgba(240,168,58,0.6))' }} />
           </div>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.15em', color: 'var(--accent)', fontFamily: 'var(--font-mono)', margin: 0 }}>SERAPH</h1>
+            <h1 style={{
+              fontSize: 28, fontWeight: 700, letterSpacing: '0.15em', fontFamily: 'var(--font-mono)', margin: 0,
+              background: 'linear-gradient(135deg, #f0a83a, #d4c45a)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>SERAPH</h1>
             <p style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', marginTop: 4 }}>Security Platform</p>
           </div>
         </div>
 
         {/* Card */}
-        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 6, padding: 32 }}>
+        <div style={{ background: 'rgba(13,12,10,0.82)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', border: '1px solid rgba(240,168,58,0.12)', borderRadius: 16, padding: 32 }}>
           {mode === 'setup' && (
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--accent)', marginBottom: 4 }}>
@@ -268,7 +275,7 @@ export default function Login() {
 
             {error && (
               <div
-                style={{ borderRadius: 4, padding: '8px 12px', fontSize: 11, color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.08)' }}
+                style={{ borderRadius: 6, padding: '8px 12px', fontSize: 11, color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.3)', background: 'rgba(232,64,64,0.08)' }}
               >
                 {error}
               </div>
@@ -279,8 +286,10 @@ export default function Login() {
               disabled={loading}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 600,
-                background: 'var(--accent)', color: '#0d0c0a', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: 'linear-gradient(135deg, #f0a83a, #d4a82a)',
+                boxShadow: loading ? 'none' : '0 0 20px rgba(240,168,58,0.3)',
+                color: '#0d0c0a', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.6 : 1, width: '100%', fontFamily: 'var(--font-sans)',
               }}
             >
@@ -306,7 +315,7 @@ export default function Login() {
                   disabled={passkeyLoading}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: '10px 0', borderRadius: 4, fontSize: 13, fontWeight: 500,
+                    padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 500,
                     background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.2)',
                     color: 'var(--accent)', cursor: passkeyLoading ? 'not-allowed' : 'pointer',
                     opacity: passkeyLoading ? 0.5 : 1, width: '100%', fontFamily: 'var(--font-sans)',
