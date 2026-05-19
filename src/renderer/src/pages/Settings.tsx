@@ -1222,23 +1222,19 @@ export default function Settings() {
   }
 
   function renderAppearance() {
-    const ACCENT_SWATCHES = [
-      { value: '#e8b84b', label: 'Amber' },
-      { value: '#e8784b', label: 'Orange' },
-      { value: '#4be87a', label: 'Green' },
-      { value: '#4be8d8', label: 'Cyan' },
-      { value: '#4b8ee8', label: 'Blue' },
-      { value: '#7a4be8', label: 'Purple' },
-      { value: '#e84b4b', label: 'Red' },
-      { value: '#e84b8e', label: 'Pink' },
+    const ACCENT_SWATCHES: { value: import('@/contexts/ThemeContext').Accent; label: string; color: string }[] = [
+      { value: 'amber',          label: 'Amber',   color: '#f0a83a' },
+      { value: 'cyan',           label: 'Cyan',    color: '#5fb6c4' },
+      { value: 'electric-green', label: 'Green',   color: '#8ad26b' },
+      { value: 'signal-red',     label: 'Red',     color: '#e85c4e' },
+      { value: 'violet',         label: 'Violet',  color: '#b794f6' },
     ]
-    const BG_OPTIONS = [
-      { value: 'default' as const, label: 'Default', swatch: '#0d0d0d' },
-      { value: 'warm'    as const, label: 'Warm',    swatch: '#0f0d09' },
-      { value: 'cool'    as const, label: 'Cool',    swatch: '#090d0f' },
-      { value: 'pure'    as const, label: 'Pure',    swatch: '#000000' },
+    const BG_OPTIONS: { value: import('@/contexts/ThemeContext').BgVariant; label: string; swatch: string }[] = [
+      { value: 'paper',      label: 'Paper Dark', swatch: '#0d0c0a' },
+      { value: 'true-black', label: 'True Black', swatch: '#000000' },
+      { value: 'midnight',   label: 'Midnight',   swatch: '#07091a' },
     ]
-    const DENSITY_OPTIONS = ['compact', 'default', 'comfortable'] as const
+    const DENSITY_OPTIONS: import('@/contexts/ThemeContext').Density[] = ['compact', 'standard', 'roomy']
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Section title="ACCENT COLOR">
@@ -1247,10 +1243,10 @@ export default function Settings() {
               {ACCENT_SWATCHES.map(s => {
                 const isActive = accent === s.value
                 return (
-                  <button key={s.value} onClick={() => setAccent(s.value as any)} title={s.label}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)', background: isActive ? `${s.value}18` : 'var(--bg)', border: isActive ? `1px solid ${s.value}` : ruleStrong, color: isActive ? s.value : 'var(--fg-2)' }}
+                  <button key={s.value} onClick={() => setAccent(s.value)} title={s.label}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)', background: isActive ? `${s.color}18` : 'var(--bg)', border: isActive ? `1px solid ${s.color}` : ruleStrong, color: isActive ? s.color : 'var(--fg-2)' }}
                   >
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.value, flexShrink: 0 }} />
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
                     {s.label}
                     {isActive && <CheckCircle size={10} />}
                   </button>

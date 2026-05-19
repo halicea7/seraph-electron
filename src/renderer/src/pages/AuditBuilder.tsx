@@ -17,6 +17,10 @@ interface CisControl {
   title: string
   sev: string
   state: 'pass' | 'warn' | 'fail'
+  rationale?: string
+  audit_cmd?: string[]
+  audit_expected?: string
+  remediation?: string[]
 }
 
 interface Profile {
@@ -44,13 +48,84 @@ const STATIC_BENCHMARKS: BenchmarkEntry[] = [
 const STATIC_TARGETS_DEMO = ['app-01', 'app-02', 'db-01', 'redis-01']
 
 const STATIC_CONTROLS: CisControl[] = [
-  { id: 'cis-1', code: '1.1.1.1', title: 'Ensure mounting of cramfs is disabled',              sev: 'Medium', state: 'pass' },
-  { id: 'cis-2', code: '1.4.1',   title: 'Ensure bootloader password is set',                  sev: 'High',   state: 'fail' },
-  { id: 'cis-3', code: '3.1.1',   title: 'Ensure source-routed packets are not accepted',       sev: 'Medium', state: 'pass' },
-  { id: 'cis-4', code: '5.2.5',   title: 'Ensure SSH PermitRootLogin is disabled',              sev: 'High',   state: 'fail' },
-  { id: 'cis-5', code: '5.4.1',   title: 'Ensure password expiration ≤ 365 days',              sev: 'Medium', state: 'warn' },
-  { id: 'cis-6', code: '6.1.1',   title: 'Audit system file permissions',                       sev: 'Low',    state: 'pass' },
-  { id: 'cis-7', code: '4.1.4',   title: 'Ensure events that modify date/time are collected',  sev: 'Medium', state: 'fail' },
+  {
+    id: 'cis-1', code: '1.1.1.1', title: 'Ensure mounting of cramfs is disabled', sev: 'Medium', state: 'pass',
+    rationale: 'The cramfs filesystem type is not required for normal operation. Disabling it reduces the attack surface against kernel filesystem vulnerabilities.',
+    audit_cmd: ['modprobe -n -v cramfs', 'lsmod | grep cramfs'],
+    audit_expected: 'install /bin/true (modprobe output); no output from lsmod',
+    remediation: [
+      'echo "install cramfs /bin/true" >> /etc/modprobe.d/CIS.conf',
+      'rmmod cramfs 2>/dev/null || true',
+    ],
+  },
+  {
+    id: 'cis-2', code: '1.4.1', title: 'Ensure bootloader password is set', sev: 'High', state: 'fail',
+    rationale: 'Without a GRUB password, any user with physical access can boot into single-user mode or modify kernel parameters to bypass authentication.',
+    audit_cmd: ['grep "^set superusers" /boot/grub/grub.cfg', 'grep "^password" /boot/grub/grub.cfg'],
+    audit_expected: 'Both lines should be present with non-empty values',
+    remediation: [
+      'grub-mkpasswd-pbkdf2   # copy hash output',
+      '# Add to /etc/grub.d/40_custom:',
+      'set superusers="root"',
+      'password_pbkdf2 root <hash>',
+      'update-grub',
+    ],
+  },
+  {
+    id: 'cis-3', code: '3.1.1', title: 'Ensure source-routed packets are not accepted', sev: 'Medium', state: 'pass',
+    rationale: 'Source-routed packets allow the sender to specify the route, enabling traffic to bypass firewall rules and network monitoring controls.',
+    audit_cmd: ['sysctl net.ipv4.conf.all.accept_source_route', 'sysctl net.ipv4.conf.default.accept_source_route'],
+    audit_expected: 'net.ipv4.conf.all.accept_source_route = 0\nnet.ipv4.conf.default.accept_source_route = 0',
+    remediation: [
+      'sysctl -w net.ipv4.conf.all.accept_source_route=0',
+      'sysctl -w net.ipv4.conf.default.accept_source_route=0',
+      'echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.d/99-cis.conf',
+    ],
+  },
+  {
+    id: 'cis-4', code: '5.2.5', title: 'Ensure SSH PermitRootLogin is disabled', sev: 'High', state: 'fail',
+    rationale: 'Disabling root login over SSH narrows the attack surface considerably. Privileged operations should be performed through sudo by named users, leaving an auditable trail.',
+    audit_cmd: ['grep "^PermitRootLogin" /etc/ssh/sshd_config'],
+    audit_expected: 'PermitRootLogin no',
+    remediation: [
+      "sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config",
+      'systemctl reload sshd',
+    ],
+  },
+  {
+    id: 'cis-5', code: '5.4.1', title: 'Ensure password expiration ≤ 365 days', sev: 'Medium', state: 'warn',
+    rationale: 'Enforcing periodic password changes limits the window of opportunity for compromised credentials to be exploited.',
+    audit_cmd: ['grep "^PASS_MAX_DAYS" /etc/login.defs', 'awk -F: \'($5 > 365) {print $1, $5}\' /etc/shadow'],
+    audit_expected: 'PASS_MAX_DAYS 365 (or lower); no users with expiry > 365',
+    remediation: [
+      "sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 365/' /etc/login.defs",
+      '# For existing users: chage --maxdays 365 <username>',
+    ],
+  },
+  {
+    id: 'cis-6', code: '6.1.1', title: 'Audit system file permissions', sev: 'Low', state: 'pass',
+    rationale: 'Incorrect file permissions on system files can allow unprivileged users to read sensitive configuration or escalate privileges.',
+    audit_cmd: ['dpkg --verify 2>&1 | grep -v "^$"', 'find /etc -maxdepth 1 -perm /o+w -ls'],
+    audit_expected: 'No output from dpkg --verify; no world-writable files in /etc',
+    remediation: [
+      '# Reinstall affected packages to restore permissions:',
+      'dpkg --verify | awk \'{print $NF}\' | xargs dpkg -S | cut -d: -f1 | sort -u | xargs apt-get install --reinstall',
+    ],
+  },
+  {
+    id: 'cis-7', code: '4.1.4', title: 'Ensure events that modify date/time are collected', sev: 'Medium', state: 'fail',
+    rationale: 'Unauthorised date/time changes can be used to cover tracks or manipulate log timestamps, undermining forensic integrity.',
+    audit_cmd: ['grep time-change /etc/audit/audit.rules', 'auditctl -l | grep time-change'],
+    audit_expected: 'Rules for adjtimex, settimeofday, stime, clock_settime, and /etc/localtime present',
+    remediation: [
+      '# Add to /etc/audit/audit.rules:',
+      '-a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change',
+      '-a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change',
+      '-a always,exit -F arch=b64 -S clock_settime -k time-change',
+      '-w /etc/localtime -p wa -k time-change',
+      'service auditd restart',
+    ],
+  },
 ]
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -162,26 +237,37 @@ function ControlDetail({ control }: { control: CisControl | null }) {
         {/* Rationale */}
         <div className="smcap" style={{ marginBottom: 8 }}>Rationale</div>
         <p style={{ fontFamily: 'var(--font-serif)', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.65, marginTop: 0 }}>
-          Disabling root login over SSH narrows the attack surface considerably. Privileged operations
-          should be performed through <code className="mono">sudo</code> by named users, leaving an
-          auditable trail. Failed logins to <code className="mono">root</code> can mask brute-force
-          activity that would otherwise be loud against a regular account.
+          {control.rationale ?? 'No rationale available for this control.'}
         </p>
 
-        {/* Audit command */}
-        <div className="smcap" style={{ margin: '14px 0 8px' }}>Audit command</div>
-        <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
-          <div><span className="pr">$</span> grep "^PermitRootLogin" /etc/ssh/sshd_config</div>
-          <div className="stderr">PermitRootLogin yes</div>
-          <div className="muted">(expected: PermitRootLogin no)</div>
-        </div>
+        {/* Audit commands */}
+        {control.audit_cmd && control.audit_cmd.length > 0 && (
+          <>
+            <div className="smcap" style={{ margin: '14px 0 8px' }}>Audit command</div>
+            <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
+              {control.audit_cmd.map((cmd, i) => (
+                <div key={i}><span className="pr">$</span> {cmd}</div>
+              ))}
+              {control.audit_expected && (
+                <div className="muted" style={{ marginTop: 6 }}>(expected: {control.audit_expected})</div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Remediation */}
-        <div className="smcap" style={{ margin: '14px 0 8px' }}>Remediation</div>
-        <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
-          <div><span className="pr">$</span> sed -i {'\''}s/^#\?PermitRootLogin.*/PermitRootLogin no/{'\''} /etc/ssh/sshd_config</div>
-          <div><span className="pr">$</span> systemctl reload sshd</div>
-        </div>
+        {control.remediation && control.remediation.length > 0 && (
+          <>
+            <div className="smcap" style={{ margin: '14px 0 8px' }}>Remediation</div>
+            <div className="term rule" style={{ padding: 10, fontSize: 11.5 }}>
+              {control.remediation.map((line, i) => (
+                line.startsWith('#')
+                  ? <div key={i} className="muted">{line}</div>
+                  : <div key={i}><span className="pr">$</span> {line}</div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Auto-pin */}
         <div className="rule" style={{ marginTop: 14, padding: 12, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -195,35 +281,6 @@ function ControlDetail({ control }: { control: CisControl | null }) {
             <input type="checkbox" defaultChecked style={{ width: 12, height: 12, accentColor: 'var(--accent)' }} />
             on
           </label>
-        </div>
-
-        {/* Generated bash script preview */}
-        <div style={{ marginTop: 18 }}>
-          <div className="smcap" style={{ marginBottom: 8 }}>Generated bash script (preview · 274 lines)</div>
-          <div className="term rule" style={{ padding: 12, fontSize: 11, maxHeight: 220, overflowY: 'auto' }}>
-            <div className="muted">#!/usr/bin/env bash</div>
-            <div className="muted"># Seraph · CIS Ubuntu 22.04 L1 · 198 controls · profile=Server</div>
-            <div className="muted"># Generated 2026-05-16 14:42 UTC</div>
-            <div style={{ height: 6 }} />
-            <div>set -euo pipefail</div>
-            <div>WORKSPACE=$(mktemp -d /tmp/seraph-cis-XXXX)</div>
-            <div>RESULTS=$WORKSPACE/results.jsonl</div>
-            <div style={{ height: 6 }} />
-            <div className="muted"># 1.1.1.1 mounting of cramfs</div>
-            <div>check_cramfs() {'{'}</div>
-            <div>{'  '}modprobe -n -v cramfs 2&gt;&1 | grep -q "install /bin/(true|false)" \</div>
-            <div>{'    '}&amp;&amp; result=pass || result=fail</div>
-            <div>{'  '}emit "1.1.1.1" "$result"</div>
-            <div>{'}'}</div>
-            <div style={{ height: 6 }} />
-            <div className="muted"># 5.2.5 PermitRootLogin disabled</div>
-            <div>check_root_ssh() {'{'}</div>
-            <div>{'  '}grep -q "^PermitRootLogin no" /etc/ssh/sshd_config \</div>
-            <div>{'    '}&amp;&amp; result=pass || result=fail</div>
-            <div>{'  '}emit "5.2.5" "$result"</div>
-            <div>{'}'}</div>
-            <div className="muted"># ... 196 more checks</div>
-          </div>
         </div>
       </div>
     </div>

@@ -984,6 +984,24 @@ export default function Dashboard() {
     }
   }, [setProjects]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Refresh findings + stats when the active engagement changes
+  useEffect(() => {
+    if (!selectedProject?.id) return
+    getStats().then(data => {
+      setStats(data)
+      const rf = data.recent_findings ?? []
+      if (rf.length > 0) {
+        setFindings(rf.map((f) => ({
+          id: f.id, severity: f.severity, cvss_score: f.cvss_score,
+          title: f.title, cve_id: f.cve_id, target: f.target, status: 'open',
+        })))
+      } else {
+        fetch(`${getApiBase()}/findings?project_id=${selectedProject.id}&limit=8`)
+          .then(r => r.json()).then(d => Array.isArray(d) && setFindings(d)).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [selectedProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleCreateProject(
     projectData: { name: string; description: string },
     targets: Array<{ hostname_or_ip: string; target_type: string; ports: string; notes: string }>,
