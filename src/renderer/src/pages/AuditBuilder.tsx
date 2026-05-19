@@ -779,8 +779,8 @@ export default function AuditBuilder() {
                     disabled={scoring || !scanId}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', borderRadius: 4,
-                      background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
-                      fontSize: 12, fontWeight: 600, color: '#60a5fa',
+                      background: 'rgba(240,168,58,0.1)', border: '1px solid rgba(240,168,58,0.3)',
+                      fontSize: 12, fontWeight: 600, color: 'var(--accent)',
                       cursor: scoring || !scanId ? 'not-allowed' : 'pointer',
                       opacity: scoring || !scanId ? 0.5 : 1, fontFamily: 'var(--font-sans)',
                     }}

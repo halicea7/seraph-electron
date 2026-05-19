@@ -28,7 +28,7 @@ const SEVERITY_COLOR: Record<string, { bg: string; border: string; glow: string 
   high:     { bg: '#2a1500', border: '#f97316', glow: 'rgba(249,115,22,0.5)' },
   medium:   { bg: '#1f1600', border: '#f0a83a', glow: 'rgba(240,168,58,0.4)' },
   low:      { bg: '#0a2010', border: '#54af61', glow: 'rgba(84,175,97,0.4)' },
-  info:     { bg: '#0a1520', border: '#3b82f6', glow: 'rgba(59,130,246,0.4)' },
+  info:     { bg: '#0a1520', border: 'var(--med)', glow: 'rgba(180,130,60,0.4)' },
   none:     { bg: '#1a1714', border: '#3a3530', glow: 'rgba(58,53,48,0.3)' },
 }
 
@@ -37,7 +37,7 @@ const SEV_INLINE: Record<string, { color: string; border: string; bg: string }> 
   high:     { color: '#f97316',       border: 'rgba(249,115,22,0.4)', bg: 'rgba(249,115,22,0.08)' },
   medium:   { color: 'var(--accent)', border: 'rgba(240,168,58,0.4)', bg: 'rgba(240,168,58,0.08)' },
   low:      { color: 'var(--ok)',     border: 'rgba(84,175,97,0.4)',  bg: 'rgba(84,175,97,0.08)' },
-  info:     { color: '#60a5fa',       border: 'rgba(96,165,250,0.4)', bg: 'rgba(96,165,250,0.08)' },
+  info:     { color: 'var(--med)',     border: 'rgba(180,130,60,0.4)',  bg: 'rgba(180,130,60,0.08)' },
   none:     { color: 'var(--fg-3)',   border: 'var(--rule-strong)',   bg: 'transparent' },
 }
 

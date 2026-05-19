@@ -919,19 +919,19 @@ export const PHASE_LABELS: Record<Phase, string> = {
 
 // Hex/rgba values for use in inline styles (dynamic color generation)
 export const CATEGORY_COLORS: Record<Category, string> = {
-  'Network':          '#60a5fa',
-  'Web':              '#22d3ee',
+  'Network':          '#94a3b8',
+  'Web':              '#94a3b8',
   'Active Directory': '#c084fc',
   'OSINT':            '#4ade80',
-  'Cloud':            '#38bdf8',
+  'Cloud':            '#94a3b8',
   'Post-Exploitation':'#fbbf24',
   'Metasploit':       '#f87171',
 }
 
 export const PHASE_COLORS: Record<Phase, { bg: string; border: string; text: string }> = {
   recon:            { bg: 'rgba(100,116,139,0.15)', border: 'rgba(100,116,139,0.3)', text: '#94a3b8' },
-  scanning:         { bg: 'rgba(59,130,246,0.1)',   border: 'rgba(59,130,246,0.3)',  text: '#60a5fa' },
-  enumeration:      { bg: 'rgba(6,182,212,0.1)',    border: 'rgba(6,182,212,0.3)',   text: '#22d3ee' },
+  scanning:         { bg: 'rgba(240,168,58,0.1)',   border: 'rgba(240,168,58,0.3)',  text: '#f0a83a' },
+  enumeration:      { bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.3)', text: '#94a3b8' },
   exploitation:     { bg: 'rgba(239,68,68,0.1)',    border: 'rgba(239,68,68,0.3)',   text: '#f87171' },
   post_exploitation:{ bg: 'rgba(251,191,36,0.1)',   border: 'rgba(251,191,36,0.3)',  text: '#fbbf24' },
 }

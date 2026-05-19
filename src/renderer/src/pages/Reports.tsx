@@ -14,7 +14,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   high:     '#f97316',
   medium:   'var(--accent)',
   low:      'var(--ok)',
-  info:     '#60a5fa',
+  info:     'var(--med)',
 }
 
 const SEVERITY_BORDER_TOP: Record<string, string> = {
@@ -22,7 +22,7 @@ const SEVERITY_BORDER_TOP: Record<string, string> = {
   high:     'rgba(249,115,22,0.6)',
   medium:   'rgba(240,168,58,0.6)',
   low:      'rgba(84,175,97,0.6)',
-  info:     'rgba(96,165,250,0.6)',
+  info:     'rgba(180,130,60,0.6)',
 }
 
 const rule = '1px solid var(--rule)'
@@ -170,8 +170,8 @@ export default function Reports() {
   ] as const
 
   const TEMPLATES = [
-    { key: 'executive_summary', label: 'Executive Summary', color: '#60a5fa', title: 'Risk overview, key findings, no technical detail' },
-    { key: 'technical_detail', label: 'Technical Detail', color: '#22d3ee', title: 'All findings with evidence and remediation' },
+    { key: 'executive_summary', label: 'Executive Summary', color: 'var(--med)', title: 'Risk overview, key findings, no technical detail' },
+    { key: 'technical_detail', label: 'Technical Detail', color: 'var(--warn)', title: 'All findings with evidence and remediation' },
     { key: 'compliance_mapped', label: 'Compliance Mapped', color: '#a855f7', title: 'Findings organized by NIST/CIS/PCI control' },
   ] as const
 
@@ -203,7 +203,7 @@ export default function Reports() {
       {/* Header */}
       <div>
         <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-sans)' }}>
-          <Icon name="file" size={20} color="#60a5fa" /> Reports
+          <Icon name="file" size={20} color="var(--accent)" /> Reports
         </h1>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
           Generate and export audit and pentest findings reports
@@ -273,7 +273,7 @@ export default function Reports() {
           <button onClick={handlePreviewReport} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
             <Icon name={generating ? 'refresh' : 'file'} size={13} color="currentColor" /> Preview
           </button>
-          <button onClick={() => handleGenerateReport('html')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: '#60a5fa', color: 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
+          <button onClick={() => handleGenerateReport('html')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontSize: 12, fontWeight: 600, cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
             <Icon name="download" size={13} color="currentColor" /> HTML
           </button>
           <button onClick={() => handleGenerateReport('markdown')} disabled={generating || !selectedProject} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 4, background: 'none', border: ruleStrong, fontSize: 12, color: 'var(--fg-3)', cursor: generating || !selectedProject ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: generating || !selectedProject ? 0.5 : 1 }}>
@@ -307,7 +307,7 @@ export default function Reports() {
       {activeTab === 'findings' && (
         <div>
           {template === 'executive_summary' && findings.length > 0 && (
-            <div style={{ fontSize: 12, color: '#60a5fa', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 3, padding: '8px 12px', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
+            <div style={{ fontSize: 12, color: 'var(--med)', background: 'rgba(180,130,60,0.06)', border: '1px solid rgba(180,130,60,0.2)', borderRadius: 3, padding: '8px 12px', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
               Executive template active — showing {displayFindings.length} of {findings.length} findings (critical & high only)
             </div>
           )}
@@ -320,8 +320,8 @@ export default function Reports() {
           {reportPreview ? (
             <>
               {template === 'executive_summary' && (
-                <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 3, background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.15)' }}>
-                  <p style={{ margin: '0 0 5px', fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Executive Summary</p>
+                <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 3, background: 'rgba(180,130,60,0.05)', border: '1px solid rgba(180,130,60,0.15)' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: 10, fontWeight: 700, color: 'var(--med)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-sans)' }}>Executive Summary</p>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}>
                     This report highlights <strong style={{ color: 'var(--fg)' }}>{displayFindings.length}</strong> critical and high severity findings
                     out of <strong style={{ color: 'var(--fg)' }}>{findings.length}</strong> total. Immediate remediation is recommended for all items below.

@@ -27,10 +27,10 @@ export function ConnectScreen() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100vh', background: '#05080d', gap: 16,
+      justifyContent: 'center', height: '100vh', background: 'var(--bg)', gap: 16,
     }}>
-      <div style={{ fontSize: 28, fontWeight: 700, color: '#22d3ee', letterSpacing: 2 }}>SERAPH</div>
-      <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 8 }}>Enter your Seraph server address</p>
+      <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2, fontFamily: 'var(--font-mono)' }}>SERAPH</div>
+      <p style={{ color: 'var(--fg-3)', fontSize: 13, marginBottom: 8 }}>Enter your Seraph server address</p>
       <input
         type="text"
         value={url}
@@ -38,19 +38,20 @@ export function ConnectScreen() {
         onKeyDown={(e) => e.key === 'Enter' && connect()}
         placeholder="http://192.168.1.10:8000"
         style={{
-          width: 320, padding: '10px 14px', borderRadius: 8, fontSize: 13,
-          background: '#0f172a', border: '1px solid #1e3a5f', color: '#e2e8f0',
-          outline: 'none',
+          width: 320, padding: '10px 14px', fontSize: 13,
+          background: 'var(--bg-2)', border: '1px solid var(--rule-strong)', color: 'var(--fg)',
+          outline: 'none', borderRadius: 0, fontFamily: 'var(--font-mono)',
         }}
       />
-      {error && <p style={{ color: '#f87171', fontSize: 12 }}>{error}</p>}
+      {error && <p style={{ color: 'var(--err)', fontSize: 12 }}>{error}</p>}
       <button
         onClick={connect}
         disabled={testing}
         style={{
-          padding: '10px 28px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-          background: testing ? '#0e7490' : '#0891b2', color: '#fff',
-          border: 'none', cursor: testing ? 'default' : 'pointer',
+          padding: '10px 28px', fontSize: 13, fontWeight: 600,
+          background: testing ? 'var(--fg-3)' : 'var(--accent)', color: '#1a1408',
+          border: 'none', cursor: testing ? 'default' : 'pointer', borderRadius: 0,
+          fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
         }}
       >
         {testing ? 'Connecting…' : 'Connect'}

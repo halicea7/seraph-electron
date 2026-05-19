@@ -34,7 +34,7 @@ export default function LoginBackground() {
     function draw() {
       t += 0.016 * SPEED
 
-      ctx.fillStyle = '#0a0a0f'
+      ctx.fillStyle = '#0d0c0a'
       ctx.fillRect(0, 0, cv.width, cv.height)
 
       const cols = COLS
@@ -83,11 +83,11 @@ export default function LoginBackground() {
           const ch = CHARS[charIdx]
           if (ch === ' ') continue
 
-          // Cyan palette: rgb(0-10, 80-220, 100-255) — teal at dim, bright cyan at peak
-          const r = (w * 10) | 0
-          const g = (80 + w * 140) | 0
-          const b = (100 + w * 155) | 0
-          ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + w * 0.7})`
+          // Amber palette: rgb(180-240, 80-168, 0-40) — warm amber at dim, bright amber at peak
+          const r = (180 + w * 60) | 0
+          const g = (80 + w * 88) | 0
+          const b = (w * 40) | 0
+          ctx.fillStyle = `rgba(${r},${g},${b},${0.25 + w * 0.65})`
           ctx.fillText(ch, col * CW, row * CH)
         }
       }

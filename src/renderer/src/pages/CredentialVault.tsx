@@ -4,10 +4,10 @@ import type { Credential, CredType, CredSource, Project } from '../types/index'
 import { getApiBase } from '@/lib/config'
 
 const CRED_TYPE_STYLE: Record<CredType, { color: string; background: string; border: string }> = {
-  password: { color: '#22d3ee',     background: 'rgba(34,211,238,0.08)',  border: '1px solid rgba(34,211,238,0.25)' },
-  hash:     { color: '#a855f7',     background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' },
+  password: { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.25)' },
+  hash:     { color: '#a855f7',      background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' },
   key:      { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.25)' },
-  token:    { color: '#60a5fa',     background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)' },
+  token:    { color: 'var(--med)',   background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.15)' },
   other:    { color: 'var(--fg-3)', background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
 }
 

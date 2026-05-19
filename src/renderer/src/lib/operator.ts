@@ -36,9 +36,9 @@ export const MODE_CONFIGS: Record<OperatorMode, ModeConfig> = {
   recon: {
     id: 'recon',
     label: 'Recon',
-    color: '#60a5fa',
-    bg: 'rgba(59,130,246,0.08)',
-    border: 'rgba(59,130,246,0.35)',
+    color: '#94a3b8',
+    bg: 'rgba(100,116,139,0.08)',
+    border: 'rgba(100,116,139,0.35)',
     desc: 'Map the surface, no exploitation',
     defaultTools: ['nmap', 'masscan', 'rustscan', 'gobuster', 'ffuf', 'theHarvester', 'subfinder'],
     defaultMsf: [

@@ -89,7 +89,7 @@ const BLANK_STEP: BuilderStep = {
 
 const STATUS_STYLE: Record<string, { color: string; background: string; border: string }> = {
   completed: { color: 'var(--ok)',    background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.3)' },
-  running:   { color: '#60a5fa',      background: 'rgba(96,165,250,0.08)',  border: '1px solid rgba(96,165,250,0.3)' },
+  running:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.3)' },
   paused:    { color: 'var(--accent)',background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.3)' },
   failed:    { color: 'var(--crit)',  background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.3)' },
   pending:   { color: 'var(--fg-3)', background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
@@ -98,13 +98,13 @@ const STATUS_STYLE: Record<string, { color: string; background: string; border: 
 
 const STEP_ICON: Record<string, React.ReactNode> = {
   completed: <CheckCircle size={13} color="var(--ok)" />,
-  running:   <Loader size={13} color="#60a5fa" style={{ animation: 'spin 1s linear infinite' }} />,
+  running:   <Loader size={13} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />,
   skipped:   <SkipForward size={13} color="var(--fg-3)" />,
   failed:    <XCircle size={13} color="var(--crit)" />,
   pending:   <Clock size={13} color="var(--fg-3)" />,
 }
 
-const GROUP_PALETTE = ['#06b6d4', '#a855f7', '#10b981', '#f59e0b', '#ec4899']
+const GROUP_PALETTE = ['var(--med)', '#a855f7', '#10b981', '#f59e0b', '#ec4899']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -684,7 +684,7 @@ export default function Playbooks() {
                     />
                   ))}
                   {runStatus === 'running' && currentTool && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', marginTop: 4 }}>
                       <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} />
                       <span>{currentTool} running…</span>
                     </div>
@@ -1152,7 +1152,7 @@ function ansiToHtml(text: string): string {
     .replace(/\x1b\[(\d+)m/g, (_: string, code: string) => {
       const colorMap: Record<string, string> = {
         '30': '#475569', '31': '#e84040', '32': '#54af61', '33': '#f0a83a',
-        '34': '#3b82f6', '35': '#a855f7', '36': '#06b6d4', '37': '#e8e3d8',
+        '34': '#f0a83a', '35': '#a855f7', '36': '#f0a83a', '37': '#e8e3d8',
         '90': '#5a5550',
       }
       const color = colorMap[code]

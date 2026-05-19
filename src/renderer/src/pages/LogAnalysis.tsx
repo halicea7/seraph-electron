@@ -171,7 +171,7 @@ export default function LogAnalysis() {
 
   const TABS = [
     { key: 'patterns', label: `Patterns (${results?.pattern_count ?? 0})`, icon: <AlertTriangle size={11} />, color: 'var(--accent)' },
-    { key: 'iocs',     label: `IOCs (${results?.ioc_count ?? 0})`,         icon: <Hash size={11} />,          color: '#22d3ee' },
+    { key: 'iocs',     label: `IOCs (${results?.ioc_count ?? 0})`,         icon: <Hash size={11} />,          color: 'var(--med)' },
     { key: 'ai',       label: 'AI Triage',                                  icon: <Brain size={11} />,         color: '#a855f7' },
   ] as const
 
@@ -267,7 +267,7 @@ export default function LogAnalysis() {
                   <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Patterns</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#22d3ee' }}>{results.ioc_count}</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--med)' }}>{results.ioc_count}</p>
                   <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>IOCs</p>
                 </div>
               </div>
@@ -369,7 +369,7 @@ export default function LogAnalysis() {
                     <div>
                       <IOCSection label="Public IPs"        icon={<Globe size={13} />} items={iocs.public_ips}  accent="#f97316" />
                       <IOCSection label="Private IPs"       icon={<Icon name="shield" size={13} color="currentColor" />} items={iocs.private_ips} accent="#64748b" />
-                      <IOCSection label="Domains"           icon={<Globe size={13} />} items={iocs.domains}    accent="#22d3ee" />
+                      <IOCSection label="Domains"           icon={<Globe size={13} />} items={iocs.domains}    accent="var(--med)" />
                       <IOCSection label="MD5 Hashes"        icon={<Hash size={13} />}  items={iocs.md5}        accent="#a78bfa" />
                       <IOCSection label="SHA1 Hashes"       icon={<Hash size={13} />}  items={iocs.sha1}       accent="#a78bfa" />
                       <IOCSection label="SHA256 Hashes"     icon={<Hash size={13} />}  items={iocs.sha256}     accent="#7c3aed" />

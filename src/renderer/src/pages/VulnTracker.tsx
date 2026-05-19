@@ -47,7 +47,7 @@ const SEV_COLOR: Record<VulnSeverity, string> = {
   high:     '#f97316',
   medium:   'var(--accent)',
   low:      'var(--ok)',
-  info:     '#60a5fa',
+  info:     'var(--med)',
 }
 
 const SEV_STYLE: Record<VulnSeverity, { color: string; background: string; border: string }> = {
@@ -55,14 +55,14 @@ const SEV_STYLE: Record<VulnSeverity, { color: string; background: string; borde
   high:     { color: '#f97316',       background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)' },
   medium:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
   low:      { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',  border: '1px solid rgba(84,175,97,0.3)' },
-  info:     { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)' },
+  info:     { color: 'var(--med)',    background: 'rgba(240,168,58,0.06)', border: '1px solid rgba(240,168,58,0.15)' },
 }
 
 const STATUS_STYLE: Record<VulnStatus, { color: string; background: string; border: string }> = {
   open:           { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',  border: '1px solid rgba(232,64,64,0.3)' },
   in_progress:    { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
   mitigated:      { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',  border: '1px solid rgba(84,175,97,0.3)' },
-  accepted:       { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)' },
+  accepted:       { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.06)', border: '1px solid rgba(100,116,139,0.2)' },
   false_positive: { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
 }
 

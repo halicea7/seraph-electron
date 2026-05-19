@@ -48,7 +48,7 @@ interface DiffResult {
 
 const STATUS_COLORS: Record<string, string> = {
   completed:  '#22c55e',
-  running:    '#3b82f6',
+  running:    'var(--accent)',
   pending:    '#64748b',
   failed:     '#ef4444',
   cancelled:  '#f59e0b',
@@ -56,18 +56,18 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_STYLES: Record<string, { color: string; background: string; border: string }> = {
   completed: { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.3)' },
-  running:   { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)',  border: '1px solid rgba(96,165,250,0.3)' },
+  running:   { color: 'var(--accent)',  background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
   pending:   { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
   failed:    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.3)' },
   cancelled: { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
 }
 
 const SEV_COLOR: Record<string, string> = {
-  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: '#60a5fa',
+  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: 'var(--med)',
 }
 const SEV_BG: Record<string, string> = {
   critical: 'rgba(232,64,64,0.1)', high: 'rgba(249,115,22,0.1)', medium: 'rgba(240,168,58,0.1)',
-  low: 'rgba(84,175,97,0.1)', info: 'rgba(96,165,250,0.1)',
+  low: 'rgba(84,175,97,0.1)', info: 'rgba(180,140,60,0.1)',
 }
 
 const STATUSES = ['all', 'completed', 'running', 'pending', 'failed']

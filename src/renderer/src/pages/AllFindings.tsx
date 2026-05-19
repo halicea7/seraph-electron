@@ -25,12 +25,12 @@ interface FindingRow {
 const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info']
 
 const SEV_COLOR: Record<string, string> = {
-  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: '#60a5fa',
+  critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: 'var(--fg-3)',
 }
 
 const SEV_BG: Record<string, string> = {
   critical: 'rgba(232,64,64,0.1)', high: 'rgba(249,115,22,0.1)', medium: 'rgba(240,168,58,0.1)',
-  low: 'rgba(84,175,97,0.1)', info: 'rgba(96,165,250,0.1)',
+  low: 'rgba(84,175,97,0.1)', info: 'rgba(100,116,139,0.1)',
 }
 
 const STATUS_OPTIONS = ['open', 'in-review', 'remediated', 'accepted', 'false_positive'] as const
@@ -426,7 +426,7 @@ export default function AllFindings() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       {f.cve_id && (
-                        <span style={{ fontSize: 10, color: '#60a5fa', fontFamily: 'var(--font-mono)' }}>{f.cve_id}</span>
+                        <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{f.cve_id}</span>
                       )}
                       {f.cvss_score && (
                         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4, border: ruleStrong, color: 'var(--fg-2)' }}>

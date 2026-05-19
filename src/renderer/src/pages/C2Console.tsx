@@ -1001,7 +1001,7 @@ export default function C2Console() {
   const LOOT_STYLES: Record<string, { color: string; border: string; background: string }> = {
     credential: { color: 'var(--accent)',  border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.08)' },
     hash:       { color: 'var(--crit)',    border: '1px solid rgba(232,64,64,0.3)',  background: 'rgba(232,64,64,0.08)' },
-    file:       { color: '#60a5fa',        border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)' },
+    file:       { color: 'var(--med)',      border: '1px solid rgba(180,130,60,0.3)',  background: 'rgba(180,130,60,0.08)' },
     key:        { color: '#a78bfa',        border: '1px solid rgba(167,139,250,0.3)', background: 'rgba(167,139,250,0.08)' },
     secret:     { color: '#fb923c',        border: '1px solid rgba(251,146,60,0.3)', background: 'rgba(251,146,60,0.08)' },
     system_info:{ color: 'var(--accent)',  border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.06)' },
@@ -1907,7 +1907,7 @@ export default function C2Console() {
                       onClick={handleScreenshot}
                       disabled={screenshotting || !activeSession.session_type.includes('meterpreter')}
                       title={!activeSession.session_type.includes('meterpreter') ? 'Requires Meterpreter' : ''}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', fontSize: 11, color: '#60a5fa', cursor: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 'not-allowed' : 'pointer', opacity: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 0.4 : 1, fontFamily: 'var(--font-sans)' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, background: 'rgba(180,130,60,0.08)', border: '1px solid rgba(180,130,60,0.2)', fontSize: 11, color: 'var(--med)', cursor: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 'not-allowed' : 'pointer', opacity: (screenshotting || !activeSession.session_type.includes('meterpreter')) ? 0.4 : 1, fontFamily: 'var(--font-sans)' }}
                     >
                       {screenshotting ? <RefreshCw size={12} className="animate-spin" /> : <Camera size={12} />}
                       Screenshot
@@ -2238,7 +2238,7 @@ export default function C2Console() {
                       <div key={cmd.id} style={{ padding: 12, borderBottom: rule }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', color: cmd.platform === 'linux' ? 'var(--ok)' : '#60a5fa', background: cmd.platform === 'linux' ? 'rgba(84,175,97,0.1)' : 'rgba(96,165,250,0.1)' }}>
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', color: cmd.platform === 'linux' ? 'var(--ok)' : 'var(--med)', background: cmd.platform === 'linux' ? 'rgba(84,175,97,0.1)' : 'rgba(180,130,60,0.1)' }}>
                               {cmd.platform}
                             </span>
                             <span style={{ fontSize: 11, color: 'var(--fg)', fontWeight: 500 }}>{cmd.label}</span>

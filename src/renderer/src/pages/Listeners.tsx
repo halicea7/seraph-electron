@@ -54,7 +54,7 @@ const labelStyle: React.CSSProperties = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const TYPE_META: Record<ListenerType, { label: string; color: string; background: string; border: string }> = {
-  scheduled:   { label: 'Scheduled',    color: '#22d3ee',       background: 'rgba(34,211,238,0.08)',  border: '1px solid rgba(34,211,238,0.25)' },
+  scheduled:   { label: 'Scheduled',    color: 'var(--med)',    background: 'rgba(180,130,60,0.08)',  border: '1px solid rgba(180,130,60,0.25)' },
   threshold:   { label: 'Threshold',    color: 'var(--accent)', background: 'rgba(240,168,58,0.08)',  border: '1px solid rgba(240,168,58,0.25)' },
   healthcheck: { label: 'Health Check', color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.25)' },
   agent_audit: { label: 'Agent Audit',  color: '#a855f7',       background: 'rgba(168,85,247,0.08)',  border: '1px solid rgba(168,85,247,0.25)' },
@@ -73,7 +73,7 @@ const OUTCOME_ICON: Record<EventOutcome, string> = {
 }
 
 const OUTCOME_COLOR: Record<EventOutcome, string> = {
-  triggered: '#22d3ee',
+  triggered: 'var(--med)',
   skipped:   'var(--fg-3)',
   error:     'var(--crit)',
 }
@@ -478,7 +478,7 @@ function CreateForm({
                   key={cat.id} id={cat.id} label={cat.label}
                   selected={selCats.includes(cat.id)}
                   onToggle={() => toggleCat(cat.id)}
-                  activeColor="#22d3ee"
+                  activeColor="var(--med)"
                 />
               ))}
             </div>

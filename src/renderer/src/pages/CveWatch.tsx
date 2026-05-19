@@ -33,7 +33,7 @@ const SEV_STYLE: Record<string, { color: string; background: string; border: str
   high:     { color: '#f97316',       background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)' },
   medium:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
   low:      { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',  border: '1px solid rgba(84,175,97,0.3)' },
-  info:     { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)' },
+  info:     { color: 'var(--med)',     background: 'rgba(180,140,60,0.08)',  border: '1px solid rgba(180,140,60,0.3)' },
 }
 
 const rule = '1px solid var(--rule)'
@@ -168,7 +168,7 @@ export default function CveWatch() {
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{target.hostname_or_ip}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {services.length > 0 && (
-                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', fontFamily: 'var(--font-sans)' }}>
+                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(180,140,60,0.08)', border: '1px solid rgba(180,140,60,0.25)', color: 'var(--med)', fontFamily: 'var(--font-sans)' }}>
                         {services.length} service{services.length !== 1 ? 's' : ''}
                       </span>
                     )}

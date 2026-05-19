@@ -347,11 +347,11 @@ const ruleStrong = '1px solid var(--rule-strong)'
 
 const FEATURE_STYLES: Record<string, { color: string; background: string; border: string }> = {
   'Auto-Probe':         { color: 'var(--ok)',     background: 'rgba(84,175,97,0.1)',    border: '1px solid rgba(84,175,97,0.25)' },
-  'Tool Chains':        { color: '#60a5fa',       background: 'rgba(96,165,250,0.1)',   border: '1px solid rgba(96,165,250,0.25)' },
+  'Tool Chains':        { color: 'var(--accent)',  background: 'rgba(240,168,58,0.1)',   border: '1px solid rgba(240,168,58,0.25)' },
   'Playbooks':          { color: '#a855f7',       background: 'rgba(168,85,247,0.1)',   border: '1px solid rgba(168,85,247,0.25)' },
   'Hardening Module':   { color: '#f97316',       background: 'rgba(249,115,22,0.1)',   border: '1px solid rgba(249,115,22,0.25)' },
   'Cracking Module':    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.1)',    border: '1px solid rgba(232,64,64,0.25)' },
-  'OSINT Module':       { color: '#22d3ee',       background: 'rgba(34,211,238,0.1)',   border: '1px solid rgba(34,211,238,0.25)' },
+  'OSINT Module':       { color: 'var(--med)',     background: 'rgba(212,196,90,0.1)',   border: '1px solid rgba(212,196,90,0.25)' },
   'Scan Templates':     { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.1)',  border: '1px solid rgba(100,116,139,0.2)' },
   'Database':           { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.1)',  border: '1px solid rgba(100,116,139,0.2)' },
   'Runtime Dependency': { color: 'var(--accent)', background: 'rgba(240,168,58,0.1)',   border: '1px solid rgba(240,168,58,0.25)' },
@@ -361,7 +361,7 @@ const FEATURE_STYLES: Record<string, { color: string; background: string; border
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<'tools' | 'profiles' | 'ai' | 'users' | 'autoprobe' | 'appearance' | 'webhooks'>('tools')
   const { user: currentUser, token: authToken, refreshUser } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { accent, bg, density, setAccent, setBg, setDensity } = useTheme()
   const navigate = useNavigate()
   const [toolStatus, setToolStatus] = useState<Record<string, ToolInfo>>({})
   const [hostInfo, setHostInfo] = useState<HostInfo | null>(null)
@@ -1105,7 +1105,7 @@ export default function Settings() {
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           {!goMissing && (
-                            <button onClick={() => startInstall(name)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 3, background: isGoRuntime ? 'rgba(240,168,58,0.1)' : 'rgba(96,165,250,0.1)', color: isGoRuntime ? 'var(--accent)' : '#60a5fa', border: isGoRuntime ? '1px solid rgba(240,168,58,0.3)' : '1px solid rgba(96,165,250,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}>
+                            <button onClick={() => startInstall(name)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}>
                               <Icon name="download" size={10} color="currentColor" /> Install
                             </button>
                           )}
@@ -1668,82 +1668,104 @@ export default function Settings() {
       )}
       {activeTab === 'appearance' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
+          {/* Accent color */}
           <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Monitor size={14} color="var(--accent)" />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Color Theme</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Palette size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Accent Color</span>
             </div>
-            <p style={{ margin: '0 0 14px', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-              Choose a visual theme. Functional colors (severity, status, terminal) are preserved in all themes.
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {/* Cyber Blue */}
-              <button onClick={() => setTheme('blue')} style={{ borderRadius: 4, border: theme === 'blue' ? '2px solid var(--accent)' : ruleStrong, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', background: 'none', padding: 0 }}>
-                <div style={{ height: 96, position: 'relative', background: '#05080d' }}>
-                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(6,182,212,0.06) 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 36, background: '#090d14', borderRight: '1px solid rgba(6,182,212,0.15)' }}>
-                    {[0,1,2,3].map(i => <div key={i} style={{ margin: '5px 5px', height: 5, borderRadius: 2, background: i === 0 ? 'rgba(6,182,212,0.4)' : 'rgba(148,163,184,0.15)' }} />)}
-                  </div>
-                  <div style={{ position: 'absolute', left: 44, top: 6, right: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <div style={{ height: 16, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)' }} />
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)', padding: 5 }}>
-                        <div style={{ height: 5, width: '50%', borderRadius: 2, background: '#06b6d4', opacity: 0.5 }} />
-                      </div>
-                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(9,13,20,0.8)', border: '1px solid rgba(6,182,212,0.12)', padding: 5 }}>
-                        <div style={{ height: 5, width: '33%', borderRadius: 2, background: '#3b82f6', opacity: 0.5 }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090d14' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', fontFamily: 'var(--font-sans)' }}>Cyber Blue</div>
-                    <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'var(--font-sans)' }}>Cyan + dark blue accents</div>
-                  </div>
-                  {theme === 'blue' && <CheckCircle size={14} color="#22d3ee" />}
-                </div>
-              </button>
-
-              {/* Monochrome */}
-              <button onClick={() => setTheme('mono')} style={{ borderRadius: 4, border: theme === 'mono' ? '2px solid rgba(255,255,255,0.4)' : ruleStrong, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', background: 'none', padding: 0 }}>
-                <div style={{ height: 96, position: 'relative', background: '#080808' }}>
-                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 36, background: '#111', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-                    {[0,1,2,3].map(i => <div key={i} style={{ margin: '5px 5px', height: 5, borderRadius: 2, background: i === 0 ? 'rgba(212,212,216,0.6)' : 'rgba(148,163,184,0.12)' }} />)}
-                  </div>
-                  <div style={{ position: 'absolute', left: 44, top: 6, right: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <div style={{ height: 16, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)' }} />
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)', padding: 5 }}>
-                        <div style={{ height: 5, width: '50%', borderRadius: 2, background: '#d4d4d8', opacity: 0.4 }} />
-                      </div>
-                      <div style={{ flex: 1, height: 40, borderRadius: 3, background: 'rgba(17,17,17,0.88)', border: '1px solid rgba(255,255,255,0.07)', padding: 5 }}>
-                        <div style={{ height: 5, width: '33%', borderRadius: 2, background: '#a1a1aa', opacity: 0.4 }} />
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} />
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fbbf24' }} />
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />
-                  </div>
-                </div>
-                <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#111' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', fontFamily: 'var(--font-sans)' }}>Monochrome</div>
-                    <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'var(--font-sans)' }}>Black, white, gray — status colors preserved</div>
-                  </div>
-                  {theme === 'mono' && <CheckCircle size={14} color="#d4d4d8" />}
-                </div>
-              </button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {([
+                { value: 'amber' as const,         label: 'Amber',         color: '#f0a83a' },
+                { value: 'signal-red' as const,    label: 'Signal Red',    color: '#e85c4e' },
+                { value: 'cyan' as const,           label: 'Cyan',          color: '#5fb6c4' },
+                { value: 'electric-green' as const, label: 'Electric Green',color: '#8ad26b' },
+                { value: 'violet' as const,         label: 'Violet',        color: '#b794f6' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setAccent(opt.value)}
+                  title={opt.label}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+                    background: accent === opt.value ? `${opt.color}18` : 'var(--bg)',
+                    border: accent === opt.value ? `1px solid ${opt.color}` : ruleStrong,
+                    cursor: 'pointer', fontSize: 11, color: accent === opt.value ? opt.color : 'var(--fg-2)',
+                    fontFamily: 'var(--font-sans)',
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: opt.color, flexShrink: 0 }} />
+                  {opt.label}
+                  {accent === opt.value && <CheckCircle size={11} />}
+                </button>
+              ))}
             </div>
-
-            <p style={{ margin: '10px 0 0', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-              Theme saved locally. Green, amber, red, and orange always indicate severity and status.
-            </p>
           </div>
+
+          {/* Background variant */}
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Monitor size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Background</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {([
+                { value: 'paper' as const,      label: 'Paper Dark',  swatch: '#0d0c0a' },
+                { value: 'true-black' as const, label: 'True Black',  swatch: '#000000' },
+                { value: 'midnight' as const,   label: 'Midnight',    swatch: '#07091a' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setBg(opt.value)}
+                  title={opt.label}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+                    background: bg === opt.value ? 'var(--accent-2)' : 'var(--bg)',
+                    border: bg === opt.value ? '1px solid var(--accent)' : ruleStrong,
+                    cursor: 'pointer', fontSize: 11, color: bg === opt.value ? 'var(--accent)' : 'var(--fg-2)',
+                    fontFamily: 'var(--font-sans)',
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, border: '1px solid var(--rule-strong)', background: opt.swatch, flexShrink: 0 }} />
+                  {opt.label}
+                  {bg === opt.value && <CheckCircle size={11} />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Density */}
+          <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Gauge size={14} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>Density</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {([
+                { value: 'compact' as const,  label: 'Compact'  },
+                { value: 'standard' as const, label: 'Standard' },
+                { value: 'roomy' as const,    label: 'Roomy'    },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDensity(opt.value)}
+                  style={{
+                    padding: '6px 16px', fontSize: 11,
+                    background: density === opt.value ? 'var(--accent-2)' : 'var(--bg)',
+                    border: density === opt.value ? '1px solid var(--accent)' : ruleStrong,
+                    cursor: 'pointer', color: density === opt.value ? 'var(--accent)' : 'var(--fg-2)',
+                    fontFamily: 'var(--font-sans)',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: 10, color: 'var(--fg-4)', fontFamily: 'var(--font-sans)' }}>
+            All settings saved locally. Green, amber, red, and orange always indicate severity and status.
+          </p>
 
           {currentUser?.role === 'admin' && (
             <div style={{ background: 'var(--bg-2)', border: '1px solid rgba(240,168,58,0.2)', borderRadius: 4, padding: 16 }}>
@@ -1802,7 +1824,7 @@ export default function Settings() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   {(['critical', 'warning', 'info', 'all'] as const).map(ev => {
                     const on = webhookForm.events.includes(ev)
-                    const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? '#60a5fa' : '#22d3ee'
+                    const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? 'var(--fg-2)' : 'var(--ok)'
                     return (
                       <button key={ev} type="button" onClick={() => toggleWebhookEvent(ev)}
                         style={{ padding: '3px 10px', borderRadius: 3, fontSize: 11, fontFamily: 'var(--font-sans)', textTransform: 'capitalize', cursor: 'pointer', background: on ? `${col}18` : 'none', color: on ? col : 'var(--fg-3)', border: on ? `1px solid ${col}55` : ruleStrong }}
@@ -1833,8 +1855,8 @@ export default function Settings() {
                     <p style={{ margin: '0 0 6px', fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wh.url}</p>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {wh.events.map(ev => {
-                        const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? '#60a5fa' : '#22d3ee'
-                        return <span key={ev} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-sans)', color: col, background: `${col}18`, border: `1px solid ${col}55` }}>{ev}</span>
+                        const col = ev === 'critical' ? 'var(--crit)' : ev === 'warning' ? 'var(--accent)' : ev === 'info' ? 'var(--fg-2)' : 'var(--ok)'
+                        return <span key={ev} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-sans)', color: col }}>{ev}</span>
                       })}
                     </div>
                   </div>
@@ -1923,7 +1945,7 @@ export default function Settings() {
                 ) : <div />}
                 {!entry?.available && (
                   <button onClick={() => { setInfoTool(null); startInstall(infoTool) }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 3, background: 'rgba(240,168,58,0.1)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.3)', fontSize: 11, fontFamily: 'var(--font-sans)', cursor: 'pointer' }}
                   ><Icon name="download" size={11} color="currentColor" /> Install now</button>
                 )}
               </div>

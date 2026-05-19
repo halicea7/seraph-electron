@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type React from 'react'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Shield } from 'lucide-react'
 
 interface TargetInput {
@@ -29,7 +30,11 @@ const TARGET_TYPES = [
   { value: 'api_endpoint', label: 'API Endpoint' },
 ]
 
-const inputClass = "w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none border border-cyan-900/20 focus:border-cyan-500/40"
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '7px 10px', fontSize: 12, background: 'var(--bg)',
+  border: '1px solid var(--rule)', color: 'var(--fg)', outline: 'none',
+  fontFamily: 'var(--font-mono)', borderRadius: 0,
+}
 
 export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
   const [name, setName] = useState('')
@@ -84,117 +89,89 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
-      <div className="glass rounded-2xl border border-cyan-900/30 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--bg-2)', border: '1px solid var(--rule-strong)', width: '100%', maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-cyan-900/20">
-          <h2 className="text-lg font-semibold text-white">New Project</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
-            <X size={20} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>New Project</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex' }}>
+            <X size={16} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {error && (
-            <div className="rounded-lg px-4 py-2 text-sm text-red-400 border border-red-700/50" style={{ background: 'rgba(127,29,29,0.3)' }}>
+            <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--crit)', border: '1px solid rgba(232,92,78,0.3)', background: 'rgba(232,92,78,0.06)' }}>
               {error}
             </div>
           )}
 
           {/* Project Info */}
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Project Name *</label>
+              <label style={{ display: 'block', fontSize: 10, color: 'var(--fg-3)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Project Name *</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. ACME Corp Q2 Assessment"
-                className={inputClass}
-                style={{ background: '#05080d' }}
+                style={inputStyle}
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Description</label>
+              <label style={{ display: 'block', fontSize: 10, color: 'var(--fg-3)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Description</label>
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 placeholder="Engagement scope, objectives..."
                 rows={2}
-                className={`${inputClass} resize-none`}
-                style={{ background: '#05080d' }}
+                style={{ ...inputStyle, height: 'auto', resize: 'vertical' }}
               />
             </div>
           </div>
 
           {/* Targets */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Targets</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: 'var(--font-mono)' }}>Targets</label>
               <button
                 onClick={addTarget}
-                className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
               >
-                <Plus size={14} /> Add Target
+                <Plus size={13} /> Add Target
               </button>
             </div>
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {targets.map((target, idx) => (
-                <div key={idx} className="glass rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Target {idx + 1}</span>
+                <div key={idx} style={{ background: 'var(--bg)', border: '1px solid var(--rule)', padding: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>Target {idx + 1}</span>
                     {targets.length > 1 && (
-                      <button onClick={() => removeTarget(idx)} className="text-slate-600 hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
+                      <button onClick={() => removeTarget(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--crit)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-4)')}>
+                        <Trash2 size={13} />
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {[
+                      { label: 'Hostname / IP', field: 'hostname_or_ip' as const, placeholder: '192.168.1.1 or target.example.com' },
+                      { label: 'Port Range', field: 'ports' as const, placeholder: 'e.g. 1-1024' },
+                      { label: 'Notes', field: 'notes' as const, placeholder: 'Any context...' },
+                    ].map(f => (
+                      <div key={f.field}>
+                        <label style={{ display: 'block', fontSize: 9, color: 'var(--fg-4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>{f.label}</label>
+                        <input type="text" value={target[f.field]} onChange={e => updateTarget(idx, f.field, e.target.value)} placeholder={f.placeholder} style={inputStyle} />
+                      </div>
+                    ))}
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Hostname / IP</label>
-                      <input
-                        type="text"
-                        value={target.hostname_or_ip}
-                        onChange={e => updateTarget(idx, 'hostname_or_ip', e.target.value)}
-                        placeholder="192.168.1.1 or target.example.com"
-                        className={`${inputClass} font-mono`}
-                        style={{ background: '#090d14' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Type</label>
-                      <select
-                        value={target.target_type}
-                        onChange={e => updateTarget(idx, 'target_type', e.target.value)}
-                        className={inputClass}
-                        style={{ background: '#090d14' }}
-                      >
+                      <label style={{ display: 'block', fontSize: 9, color: 'var(--fg-4)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>Type</label>
+                      <select value={target.target_type} onChange={e => updateTarget(idx, 'target_type', e.target.value)} style={inputStyle}>
                         {TARGET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Port Range (optional)</label>
-                      <input
-                        type="text"
-                        value={target.ports}
-                        onChange={e => updateTarget(idx, 'ports', e.target.value)}
-                        placeholder="e.g. 1-1024"
-                        className={`${inputClass} font-mono`}
-                        style={{ background: '#090d14' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Notes</label>
-                      <input
-                        type="text"
-                        value={target.notes}
-                        onChange={e => updateTarget(idx, 'notes', e.target.value)}
-                        placeholder="Any context..."
-                        className={inputClass}
-                        style={{ background: '#090d14' }}
-                      />
                     </div>
                   </div>
                 </div>
@@ -207,40 +184,45 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
             <button
               type="button"
               onClick={() => setScopeExpanded(e => !e)}
-              className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider hover:text-slate-100 transition-colors"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
             >
-              {scopeExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              <Shield size={13} className="text-cyan-400" /> Scope (optional)
+              {scopeExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <Shield size={12} style={{ color: 'var(--accent)' }} /> Scope (optional)
             </button>
             {scopeExpanded && (
-              <div className="mt-3 glass rounded-xl p-4 space-y-4">
-                <p className="text-[11px] text-slate-400">
-                  Restrict which IPs/hostnames can be added as targets. Leave empty to allow everything.
-                  Supports CIDRs (e.g. 10.0.0.0/8), exact hostnames, and wildcards (e.g. *.example.com).
+              <div style={{ marginTop: 10, background: 'var(--bg)', border: '1px solid var(--rule)', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0, fontFamily: 'var(--font-sans)' }}>
+                  Restrict which IPs/hostnames can be added as targets. Supports CIDRs, exact hostnames, wildcards.
                 </p>
                 {(['include', 'exclude'] as const).map(type => (
                   <div key={type}>
-                    <label className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+                    <label style={{ display: 'block', fontSize: 9, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6, fontFamily: 'var(--font-mono)' }}>
                       {type === 'include' ? '✓ Include (allowed)' : '✗ Exclude (blocked)'}
                     </label>
-                    <div className="flex gap-2 mb-2">
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                       <input
-                        className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded px-2 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                        style={{ ...inputStyle, flex: 1 }}
                         placeholder={type === 'include' ? '192.168.1.0/24 or example.com' : '192.168.1.1'}
                         value={type === 'include' ? scopeIncludeInput : scopeExcludeInput}
                         onChange={e => type === 'include' ? setScopeIncludeInput(e.target.value) : setScopeExcludeInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addScopeRule(type) } }}
                       />
                       <button type="button" onClick={() => addScopeRule(type)}
-                        className="px-2 py-1.5 rounded border border-slate-700/40 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 text-xs transition-colors">
+                        style={{ padding: '0 10px', background: 'none', border: '1px solid var(--rule-strong)', color: 'var(--fg-2)', cursor: 'pointer', fontSize: 14 }}>
                         +
                       </button>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {scope[type].map((rule, idx) => (
-                        <span key={idx} className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border font-mono ${type === 'include' ? 'text-green-400 border-green-500/30 bg-green-900/20' : 'text-red-400 border-red-500/30 bg-red-900/20'}`}>
+                        <span key={idx} style={{
+                          display: 'flex', alignItems: 'center', gap: 4, fontSize: 10,
+                          padding: '1px 6px', fontFamily: 'var(--font-mono)', border: '1px solid',
+                          color: type === 'include' ? 'var(--ok)' : 'var(--crit)',
+                          borderColor: type === 'include' ? 'rgba(107,138,114,0.4)' : 'rgba(232,92,78,0.4)',
+                          background: type === 'include' ? 'rgba(107,138,114,0.06)' : 'rgba(232,92,78,0.06)',
+                        }}>
                           {rule}
-                          <button type="button" onClick={() => removeScopeRule(type, idx)} className="hover:text-white ml-0.5">×</button>
+                          <button type="button" onClick={() => removeScopeRule(type, idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>×</button>
                         </span>
                       ))}
                     </div>
@@ -252,17 +234,17 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-cyan-900/20">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--rule)' }}>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors"
+            style={{ padding: '6px 14px', fontSize: 12, color: 'var(--fg-3)', background: 'none', border: '1px solid var(--rule-strong)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm text-white font-semibold transition-all shadow-glow-blue"
+            style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: '#1a1408', border: 'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}
           >
             {saving ? 'Creating...' : 'Create Project'}
           </button>

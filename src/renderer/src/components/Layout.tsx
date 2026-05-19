@@ -1,12 +1,14 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CommandPalette from './CommandPalette'
 import NotificationBell from './NotificationBell'
 import ActiveUsers from './ActiveUsers'
+import ProjectModal from './ProjectModal'
 import Icon from './Icon'
 import { useAppStore } from '@/stores/appStore'
 import { useAINarrative } from '../contexts/AINarrativeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { getApiBase } from '@/lib/config'
 
 // ── Nav structure (mirrors handoff shell.jsx) ─────────────────────────────────
 
@@ -169,9 +171,34 @@ function Ticker({ backendOnline }: { backendOnline: boolean | null }) {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const navigate = useNavigate()
-  const { selectedProject } = useAppStore()
+  const { projects, selectedProject, setProjects, setSelectedProject, addProject } = useAppStore()
+  const [showPicker, setShowPicker] = useState(false)
+  const [showNewProject, setShowNewProject] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  // Load projects once
+  useEffect(() => {
+    if (!token) return
+    fetch(`${getApiBase()}/projects`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        setProjects(data)
+        // Auto-select first project if none selected
+        if (!selectedProject && data.length > 0) setSelectedProject(data[0])
+      })
+      .catch(() => {})
+  }, [token])
+
+  // Close picker on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const initials = user?.username
     ? user.username.slice(0, 2).toUpperCase()
@@ -182,7 +209,36 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
     navigate('/login')
   }
 
+  async function handleCreateProject(
+    proj: { name: string; description: string },
+    targets: any[],
+    scope: any,
+  ) {
+    const res = await fetch(`${getApiBase()}/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ...proj, scope }),
+    })
+    if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+    const newProject = await res.json()
+
+    // Create targets if any
+    for (const t of targets) {
+      if (!t.hostname_or_ip.trim()) continue
+      await fetch(`${getApiBase()}/projects/${newProject.id}/targets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(t),
+      })
+    }
+
+    addProject(newProject)
+    setSelectedProject(newProject)
+    setShowNewProject(false)
+  }
+
   return (
+    <>
     <aside style={{
       width: 230,
       flexShrink: 0,
@@ -206,30 +262,72 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       </div>
 
       {/* Engagement switcher */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rule)' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rule)', position: 'relative' }} ref={pickerRef}>
         <div className="smcap smcap-2" style={{ marginBottom: 6 }}>Engagement</div>
-        <button style={{
-          width: '100%',
-          textAlign: 'left',
-          background: 'transparent',
-          border: '1px solid var(--rule)',
-          padding: '8px 10px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: 'var(--fg)',
-          cursor: 'pointer',
-        }}>
+        <button
+          onClick={() => setShowPicker(v => !v)}
+          style={{
+            width: '100%', textAlign: 'left', background: 'transparent',
+            border: `1px solid ${showPicker ? 'var(--accent)' : 'var(--rule)'}`,
+            padding: '8px 10px', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', color: 'var(--fg)', cursor: 'pointer',
+          }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
-              {selectedProject ? `OP-${String(selectedProject.id).padStart(4, '0')}` : 'No project'}
+              {selectedProject ? selectedProject.name : 'No project'}
             </span>
-            <span style={{ fontSize: 10.5, color: 'var(--fg-3)' }}>
-              {selectedProject?.name ?? 'Select a project'}
+            <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+              {selectedProject ? `${selectedProject.targets?.length ?? 0} targets` : 'Select a project'}
             </span>
           </div>
-          <Icon name="chev_d" size={11} color="var(--fg-3)" />
+          <Icon name={showPicker ? 'chev_u' : 'chev_d'} size={11} color="var(--fg-3)" />
         </button>
+
+        {/* Dropdown */}
+        {showPicker && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 40,
+            background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
+            borderTop: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            maxHeight: 260, overflowY: 'auto',
+          }}>
+            {projects.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>No projects yet</div>
+            ) : (
+              projects.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setSelectedProject(p); setShowPicker(false) }}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '9px 14px',
+                    background: selectedProject?.id === p.id ? 'var(--accent-2)' : 'transparent',
+                    borderLeft: `2px solid ${selectedProject?.id === p.id ? 'var(--accent)' : 'transparent'}`,
+                    border: 'none', borderBottom: '1px solid var(--rule-2)', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                  }}
+                  onMouseEnter={e => { if (selectedProject?.id !== p.id) e.currentTarget.style.background = 'var(--bg-3)' }}
+                  onMouseLeave={e => { if (selectedProject?.id !== p.id) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: 11, color: selectedProject?.id === p.id ? 'var(--accent)' : 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{p.name}</span>
+                  {p.description && <span style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'var(--font-sans)' }}>{p.description.slice(0, 40)}</span>}
+                </button>
+              ))
+            )}
+            <button
+              onClick={() => { setShowPicker(false); setShowNewProject(true) }}
+              style={{
+                width: '100%', textAlign: 'left', padding: '9px 14px',
+                background: 'transparent', border: 'none', borderTop: '1px solid var(--rule)',
+                display: 'flex', alignItems: 'center', gap: 6,
+                color: 'var(--accent)', fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font-mono)',
+              }}
+            >
+              <Icon name="plus" size={11} color="var(--accent)" />
+              New Project
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
@@ -315,6 +413,14 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
         </div>
       </div>
     </aside>
+
+    {showNewProject && (
+      <ProjectModal
+        onClose={() => setShowNewProject(false)}
+        onSave={handleCreateProject}
+      />
+    )}
+    </>
   )
 }
 

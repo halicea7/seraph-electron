@@ -20,7 +20,7 @@ const SEV_COLOR: Record<string, string> = {
   high:     '#f97316',
   medium:   'var(--accent)',
   low:      'var(--ok)',
-  info:     '#60a5fa',
+  info:     'var(--med)',
 }
 
 const SEV_BG: Record<string, string> = {
@@ -28,21 +28,21 @@ const SEV_BG: Record<string, string> = {
   high:     'rgba(249,115,22,0.1)',
   medium:   'rgba(240,168,58,0.1)',
   low:      'rgba(84,175,97,0.1)',
-  info:     'rgba(96,165,250,0.1)',
+  info:     'rgba(240,168,58,0.06)',
 }
 
 const STATUS_COLORS: Record<string, { color: string; background: string; border: string }> = {
   completed: { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',  border: '1px solid rgba(84,175,97,0.3)' },
-  running:   { color: '#60a5fa',       background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)' },
+  running:   { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)' },
   pending:   { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
   failed:    { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',  border: '1px solid rgba(232,64,64,0.3)' },
 }
 
 function kindIcon(kind: TimelineEvent['kind']) {
   switch (kind) {
-    case 'project':    return <Icon name="folder" size={13} color="#22d3ee" />
+    case 'project':    return <Icon name="folder" size={13} color="var(--fg-2)" />
     case 'target':     return <Icon name="target" size={13} color="#8b5cf6" />
-    case 'scan_start': return <Icon name="activity" size={13} color="#60a5fa" />
+    case 'scan_start': return <Icon name="activity" size={13} color="var(--accent)" />
     case 'scan_end':   return <Icon name="check" size={13} color="var(--ok)" />
     case 'finding':    return <AlertTriangle size={13} color="var(--accent)" />
   }
@@ -50,9 +50,9 @@ function kindIcon(kind: TimelineEvent['kind']) {
 
 function kindDotColor(kind: TimelineEvent['kind']): string {
   switch (kind) {
-    case 'project':    return '#22d3ee'
+    case 'project':    return 'var(--fg-2)'
     case 'target':     return '#8b5cf6'
-    case 'scan_start': return '#60a5fa'
+    case 'scan_start': return 'var(--accent)'
     case 'scan_end':   return 'var(--ok)'
     case 'finding':    return 'var(--accent)'
   }
@@ -176,7 +176,7 @@ export default function Timeline() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { label: 'Targets', value: targetCount, color: '#8b5cf6' },
-            { label: 'Scans run', value: scanCount, color: '#60a5fa' },
+            { label: 'Scans run', value: scanCount, color: 'var(--med)' },
             { label: 'Findings', value: findingCount, color: 'var(--accent)' },
             { label: 'Critical', value: criticalCount, color: 'var(--crit)' },
           ].map(({ label, value, color }) => (
