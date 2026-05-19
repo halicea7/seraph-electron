@@ -1157,11 +1157,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Bottom strip 2fr / 1fr / 1fr ──────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr' }}>
+      {/* ── Bottom strip 2fr / 1fr ─────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr' }}>
         <ScanHistorySection projectId={projectId} />
         <SchedulerSection />
-        <PlaybooksSection />
       </div>
 
       <ProbeToast visible={probeToast} fading={probeToastFading} />

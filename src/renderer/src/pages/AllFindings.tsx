@@ -864,7 +864,6 @@ interface DetailProps {
 }
 
 function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onDelete, onClose }: DetailProps) {
-  const [aiOpen, setAiOpen] = useState(false)
   const [aiModels, setAiModels] = useState<string[]>([])
   const [aiModel, setAiModel] = useState('')
   const [aiResult, setAiResult] = useState<string | null>(null)
@@ -872,7 +871,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
   const [statusOpen, setStatusOpen] = useState(false)
 
   useEffect(() => {
-    if (!aiOpen || aiModels.length > 0) return
+    if (aiModels.length > 0) return
     fetch(`${getApiBase()}/settings/ai`)
       .then(r => r.json())
       .then(async cfg => {
@@ -1035,49 +1034,36 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
         </div>
 
         {/* AI Remediation */}
-        <div style={{ border: `1px solid ${aiOpen ? 'rgba(168,85,247,0.5)' : 'var(--rule)'}`, background: aiOpen ? 'rgba(168,85,247,0.03)' : 'transparent' }}>
-          <div className="sec-h">
-            <span className="title" style={{ color: aiOpen ? '#a855f7' : undefined }}>AI REMEDIATION · LOCAL LLM</span>
-            <button onClick={() => setAiOpen(v => !v)} className="btn btn-sm" style={{ borderColor: 'rgba(168,85,247,0.4)', color: '#a855f7' }}>
-              {aiOpen ? <><X size={9} /> Close</> : <><Brain size={9} /> Generate</>}
+        <div style={{ border: `1px solid ${aiResult ? 'rgba(168,85,247,0.5)' : 'var(--rule)'}`, background: aiResult ? 'rgba(168,85,247,0.03)' : 'transparent' }}>
+          <div className="sec-h" style={{ gap: 6 }}>
+            <span className="title" style={{ marginRight: 'auto' }}>AI REMEDIATION · LOCAL LLM</span>
+            {aiModels.length > 0 ? (
+              <select
+                value={aiModel}
+                onChange={e => setAiModel(e.target.value)}
+                style={{ fontSize: 10, padding: '2px 6px', background: 'var(--bg)', border: '1px solid rgba(168,85,247,0.3)', color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', cursor: 'pointer', maxWidth: 130 }}
+              >
+                {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            ) : (
+              <span style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>no models</span>
+            )}
+            <button
+              onClick={generateRemediation}
+              disabled={!aiModel || aiGenerating}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, padding: '3px 10px', background: aiModel && !aiGenerating ? 'rgba(168,85,247,0.12)' : 'transparent', border: '1px solid rgba(168,85,247,0.35)', color: aiModel && !aiGenerating ? '#a855f7' : 'var(--fg-4)', cursor: aiModel && !aiGenerating ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.06em' }}
+            >
+              <Brain size={9} /> {aiGenerating ? 'Generating…' : 'Generate'}
             </button>
           </div>
-          {!aiOpen && (
-            <div style={{ padding: '8px 12px' }}>
-              <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0, lineHeight: 1.5 }}>
-                One-click remediation guidance via local Ollama. No external API calls.
-              </p>
+          {aiResult && (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.65, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(168,85,247,0.2)', fontFamily: 'var(--font-sans)' }}>
+              {aiResult}
             </div>
           )}
-          {aiOpen && (
-            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {aiModels.length > 0 ? (
-                  <select
-                    value={aiModel}
-                    onChange={e => setAiModel(e.target.value)}
-                    style={{ flex: 1, fontSize: 11, padding: '4px 8px', background: 'var(--bg)', border: '1px solid rgba(168,85,247,0.3)', color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', borderRadius: 3, cursor: 'pointer' }}
-                  >
-                    {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                ) : (
-                  <span style={{ flex: 1, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-                    {aiGenerating ? 'Loading models…' : 'No models found — check Settings → AI'}
-                  </span>
-                )}
-                <button
-                  onClick={generateRemediation}
-                  disabled={!aiModel || aiGenerating}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '4px 12px', borderRadius: 3, background: aiModel && !aiGenerating ? 'rgba(168,85,247,0.15)' : 'var(--bg)', border: '1px solid rgba(168,85,247,0.35)', color: aiModel && !aiGenerating ? '#a855f7' : 'var(--fg-4)', cursor: aiModel && !aiGenerating ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}
-                >
-                  <Sparkles size={10} /> {aiGenerating ? 'Generating…' : 'Run'}
-                </button>
-              </div>
-              {aiResult && (
-                <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.65, whiteSpace: 'pre-wrap', borderLeft: '2px solid rgba(168,85,247,0.5)', paddingLeft: 10, fontFamily: 'var(--font-sans)' }}>
-                  {aiResult}
-                </div>
-              )}
+          {!aiResult && !aiGenerating && (
+            <div style={{ padding: '6px 12px' }}>
+              <p style={{ fontSize: 11, color: 'var(--fg-4)', margin: 0 }}>Local Ollama · no external API calls</p>
             </div>
           )}
         </div>
