@@ -39,7 +39,9 @@ function timeAgo(iso: string | null): string {
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 })
   const ref = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
 
   function load() {
@@ -107,7 +109,14 @@ export default function NotificationBell() {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={buttonRef}
+        onClick={() => {
+          if (!open && buttonRef.current) {
+            const r = buttonRef.current.getBoundingClientRect()
+            setPopupPos({ top: r.top, left: r.right + 10 })
+          }
+          setOpen(o => !o)
+        }}
         style={{
           position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: 28, height: 28, background: 'transparent', border: 'none', cursor: 'pointer',
@@ -132,9 +141,9 @@ export default function NotificationBell() {
 
       {open && (
         <div style={{
-          position: 'absolute', left: 0, bottom: '100%', marginBottom: 8,
+          position: 'fixed', top: popupPos.top, left: popupPos.left,
           width: 300, background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.5)', zIndex: 30, overflow: 'hidden',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.5)', zIndex: 9999, overflow: 'hidden',
         }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--rule)' }}>

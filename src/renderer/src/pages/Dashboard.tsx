@@ -899,6 +899,7 @@ export default function Dashboard() {
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [now, setNow] = useState(new Date())
   const [findings, setFindings] = useState<FindingRow[]>([])
+  const [projectSev, setProjectSev] = useState<Record<string, number>>({})
 
   const [probeToast, setProbeToast] = useState(false)
   const [probeToastFading, setProbeToastFading] = useState(false)
@@ -984,22 +985,25 @@ export default function Dashboard() {
     }
   }, [setProjects]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh findings + stats when the active engagement changes
+  // Refresh project-specific findings + severity counts when engagement changes
   useEffect(() => {
     if (!selectedProject?.id) return
-    getStats().then(data => {
-      setStats(data)
-      const rf = data.recent_findings ?? []
-      if (rf.length > 0) {
-        setFindings(rf.map((f) => ({
-          id: f.id, severity: f.severity, cvss_score: f.cvss_score,
-          title: f.title, cve_id: f.cve_id, target: f.target, status: 'open',
-        })))
-      } else {
-        fetch(`${getApiBase()}/findings?project_id=${selectedProject.id}&limit=8`)
-          .then(r => r.json()).then(d => Array.isArray(d) && setFindings(d)).catch(() => {})
-      }
-    }).catch(() => {})
+    const pid = selectedProject.id
+    setFindings([])
+    setProjectSev({})
+    fetch(`${getApiBase()}/findings?project_id=${pid}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!Array.isArray(d)) return
+        setFindings(d.slice(0, 8))
+        const counts: Record<string, number> = {}
+        d.forEach(f => {
+          const s = (f.severity ?? '').toLowerCase()
+          if (s) counts[s] = (counts[s] ?? 0) + 1
+        })
+        setProjectSev(counts)
+      })
+      .catch(() => {})
   }, [selectedProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreateProject(
@@ -1028,7 +1032,7 @@ export default function Dashboard() {
     loadData()
   }
 
-  const sev = stats?.severity_counts ?? {}
+  const sev = Object.keys(projectSev).length > 0 ? projectSev : (stats?.severity_counts ?? {})
   const projectId = selectedProject?.id ?? (projects.length > 0 ? projects[0].id : null)
 
   // Generate trend arrays from current severity counts
