@@ -1052,7 +1052,7 @@ export default function Dashboard() {
   const totalDays = 30 // default engagement length
 
   return (
-    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column' }}>
       {showProjectModal && (
         <ProjectModal onClose={() => setShowProjectModal(false)} onSave={handleCreateProject} />
       )}

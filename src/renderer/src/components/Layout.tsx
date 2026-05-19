@@ -459,13 +459,15 @@ export default function Layout() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <Ticker backendOnline={backendOnline} />
 
-        <main className="page-enter" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
           {selectedProject && (
             <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 10 }}>
               <ActiveUsers projectId={selectedProject.id} page={currentPage} />
             </div>
           )}
-          <Outlet />
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Outlet />
+          </div>
         </main>
       </div>
 

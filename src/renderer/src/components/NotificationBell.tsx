@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Check, Trash2, X } from 'lucide-react'
 import { getApiBase, getWsBase } from '@/lib/config'
@@ -139,7 +140,7 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div style={{
           position: 'fixed', top: popupPos.top, left: popupPos.left,
           width: 300, background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
@@ -200,7 +201,8 @@ export default function NotificationBell() {
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
