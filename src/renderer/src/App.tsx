@@ -29,7 +29,6 @@ import AIOperator from '@/pages/AIOperator'
 import CveWatch from '@/pages/CveWatch'
 import Timeline from '@/pages/Timeline'
 import CommandLibrary from '@/pages/CommandLibrary'
-import { Loader } from 'lucide-react'
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -37,7 +36,7 @@ function ProtectedRoutes() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)' }}>
-        <Loader size={20} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+        <div style={{ width: 20, height: 20, border: '2px solid var(--rule)', borderTop: '2px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       </div>
     )
   }
@@ -86,7 +85,7 @@ function AuthGate() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)' }}>
-        <Loader size={20} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+        <div style={{ width: 20, height: 20, border: '2px solid var(--rule)', borderTop: '2px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       </div>
     )
   }
