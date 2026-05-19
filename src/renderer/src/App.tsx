@@ -1,3 +1,4 @@
+import { Component, type ReactNode } from 'react'
 import { HashRouter as BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
@@ -29,6 +30,24 @@ import AIOperator from '@/pages/AIOperator'
 import CveWatch from '@/pages/CveWatch'
 import Timeline from '@/pages/Timeline'
 import CommandLibrary from '@/pages/CommandLibrary'
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'monospace', background: 'var(--bg)', color: 'var(--crit)', height: '100vh', overflow: 'auto' }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 8 }}>RENDER ERROR</div>
+          <pre style={{ fontSize: 13, color: 'var(--crit)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{String(this.state.error)}</pre>
+          <pre style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 16, whiteSpace: 'pre-wrap' }}>{(this.state.error as any)?.stack}</pre>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 20, padding: '8px 16px', background: 'var(--accent)', color: '#1a1408', border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 12 }}>Retry</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -96,7 +115,7 @@ function AuthGate() {
         path="/login"
         element={user ? <Navigate to="/" replace /> : <Login />}
       />
-      <Route path="/*" element={<ProtectedRoutes />} />
+      <Route path="/*" element={<AppErrorBoundary><ProtectedRoutes /></AppErrorBoundary>} />
     </Routes>
   )
 }

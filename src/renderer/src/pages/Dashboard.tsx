@@ -1016,7 +1016,7 @@ export default function Dashboard() {
   // Generate trend arrays from current severity counts
   const makeTrend = (n: number) => Array.from({ length: 7 }, (_, i) => Math.max(0, n - (6 - i)))
 
-  const runningScans = stats?.recent_scans.filter((s) => s.status === 'running' || s.status === 'pending').length ?? 0
+  const runningScans = stats?.recent_scans?.filter((s) => s.status === 'running' || s.status === 'pending').length ?? 0
 
   // Engagement name + day X of Y
   const engName = selectedProject?.name ?? (projects[0]?.name ?? 'No project selected')
