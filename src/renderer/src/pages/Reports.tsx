@@ -310,7 +310,7 @@ interface GenState {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-type PreviewTab = 'exec' | 'tech' | 'findings' | 'evid'
+type PreviewTab = 'exec' | 'tech' | 'findings' | 'evid' | 'report' | 'ai'
 type Template = 'executive_summary' | 'technical_detail' | 'compliance_mapped'
 type NarrativeStyle = 'executive' | 'technical'
 type Audience = 'Exec' | 'Tech' | 'Both'
@@ -341,6 +341,7 @@ export default function Reports() {
   // AI narrative sidebar state
   const [narrativeStyle, setNarrativeStyle] = useState<NarrativeStyle>('executive')
   const [narrative, setNarrative] = useState<string>('')
+  const [localReport, setLocalReport] = useState<string>('')
   const [narrativeSavedAt, setNarrativeSavedAt] = useState<string>('')
   const [narrativeError, setNarrativeError] = useState<string>('')
   const [localGen, setLocalGen] = useState<GenState>({ running: false, done: false, p: 0, lines: [] })
@@ -399,21 +400,160 @@ export default function Reports() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  function handleLocalGenerate() {
+  async function handleLocalGenerate() {
     if (localGen.running) return
+    if (!projectId) return
     setLocalGen({ running: true, done: false, p: 0, lines: [] })
-    let i = 0
-    const tick = () => {
-      i++
+
+    // Run progress animation steps while fetching data in parallel
+    let animIdx = 0
+    const GEN_STEPS = [
+      'fetching findings from API ...',
+      'fetching scan data from API ...',
+      'counting severity distribution ...',
+      'drafting executive summary ...',
+      'building findings table ...',
+      'composing recommendations ...',
+      'formatting markdown report ...',
+      'finalising document ...',
+      'report ready.',
+    ]
+    const stepInterval = setInterval(() => {
+      animIdx++
       setLocalGen(g => ({
         ...g,
-        p: Math.min(100, Math.round((i / AI_STEPS.length) * 100)),
-        lines: [...g.lines, AI_STEPS[i - 1]],
+        p: Math.min(90, Math.round((animIdx / GEN_STEPS.length) * 90)),
+        lines: [...g.lines, GEN_STEPS[animIdx - 1]],
       }))
-      if (i < AI_STEPS.length) setTimeout(tick, 460 + Math.random() * 360)
-      else setLocalGen(g => ({ ...g, running: false, done: true }))
+      if (animIdx >= GEN_STEPS.length) clearInterval(stepInterval)
+    }, 480 + Math.random() * 320)
+
+    try {
+      // Fetch findings and scans in parallel
+      const [findingsRes, scansRes] = await Promise.allSettled([
+        fetch(`${getApiBase()}/findings?project_id=${projectId}`),
+        fetch(`${getApiBase()}/scans?project_id=${projectId}`),
+      ])
+
+      let reportFindings: Finding[] = []
+      if (findingsRes.status === 'fulfilled' && findingsRes.value.ok) {
+        const data = await findingsRes.value.json()
+        reportFindings = Array.isArray(data) ? data : (data.findings ?? data.items ?? [])
+      } else {
+        // Fall back to already-loaded findings
+        reportFindings = findings
+      }
+
+      let scans: any[] = []
+      if (scansRes.status === 'fulfilled' && scansRes.value.ok) {
+        const data = await scansRes.value.json()
+        scans = Array.isArray(data) ? data : (data.scans ?? data.items ?? [])
+      }
+
+      // Severity counts
+      const counts = {
+        critical: reportFindings.filter(f => f.severity === 'critical').length,
+        high:     reportFindings.filter(f => f.severity === 'high').length,
+        medium:   reportFindings.filter(f => f.severity === 'medium').length,
+        low:      reportFindings.filter(f => f.severity === 'low').length,
+      }
+      const total = reportFindings.length
+      const projName = selectedProj?.name ?? projectId
+
+      // Build the markdown report
+      const now = new Date().toISOString().slice(0, 10)
+      const lines: string[] = []
+
+      lines.push(`# Penetration Test Report`)
+      lines.push(``)
+      lines.push(`**Project:** ${projName}  `)
+      lines.push(`**Date:** ${now}  `)
+      lines.push(`**Auditor:** ${auditor || 'Seraph (Automated)'}  `)
+      lines.push(`**Classification:** CONFIDENTIAL`)
+      lines.push(``)
+      lines.push(`---`)
+      lines.push(``)
+
+      // Executive Summary
+      lines.push(`## Executive Summary`)
+      lines.push(``)
+      lines.push(`This report documents findings from a penetration test of project **${projName}**. ` +
+        `A total of **${total}** finding${total !== 1 ? 's' : ''} were identified across the assessed scope.`)
+      lines.push(``)
+      lines.push(`| Severity | Count |`)
+      lines.push(`|----------|-------|`)
+      lines.push(`| Critical | ${counts.critical} |`)
+      lines.push(`| High     | ${counts.high} |`)
+      lines.push(`| Medium   | ${counts.medium} |`)
+      lines.push(`| Low      | ${counts.low} |`)
+      lines.push(`| **Total**| **${total}** |`)
+      lines.push(``)
+
+      // Scope
+      lines.push(`## Scope`)
+      lines.push(``)
+      if (scans.length > 0) {
+        lines.push(`The following ${scans.length} scan(s) were conducted during this engagement:`)
+        lines.push(``)
+        lines.push(`| # | Target | Type | Status |`)
+        lines.push(`|---|--------|------|--------|`)
+        scans.slice(0, 20).forEach((s: any, idx: number) => {
+          lines.push(`| ${idx + 1} | ${s.target ?? s.host ?? '—'} | ${s.scan_type ?? s.type ?? '—'} | ${s.status ?? '—'} |`)
+        })
+      } else {
+        lines.push(`Scope details were not available at the time of report generation.`)
+      }
+      lines.push(``)
+
+      // Findings
+      lines.push(`## Findings`)
+      lines.push(``)
+      if (reportFindings.length === 0) {
+        lines.push(`No findings recorded for this project.`)
+      } else {
+        lines.push(`| # | Severity | Title | Description |`)
+        lines.push(`|---|----------|-------|-------------|`)
+        // Sort: critical → high → medium → low
+        const sevOrder = ['critical', 'high', 'medium', 'low']
+        const sorted = [...reportFindings].sort((a, b) =>
+          (sevOrder.indexOf(a.severity) - sevOrder.indexOf(b.severity))
+        )
+        sorted.forEach((f, idx) => {
+          const desc = (f.description ?? '').replace(/\n/g, ' ').slice(0, 120)
+          lines.push(`| ${idx + 1} | ${f.severity?.toUpperCase() ?? '—'} | ${f.title ?? '—'} | ${desc}${(f.description ?? '').length > 120 ? '…' : ''} |`)
+        })
+      }
+      lines.push(``)
+
+      // Recommendations
+      lines.push(`## Recommendations`)
+      lines.push(``)
+      const critHigh = reportFindings.filter(f => f.severity === 'critical' || f.severity === 'high')
+      if (critHigh.length > 0) {
+        lines.push(`The following high-priority items should be addressed immediately:`)
+        lines.push(``)
+        critHigh.slice(0, 10).forEach((f, idx) => {
+          const rem = f.remediation ?? f.recommendation ?? 'Refer to finding details for remediation guidance.'
+          lines.push(`${idx + 1}. **${f.title}** — ${rem.replace(/\n/g, ' ').slice(0, 200)}`)
+        })
+      } else {
+        lines.push(`No critical or high severity findings were identified. Continue to monitor and remediate any medium/low items in accordance with your security policy.`)
+      }
+      lines.push(``)
+      lines.push(`---`)
+      lines.push(``)
+      lines.push(`*Generated by Seraph on ${now}*`)
+
+      const reportMd = lines.join('\n')
+
+      clearInterval(stepInterval)
+      setLocalReport(reportMd)
+      setLocalGen(g => ({ ...g, p: 100, lines: [...g.lines, 'report ready.'], running: false, done: true }))
+      setPreviewTab('report')
+    } catch (err: any) {
+      clearInterval(stepInterval)
+      setLocalGen(g => ({ ...g, running: false, done: true, lines: [...g.lines, `error: ${err.message}`] }))
     }
-    setTimeout(tick, 250)
   }
 
   async function handleGenerateNarrative() {
@@ -421,7 +561,11 @@ export default function Reports() {
     setNarrativeError('')
     try {
       const result = await generate(projectId, narrativeStyle)
-      if (result) { setNarrative(result.narrative); setNarrativeSavedAt(result.savedAt) }
+      if (result) {
+        setNarrative(result.narrative)
+        setNarrativeSavedAt(result.savedAt)
+        setPreviewTab('ai')
+      }
     } catch (err: any) { setNarrativeError(err.message || 'Unknown error') }
   }
 
@@ -486,6 +630,8 @@ export default function Reports() {
     { id: 'tech' as PreviewTab, label: `Technical · ${displayFindings.length}` },
     { id: 'findings' as PreviewTab, label: 'Findings matrix' },
     { id: 'evid' as PreviewTab, label: 'Evidence' },
+    { id: 'report' as PreviewTab, label: 'Report' },
+    { id: 'ai' as PreviewTab, label: 'AI' },
   ]
 
   const selStyle: React.CSSProperties = {
@@ -676,7 +822,7 @@ export default function Reports() {
                   }}
                 >
                   <Brain size={11} />
-                  {hasNewFindings ? 'Regenerate (new findings)' : 'Generate via context'}
+                  AI Interpretation
                   {hasNewFindings && !generatingNarrative && (
                     <span style={{ position: 'absolute', top: 2, right: 6, width: 6, height: 6, borderRadius: '50%', background: 'var(--crit)', boxShadow: '0 0 6px rgba(232,64,64,0.8)' }} />
                   )}
@@ -791,6 +937,16 @@ export default function Reports() {
               {previewTab === 'tech' && <TechReport />}
               {previewTab === 'findings' && <FindingsMatrix findings={displayFindings} />}
               {previewTab === 'evid' && <EvidencePreview />}
+              {previewTab === 'report' && (
+                localReport
+                  ? <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg)', margin: 0 }}>{localReport}</pre>
+                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No report generated yet. Use "Generate narrative" to build one.</div>
+              )}
+              {previewTab === 'ai' && (
+                narrative
+                  ? <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg)', margin: 0 }}>{narrative}</pre>
+                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No AI narrative yet. Use "AI Interpretation" to generate one.</div>
+              )}
             </div>
           </div>
         </div>

@@ -31,13 +31,15 @@ interface Profile {
 
 // ── Static fallback data ──────────────────────────────────────────────────────
 
-const STATIC_BENCHMARKS = [
+type BenchmarkEntry = { id: string; label: string; controls: number | string; sel: number | string }
+
+const STATIC_BENCHMARKS: BenchmarkEntry[] = [
   { id: 'cis-l1',  label: 'CIS Ubuntu 22.04 L1',        controls: 274, sel: 198 },
   { id: 'cis-l2',  label: 'CIS Ubuntu 22.04 L2',        controls: 312, sel: 0   },
   { id: 'nist',    label: 'NIST 800-53 r5 · Moderate',  controls: 158, sel: 0   },
   { id: 'cis-win', label: 'CIS Win Server 2019 L1',      controls: 376, sel: 0   },
   { id: 'lynis',   label: 'Lynis · audit system',        controls: '—', sel: '—' },
-] as const
+]
 
 const STATIC_TARGETS_DEMO = ['app-01', 'app-02', 'db-01', 'redis-01']
 
@@ -248,6 +250,7 @@ export default function AuditBuilder() {
   const [profileMode, setProfileMode] = useState<string>('Server')
   const [checkedTargets, setCheckedTargets] = useState<Set<string>>(new Set(STATIC_TARGETS_DEMO))
   const [controls, setControls] = useState<CisControl[]>(STATIC_CONTROLS)
+  const [benchmarks, setBenchmarks] = useState<BenchmarkEntry[]>(STATIC_BENCHMARKS)
   const [selectedControlId, setSelectedControlId] = useState<string>(STATIC_CONTROLS[0].id)
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, unknown>>>({})
@@ -300,6 +303,9 @@ export default function AuditBuilder() {
         .then(r => r.ok ? r.json() : [])
         .then(setSshCredentials)
         .catch(() => {})
+
+      loadControlResults(projectId)
+      loadBenchmarks(projectId)
     }
   }, [projectId])
 
@@ -348,6 +354,48 @@ export default function AuditBuilder() {
       const res = await fetch(`${getApiBase()}/hardening/profiles`)
       if (res.ok) setHardeningProfiles(await res.json())
     } catch { /* ignore */ }
+  }
+
+  async function loadControlResults(pid: string) {
+    try {
+      const res = await fetch(`${getApiBase()}/audit/findings?project_id=${pid}`)
+      if (!res.ok) return
+      const findings: Array<{ severity: string; title: string; description?: string }> = await res.json()
+      if (!findings.length) return
+
+      // Map findings severity to control states
+      setControls(prev => prev.map(ctrl => {
+        const related = findings.filter(f =>
+          f.title?.toLowerCase().includes(ctrl.title?.toLowerCase?.() ?? '') ||
+          f.description?.toLowerCase().includes(ctrl.id?.toLowerCase?.() ?? '')
+        )
+        if (!related.length) return ctrl
+        const hasCrit = related.some(f => f.severity === 'critical')
+        const hasHigh  = related.some(f => f.severity === 'high')
+        return {
+          ...ctrl,
+          state: hasCrit ? 'fail' : hasHigh ? 'warn' : ctrl.state,
+        }
+      }))
+    } catch {
+      // keep static data on error
+    }
+  }
+
+  async function loadBenchmarks(pid: string) {
+    try {
+      // Try /audit/summary first, fall back to /audit/benchmarks
+      let res = await fetch(`${getApiBase()}/audit/summary?project_id=${pid}`)
+      if (!res.ok) {
+        res = await fetch(`${getApiBase()}/audit/benchmarks?project_id=${pid}`)
+      }
+      if (!res.ok) return
+      const data: Array<{ id: string; label: string; controls: number | string; sel: number | string }> = await res.json()
+      if (!data.length) return
+      setBenchmarks(data)
+    } catch {
+      // keep STATIC_BENCHMARKS on error
+    }
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -546,7 +594,7 @@ export default function AuditBuilder() {
 
           {/* Benchmark list */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {STATIC_BENCHMARKS.map(b => (
+            {benchmarks.map(b => (
               <button
                 key={b.id}
                 onClick={() => setActiveBench(b.id)}

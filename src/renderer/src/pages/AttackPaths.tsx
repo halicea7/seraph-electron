@@ -35,6 +35,8 @@ interface PathStep {
   tool: string
   title: string
   sev: string
+  description: string
+  command: string
 }
 
 interface AttackChain {
@@ -133,9 +135,16 @@ function buildChains(graph: GraphData): AttackChain[] {
     const impact = topSev ?? EDGE_TYPE_IMPACT[entry.type] ?? 'Medium'
     const cvss = impact === 'Critical' ? 9.8 : impact === 'High' ? 7.5 : impact === 'Medium' ? 5.0 : 3.0
 
+    const edgeTool = EDGE_TYPE_TOOL[entry.type] ?? 'access'
+    const entryStep: PathStep = entry.type === 'c2'
+      ? { tool: edgeTool, title: target.label, sev: impact, description: 'Deploy implant via exploit and establish callback', command: 'use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp' }
+      : entry.type === 'finding'
+        ? { tool: edgeTool, title: target.label, sev: impact, description: 'Exploit identified vulnerability to gain code execution', command: 'nxc smb {target} -u {user} -p {pass} --exec-method mmcexec' }
+        : { tool: edgeTool, title: target.label, sev: impact, description: 'Reuse captured credentials for lateral movement', command: 'impacket-psexec {domain}/{user}:{pass}@{target}' }
+
     const baseSteps: PathStep[] = [
-      { tool: 'recon', title: 'Initial recon', sev: 'Info' },
-      { tool: EDGE_TYPE_TOOL[entry.type] ?? 'access', title: target.label, sev: impact },
+      { tool: 'recon', title: 'Initial recon', sev: 'Info', description: 'Enumerate open ports, services, and OS fingerprint', command: 'nmap -sV -sC -O -T4 {target}' },
+      entryStep,
     ]
 
     // Check for lateral movement from this target
@@ -143,7 +152,7 @@ function buildChains(graph: GraphData): AttackChain[] {
     laterals.forEach(lat => {
       const latTarget = nodeMap.get(lat.target)
       if (latTarget) {
-        baseSteps.push({ tool: 'cred-reuse', title: latTarget.label, sev: 'Medium' })
+        baseSteps.push({ tool: 'cred-reuse', title: latTarget.label, sev: 'Medium', description: 'Reuse captured credentials for lateral movement', command: 'impacket-psexec {domain}/{user}:{pass}@{target}' })
       }
     })
 
@@ -163,10 +172,10 @@ function buildChains(graph: GraphData): AttackChain[] {
       impact: 'High',
       cvss: 7.5,
       steps: [
-        { tool: 'recon', title: 'External recon', sev: 'Info' },
-        { tool: 'exploit', title: 'Initial access', sev: 'High' },
-        { tool: 'pivot', title: 'Lateral movement', sev: 'Medium' },
-        { tool: 'exfil', title: 'Data exfiltration', sev: 'Critical' },
+        { tool: 'recon', title: 'External recon', sev: 'Info', description: 'Enumerate open ports, services, and OS fingerprint', command: 'nmap -sV -sC -O -T4 {target}' },
+        { tool: 'exploit', title: 'Initial access', sev: 'High', description: 'Exploit identified vulnerability to gain code execution', command: 'nxc smb {target} -u {user} -p {pass} --exec-method mmcexec' },
+        { tool: 'pivot', title: 'Lateral movement', sev: 'Medium', description: 'Reuse captured credentials for lateral movement', command: 'impacket-psexec {domain}/{user}:{pass}@{target}' },
+        { tool: 'exfil', title: 'Data exfiltration', sev: 'Critical', description: 'Deploy implant via exploit and establish callback', command: 'use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp' },
       ],
       time: '12m',
     })
@@ -197,6 +206,8 @@ export default function AttackPaths() {
   const [graph, setGraph] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState(SORT_OPTIONS[0])
+  const [runningChain, setRunningChain] = useState<string | null>(null)
+  const [runResults, setRunResults] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (projectId) loadGraph()
@@ -209,6 +220,27 @@ export default function AttackPaths() {
       if (res.ok) setGraph(await res.json())
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleRunChain(chain: AttackChain) {
+    setRunningChain(chain.id)
+    try {
+      const res = await fetch(`${getApiBase()}/pentest/scans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId,
+          name: `Attack Chain ${chain.id}`,
+          targets: chain.steps.filter(s => s.command).map(s => s.command),
+          mode: 'chain',
+        })
+      })
+      if (res.ok) {
+        setRunResults(prev => ({ ...prev, [chain.id]: 'queued' }))
+      }
+    } finally {
+      setRunningChain(null)
     }
   }
 
@@ -268,6 +300,15 @@ export default function AttackPaths() {
                 <span className="title">CHAIN {chain.id} · {chain.impact.toUpperCase()}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
                   <span className="badge badge-accent">CVSS {chain.cvss.toFixed(1)}</span>
+                  <button
+                    className="btn btn-sm"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => handleRunChain(chain)}
+                    disabled={runningChain === chain.id}
+                  >
+                    <Icon name="play" size={10} />
+                    {runningChain === chain.id ? 'Queuing…' : runResults[chain.id] === 'queued' ? 'Queued' : 'Run'}
+                  </button>
                   <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>
                     {chain.steps.length} steps · {chain.time}
                   </span>
@@ -297,6 +338,12 @@ export default function AttackPaths() {
                       {step.title}
                     </div>
                     <SevBadge sev={step.sev} />
+                    {step.description && (
+                      <div style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 6, lineHeight: 1.4 }}>{step.description}</div>
+                    )}
+                    {step.command && (
+                      <div className="mono" style={{ fontSize: 9, color: 'var(--accent)', marginTop: 4, wordBreak: 'break-all', opacity: 0.8 }}>{step.command}</div>
+                    )}
 
                     {/* Arrow connector */}
                     {si < last && (

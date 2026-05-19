@@ -161,12 +161,31 @@ export default function PasswordAuditing() {
   const [installing, setInstalling] = useState<string | null>(null)
   const [installLog, setInstallLog] = useState<Record<string, string>>({})
 
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [loadingJobs, setLoadingJobs] = useState(false)
+
   const terminalRef = useRef<TerminalHandle>(null)
 
-  // KPI state (derived from static jobs for UI)
-  const recovered = STATIC_JOBS.reduce((a, j) => a + j.recovered, 0)
-  const inQueue   = STATIC_JOBS.filter(j => j.state === 'queued').reduce((a, j) => a + j.hashes, 0)
-  const activeCount = STATIC_JOBS.filter(j => j.state === 'active').length
+  // KPI state (derived from live jobs)
+  const recovered = jobs.reduce((a, j) => a + j.recovered, 0)
+  const inQueue   = jobs.filter(j => j.state === 'queued').reduce((a, j) => a + j.hashes, 0)
+  const activeCount = jobs.filter(j => j.state === 'active').length
+
+  async function loadJobs() {
+    if (!projectId) return
+    setLoadingJobs(true)
+    try {
+      const res = await fetch(`${getApiBase()}/cracking/jobs?project_id=${projectId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setJobs(Array.isArray(data) ? data : data.jobs ?? [])
+      }
+    } catch {
+      // keep empty
+    } finally {
+      setLoadingJobs(false)
+    }
+  }
 
   function loadBundles() {
     fetch(`${getApiBase()}/cracking/wordlists/available`).then(r => r.json()).then(setBundles)
@@ -189,6 +208,7 @@ export default function PasswordAuditing() {
       fetch(`${getApiBase()}/credentials?project_id=${projectId}`)
         .then(r => r.json())
         .then((data: Credential[]) => setVaultCreds(data.filter(c => c.cred_type === 'hash')))
+      loadJobs()
     }
   }, [projectId])
 
@@ -383,16 +403,30 @@ export default function PasswordAuditing() {
                 </tr>
               </thead>
               <tbody>
-                {STATIC_JOBS.map(job => (
-                  <tr key={job.id}>
-                    <td><span className="mono tnum" style={{ color: 'var(--accent)', fontSize: 10, textTransform: 'uppercase' }}>{job.mode}</span></td>
-                    <td><span className="mono" style={{ fontSize: 12 }}>{job.name}</span></td>
-                    <td><span className="mono tnum" style={{ fontSize: 12 }}>{job.hashes}</span></td>
-                    <td><StatePill state={job.state} /></td>
-                    <td><span className="mono tnum" style={{ color: 'var(--ok)', fontSize: 12 }}>{job.recovered}</span></td>
-                    <td><ProgressBar pct={job.progress} /></td>
+                {loadingJobs && jobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--fg-3)', fontSize: 12, padding: '16px 0', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
+                      Loading jobs…
+                    </td>
                   </tr>
-                ))}
+                ) : !loadingJobs && jobs.length === 0 && projectId ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--fg-3)', fontSize: 12, padding: '16px 0', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
+                      No cracking jobs yet.
+                    </td>
+                  </tr>
+                ) : (
+                  jobs.map(job => (
+                    <tr key={job.id}>
+                      <td><span className="mono tnum" style={{ color: 'var(--accent)', fontSize: 10, textTransform: 'uppercase' }}>{job.mode}</span></td>
+                      <td><span className="mono" style={{ fontSize: 12 }}>{job.name}</span></td>
+                      <td><span className="mono tnum" style={{ fontSize: 12 }}>{job.hashes}</span></td>
+                      <td><StatePill state={job.state} /></td>
+                      <td><span className="mono tnum" style={{ color: 'var(--ok)', fontSize: 12 }}>{job.recovered}</span></td>
+                      <td><ProgressBar pct={job.progress} /></td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </Section>

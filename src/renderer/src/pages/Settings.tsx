@@ -164,6 +164,8 @@ function getBulkInstallCmd(toolNames: string[], hostInfo: HostInfo | null): stri
   return parts.join(' && ')
 }
 
+const TOOL_CACHE_KEY = 'seraph_tool_cache'
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const rule = '1px solid var(--rule)'
@@ -212,16 +214,17 @@ const inputStyle: React.CSSProperties = {
 }
 
 const NAV_ITEMS: { id: string; label: string }[] = [
-  { id: 'users',    label: 'Users' },
-  { id: 'tools',    label: 'Tools' },
-  { id: 'ai',       label: 'AI' },
-  { id: 'msf',      label: 'Metasploit RPC' },
-  { id: 'env',      label: 'Environment' },
-  { id: 'passkeys', label: 'Passkeys' },
-  { id: 'demo',     label: 'Demo Data' },
+  { id: 'users',      label: 'Users' },
+  { id: 'appearance', label: 'Variants' },
+  { id: 'tools',      label: 'Tools' },
+  { id: 'ai',         label: 'AI' },
+  { id: 'msf',        label: 'Metasploit RPC' },
+  { id: 'env',        label: 'Environment' },
+  { id: 'passkeys',   label: 'Passkeys' },
+  { id: 'demo',       label: 'Demo Data' },
 ]
 
-type NavId = 'users' | 'tools' | 'ai' | 'msf' | 'env' | 'passkeys' | 'demo'
+type NavId = 'users' | 'appearance' | 'tools' | 'ai' | 'msf' | 'env' | 'passkeys' | 'demo'
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -332,7 +335,8 @@ export default function Settings() {
   const [envVars, setEnvVars] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    loadTools()
+    const cached = localStorage.getItem(TOOL_CACHE_KEY)
+    if (cached) { try { setToolStatus(JSON.parse(cached)) } catch {} }
     loadProfiles()
     loadAiConfig()
     loadProbeConfig()
@@ -506,7 +510,9 @@ export default function Settings() {
     setLoading(true)
     try {
       const [toolRes, hostRes] = await Promise.all([fetch(`${getApiBase()}/settings/tools`), fetch(`${getApiBase()}/settings/host-info`)])
-      setToolStatus(await toolRes.json())
+      const result = await toolRes.json()
+      setToolStatus(result)
+      localStorage.setItem(TOOL_CACHE_KEY, JSON.stringify(result))
       if (hostRes.ok) setHostInfo(await hostRes.json())
     } finally { setLoading(false) }
   }
@@ -747,7 +753,7 @@ export default function Settings() {
                 </div>
                 {userError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{userError}</p>}
                 <div>
-                  <button type="submit" disabled={userSaving} className="btn-primary">
+                  <button type="submit" disabled={userSaving} className="btn btn-primary">
                     {userSaving ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />} Create User
                   </button>
                 </div>
@@ -897,7 +903,7 @@ export default function Settings() {
               <button onClick={testAiConnection} disabled={aiTesting} className="btn">
                 {aiTesting ? <Loader size={13} className="animate-spin" color="var(--accent)" /> : <Icon name="wifi" size={13} color="currentColor" />} Test endpoint
               </button>
-              <button onClick={saveAiConfig} disabled={aiSaving} className="btn-primary">
+              <button onClick={saveAiConfig} disabled={aiSaving} className="btn btn-primary">
                 {aiSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
               </button>
               {aiStatus && (
@@ -926,7 +932,7 @@ export default function Settings() {
                   <button onClick={testLocalOllama} disabled={localOllamaTesting} className="btn">
                     {localOllamaTesting ? <Loader size={13} className="animate-spin" /> : <Icon name="wifi" size={13} color="currentColor" />} Test
                   </button>
-                  <button onClick={saveLocalOllamaSettings} disabled={localOllamaSaving} className="btn-primary">
+                  <button onClick={saveLocalOllamaSettings} disabled={localOllamaSaving} className="btn btn-primary">
                     {localOllamaSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
                   </button>
                   {localOllamaStatus && (
@@ -976,7 +982,7 @@ export default function Settings() {
               </Field>
             </div>
             <div>
-              <button onClick={saveMsfConfig} disabled={msfSaving} className="btn-primary">
+              <button onClick={saveMsfConfig} disabled={msfSaving} className="btn btn-primary">
                 {msfSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
               </button>
             </div>
@@ -1038,7 +1044,7 @@ export default function Settings() {
             </Field>
             {passkeyError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{passkeyError}</p>}
             <div>
-              <button type="button" onClick={handleRegisterPasskey} disabled={passkeyRegLoading} className="btn-primary">
+              <button type="button" onClick={handleRegisterPasskey} disabled={passkeyRegLoading} className="btn btn-primary">
                 {passkeyRegLoading ? <Loader size={13} className="animate-spin" /> : <Icon name="fingerprint" size={13} color="currentColor" />}
                 {passkeys.length > 0 ? 'Add Another Passkey' : 'Register Passkey'}
               </button>
@@ -1084,7 +1090,7 @@ export default function Settings() {
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="text" value={newTokenName} onChange={e => setNewTokenName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGenerateToken()} placeholder='Token name (e.g. "Chronos — Laptop")' style={{ ...inputStyle, flex: 1, width: 'auto' }} />
-              <button onClick={handleGenerateToken} disabled={tokenGenerating || !newTokenName.trim()} className="btn-primary" style={{ opacity: (tokenGenerating || !newTokenName.trim()) ? 0.5 : 1, flexShrink: 0 }}>
+              <button onClick={handleGenerateToken} disabled={tokenGenerating || !newTokenName.trim()} className="btn btn-primary" style={{ opacity: (tokenGenerating || !newTokenName.trim()) ? 0.5 : 1, flexShrink: 0 }}>
                 {tokenGenerating ? <Loader size={13} className="animate-spin" /> : <Icon name="key" size={13} color="currentColor" />} Generate
               </button>
             </div>
@@ -1111,7 +1117,7 @@ export default function Settings() {
               ) : (
                 <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Demo mode off</span>
               )}
-              <button onClick={handleDemoToggle} disabled={demoLoading} className={demoActive ? 'btn btn-danger' : 'btn-primary'}>
+              <button onClick={handleDemoToggle} disabled={demoLoading} className={demoActive ? 'btn btn-danger' : 'btn btn-primary'}>
                 {demoLoading ? <Loader size={13} className="animate-spin" /> : <FlaskConical size={13} />}
                 {demoLoading ? (demoActive ? 'Clearing…' : 'Seeding…') : (demoActive ? 'Remove demo data' : 'Load demo data')}
               </button>
@@ -1186,7 +1192,7 @@ export default function Settings() {
                   })}
                 </div>
               </Field>
-              <div><button type="submit" disabled={webhookSaving} className="btn-primary">{webhookSaving ? 'Saving…' : 'Add Webhook'}</button></div>
+              <div><button type="submit" disabled={webhookSaving} className="btn btn-primary">{webhookSaving ? 'Saving…' : 'Add Webhook'}</button></div>
             </form>
             {webhooks.length > 0 && (
               <table className="data">
@@ -1215,15 +1221,90 @@ export default function Settings() {
     )
   }
 
+  function renderAppearance() {
+    const ACCENT_SWATCHES = [
+      { value: '#e8b84b', label: 'Amber' },
+      { value: '#e8784b', label: 'Orange' },
+      { value: '#4be87a', label: 'Green' },
+      { value: '#4be8d8', label: 'Cyan' },
+      { value: '#4b8ee8', label: 'Blue' },
+      { value: '#7a4be8', label: 'Purple' },
+      { value: '#e84b4b', label: 'Red' },
+      { value: '#e84b8e', label: 'Pink' },
+    ]
+    const BG_OPTIONS = [
+      { value: 'default' as const, label: 'Default', swatch: '#0d0d0d' },
+      { value: 'warm'    as const, label: 'Warm',    swatch: '#0f0d09' },
+      { value: 'cool'    as const, label: 'Cool',    swatch: '#090d0f' },
+      { value: 'pure'    as const, label: 'Pure',    swatch: '#000000' },
+    ]
+    const DENSITY_OPTIONS = ['compact', 'default', 'comfortable'] as const
+    return (
+      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Section title="ACCENT COLOR">
+          <div style={{ padding: '14px var(--pad)' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {ACCENT_SWATCHES.map(s => {
+                const isActive = accent === s.value
+                return (
+                  <button key={s.value} onClick={() => setAccent(s.value as any)} title={s.label}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)', background: isActive ? `${s.value}18` : 'var(--bg)', border: isActive ? `1px solid ${s.value}` : ruleStrong, color: isActive ? s.value : 'var(--fg-2)' }}
+                  >
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.value, flexShrink: 0 }} />
+                    {s.label}
+                    {isActive && <CheckCircle size={10} />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </Section>
+        <Section title="BACKGROUND">
+          <div style={{ padding: '14px var(--pad)' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {BG_OPTIONS.map(opt => {
+                const isActive = bg === opt.value
+                return (
+                  <button key={opt.value} onClick={() => setBg(opt.value)} title={opt.label}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)', background: isActive ? 'var(--accent-2)' : 'var(--bg)', border: isActive ? '1px solid var(--accent)' : ruleStrong, color: isActive ? 'var(--accent)' : 'var(--fg-2)' }}
+                  >
+                    <span style={{ width: 12, height: 12, border: '1px solid var(--rule-strong)', background: opt.swatch, flexShrink: 0 }} />
+                    {opt.label}
+                    {isActive && <CheckCircle size={10} />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </Section>
+        <Section title="DENSITY">
+          <div style={{ padding: '14px var(--pad)' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {DENSITY_OPTIONS.map(v => {
+                const isActive = density === v
+                return (
+                  <button key={v} onClick={() => setDensity(v)}
+                    style={{ padding: '5px 18px', borderRadius: 3, fontSize: 11, fontFamily: 'var(--font-sans)', textTransform: 'capitalize', cursor: 'pointer', background: isActive ? 'var(--accent-2)' : 'var(--bg)', border: isActive ? '1px solid var(--accent)' : ruleStrong, color: isActive ? 'var(--accent)' : 'var(--fg-2)' }}
+                  >{v}</button>
+                )
+              })}
+            </div>
+          </div>
+        </Section>
+      </div>
+    )
+  }
+
   function renderContent() {
     switch (activeNav) {
-      case 'users':    return renderUsers()
-      case 'tools':    return renderTools()
-      case 'ai':       return renderAi()
-      case 'msf':      return renderMsf()
-      case 'env':      return renderEnv()
-      case 'passkeys': return renderPasskeys()
-      case 'demo':     return renderDemo()
+      case 'users':      return renderUsers()
+      case 'appearance': return renderAppearance()
+      case 'tools':      return renderTools()
+      case 'ai':         return renderAi()
+      case 'msf':        return renderMsf()
+      case 'env':        return renderEnv()
+      case 'passkeys':   return renderPasskeys()
+      case 'demo':       return renderDemo()
     }
   }
 
@@ -1264,13 +1345,14 @@ export default function Settings() {
                   gap: 8,
                 }}
               >
-                {item.id === 'users'    && <Icon name="user"        size={13} color="currentColor" />}
-                {item.id === 'tools'    && <Icon name="terminal"    size={13} color="currentColor" />}
-                {item.id === 'ai'       && <Brain size={13} />}
-                {item.id === 'msf'      && <Icon name="zap"         size={13} color="currentColor" />}
-                {item.id === 'env'      && <Monitor size={13} />}
-                {item.id === 'passkeys' && <Icon name="fingerprint" size={13} color="currentColor" />}
-                {item.id === 'demo'     && <Palette size={13} />}
+                {item.id === 'users'      && <Icon name="user"        size={13} color="currentColor" />}
+                {item.id === 'appearance' && <Palette size={13} />}
+                {item.id === 'tools'      && <Icon name="terminal"    size={13} color="currentColor" />}
+                {item.id === 'ai'         && <Brain size={13} />}
+                {item.id === 'msf'        && <Icon name="zap"         size={13} color="currentColor" />}
+                {item.id === 'env'        && <Monitor size={13} />}
+                {item.id === 'passkeys'   && <Icon name="fingerprint" size={13} color="currentColor" />}
+                {item.id === 'demo'       && <FlaskConical size={13} />}
                 {item.label}
               </button>
             )
@@ -1330,7 +1412,7 @@ export default function Settings() {
               </div>
               <div style={{ padding: '10px 18px', borderTop: rule, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0 }}>
                 {!entry?.available && (
-                  <button onClick={() => { setInfoTool(null); startInstall(infoTool) }} className="btn-primary">
+                  <button onClick={() => { setInfoTool(null); startInstall(infoTool) }} className="btn btn-primary">
                     <Icon name="download" size={11} color="currentColor" /> Install now
                   </button>
                 )}
@@ -1362,7 +1444,7 @@ export default function Settings() {
             </div>
             {installDone && (
               <div style={{ padding: '10px 18px', borderTop: rule, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
-                <button onClick={() => setInstallTool(null)} className="btn-primary">Close</button>
+                <button onClick={() => setInstallTool(null)} className="btn btn-primary">Close</button>
               </div>
             )}
           </div>
