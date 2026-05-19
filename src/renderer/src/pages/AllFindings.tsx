@@ -883,7 +883,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
         if (models.length && !aiModel) setAiModel(models[0])
       })
       .catch(() => {})
-  }, [aiOpen])
+  }, [])
 
   async function generateRemediation() {
     if (!aiModel) return
