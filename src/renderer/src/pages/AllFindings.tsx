@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronDown, Download, Tag, X, Trash2, EyeOff, RotateCcw, ShieldOff, Plus } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Search, Download, ChevronDown, Tag, X, EyeOff, RotateCcw, ShieldOff, Plus, Trash2 } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
+import Icon from '@/components/Icon'
 
 const rule = '1px solid var(--rule)'
-const ruleStrong = '1px solid var(--rule-strong)'
 
 interface FindingRow {
   id: string
@@ -28,42 +28,280 @@ const SEV_COLOR: Record<string, string> = {
   critical: 'var(--crit)', high: '#f97316', medium: 'var(--accent)', low: 'var(--ok)', info: 'var(--fg-3)',
 }
 
-const SEV_BG: Record<string, string> = {
-  critical: 'rgba(232,64,64,0.1)', high: 'rgba(249,115,22,0.1)', medium: 'rgba(240,168,58,0.1)',
-  low: 'rgba(84,175,97,0.1)', info: 'rgba(100,116,139,0.1)',
-}
-
 const STATUS_OPTIONS = ['open', 'in-review', 'remediated', 'accepted', 'false_positive'] as const
 type FindingStatus = typeof STATUS_OPTIONS[number]
 
-const STATUS_STYLES: Record<string, { color: string; background: string; border: string }> = {
-  'open':           { color: 'var(--crit)',   background: 'rgba(232,64,64,0.08)',   border: '1px solid rgba(232,64,64,0.25)' },
-  'in-review':      { color: 'var(--accent)', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.25)' },
-  'remediated':     { color: 'var(--ok)',     background: 'rgba(84,175,97,0.08)',   border: '1px solid rgba(84,175,97,0.25)' },
-  'accepted':       { color: 'var(--fg-3)',   background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.2)' },
-  'false_positive': { color: '#a78bfa',       background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)' },
+const STATUS_STYLES: Record<string, { color: string; bg: string; border: string }> = {
+  'open':           { color: 'var(--crit)',   bg: 'rgba(232,64,64,0.08)',   border: 'rgba(232,64,64,0.25)' },
+  'in-review':      { color: 'var(--accent)', bg: 'rgba(240,168,58,0.08)', border: 'rgba(240,168,58,0.25)' },
+  'remediated':     { color: 'var(--ok)',     bg: 'rgba(84,175,97,0.08)',   border: 'rgba(84,175,97,0.25)' },
+  'accepted':       { color: 'var(--fg-3)',   bg: 'rgba(100,116,139,0.08)', border: 'rgba(100,116,139,0.2)' },
+  'false_positive': { color: '#a78bfa',       bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.25)' },
+}
+
+function SegBtns({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', border: rule, height: 26 }}>
+      {options.map((o, i) => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          background: value === o ? 'var(--accent-2)' : 'transparent',
+          color: value === o ? 'var(--accent)' : 'var(--fg-3)',
+          border: 'none', borderLeft: i > 0 ? rule : 'none',
+          padding: '0 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function Counter({ label, v, color }: { label: string; v: number; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+      <span className="mono tnum" style={{ fontSize: 17, color, fontWeight: 500 }}>{v}</span>
+      <span className="mono" style={{ fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>{label}</span>
+    </div>
+  )
+}
+
+function SevSquare({ sev }: { sev: string }) {
+  return <div style={{ width: 10, height: 10, background: SEV_COLOR[sev] ?? 'var(--fg-4)', flexShrink: 0 }} />
+}
+
+function StatusPill({ status }: { status: string }) {
+  const ss = STATUS_STYLES[status] ?? STATUS_STYLES.open
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 600, padding: '2px 7px', letterSpacing: '0.06em',
+      fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+      color: ss.color, background: ss.bg, border: `1px solid ${ss.border}`,
+    }}>
+      {status}
+    </span>
+  )
+}
+
+interface DetailProps {
+  finding: FindingRow
+  tagInput: string
+  setTagInput: (v: string) => void
+  onAddTag: () => void
+  onRemoveTag: (tag: string) => void
+  onChangeStatus: (id: string, s: FindingStatus) => void
+  onShowFpModal: () => void
+  onRestore: (id: string) => void
+  onDelete: (id: string) => void
+  onClose: () => void
+}
+
+function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onDelete, onClose }: DetailProps) {
+  const [aiOpen, setAiOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const fTags = (finding.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
+  const fStatus = (finding.status || 'open') as FindingStatus
+  const ss = STATUS_STYLES[fStatus] ?? STATUS_STYLES.open
+
+  return (
+    <div style={{ overflowY: 'auto', background: 'var(--bg-2)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ padding: '18px var(--pad)', borderBottom: rule, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div className="smcap">{finding.id.slice(0, 8)} · {finding.cve_id ?? 'manual finding'}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0, flexShrink: 0 }}>
+            <X size={14} />
+          </button>
+        </div>
+        <h2 style={{ margin: '8px 0 0', fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 20, lineHeight: 1.25, letterSpacing: '-0.01em', color: 'var(--fg)' }}>
+          {finding.title}
+        </h2>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', fontFamily: 'var(--font-mono)',
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            color: SEV_COLOR[finding.severity] ?? 'var(--fg-3)',
+            background: `${SEV_COLOR[finding.severity] ?? '#888'}18`,
+            border: `1px solid ${SEV_COLOR[finding.severity] ?? 'var(--rule-strong)'}44`,
+          }}>{finding.severity}</span>
+          {finding.cvss_score && (
+            <span className="badge badge-accent">cvss {finding.cvss_score}</span>
+          )}
+          <StatusPill status={fStatus} />
+        </div>
+      </div>
+
+      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+        {/* KV metadata */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+          {[
+            { k: 'target',  v: finding.target || '—' },
+            { k: 'project', v: finding.project || '—' },
+            { k: 'cve',     v: finding.cve_id || '—' },
+            { k: 'created', v: finding.created_at ? new Date(finding.created_at).toLocaleDateString() : '—' },
+          ].map(({ k, v }) => (
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px dashed var(--rule)' }}>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Description */}
+        {finding.description && (
+          <div style={{ border: rule, padding: 14 }}>
+            <div className="smcap" style={{ marginBottom: 6 }}>Description</div>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, fontFamily: 'var(--font-serif)' }}>
+              {finding.description}
+            </p>
+          </div>
+        )}
+
+        {/* Tags */}
+        <div style={{ border: rule, padding: 12 }}>
+          <div className="smcap" style={{ marginBottom: 8 }}>Tags</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {fTags.map(tag => (
+              <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', padding: '2px 8px' }}>
+                {tag}
+                <button onClick={() => onRemoveTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, display: 'flex' }}>
+                  <X size={9} />
+                </button>
+              </span>
+            ))}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Tag size={10} style={{ color: 'var(--fg-4)' }} />
+              <input
+                type="text"
+                placeholder="add tag…"
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onAddTag() } }}
+                style={{ background: 'transparent', fontSize: 10, color: 'var(--fg-3)', outline: 'none', width: 70, border: 'none', borderBottom: rule }}
+              />
+            </div>
+          </div>
+          {finding.fp_reason && (
+            <div style={{ marginTop: 8, fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', padding: '4px 8px' }}>
+              FP: {finding.fp_reason}
+            </div>
+          )}
+        </div>
+
+        {/* Status change */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setStatusOpen(o => !o)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 12px', background: ss.bg, border: `1px solid ${ss.border}`,
+              cursor: 'pointer', color: ss.color, fontFamily: 'var(--font-mono)', fontSize: 11,
+            }}
+          >
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status: {fStatus}</span>
+            <ChevronDown size={12} style={{ transform: statusOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {statusOpen && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', background: 'var(--bg-2)', border: rule, zIndex: 20 }}>
+              {STATUS_OPTIONS.filter(o => o !== 'false_positive').map(opt => {
+                const os = STATUS_STYLES[opt]
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => { onChangeStatus(finding.id, opt); setStatusOpen(false) }}
+                    style={{
+                      display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                      fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em',
+                      background: opt === fStatus ? os.bg : 'none',
+                      color: opt === fStatus ? os.color : 'var(--fg-3)',
+                      border: 'none', borderBottom: rule, cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {opt}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* AI Remediation */}
+        <div style={{ border: `1px solid ${aiOpen ? 'var(--accent)' : 'var(--rule)'}` }}>
+          <div className="sec-h">
+            <span className="title">AI REMEDIATION · LOCAL LLM</span>
+            <button onClick={() => setAiOpen(v => !v)} className="btn btn-sm" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+              {aiOpen ? <><Icon name="check" size={9} /> ready</> : <><Icon name="bolt" size={9} /> Generate</>}
+            </button>
+          </div>
+          <div style={{ padding: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0, lineHeight: 1.55 }}>
+              {aiOpen
+                ? 'AI remediation requires a connected Ollama endpoint. Configure it in Settings → AI.'
+                : 'One-click remediation guidance routed through your local Ollama endpoint. No external API calls.'}
+            </p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+            <Icon name="check" size={9} /> Verify
+          </button>
+          <button className="btn btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+            <Icon name="flag" size={9} /> Tag
+          </button>
+          <button className="btn btn-sm btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+            <Icon name="file" size={9} color="#1a1408" /> Report
+          </button>
+        </div>
+
+        {/* FP / Delete row */}
+        <div style={{ display: 'flex', gap: 6, paddingTop: 4, borderTop: '1px dashed var(--rule)' }}>
+          {fStatus === 'false_positive' ? (
+            <button
+              onClick={() => onRestore(finding.id)}
+              className="btn btn-sm btn-ghost"
+              style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)' }}
+            >
+              <RotateCcw size={9} /> Restore
+            </button>
+          ) : (
+            <button
+              onClick={onShowFpModal}
+              className="btn btn-sm btn-ghost"
+            >
+              <EyeOff size={9} /> False positive
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(finding.id)}
+            className="btn btn-sm btn-ghost"
+            style={{ marginLeft: 'auto', color: 'var(--crit)', borderColor: 'rgba(232,64,64,0.25)' }}
+          >
+            <Trash2 size={9} /> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function AllFindings() {
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [sevFilter, setSevFilter] = useState(searchParams.get('severity') ?? 'all')
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? 'all')
-  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '')
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
-  const [statusDropdown, setStatusDropdown] = useState<string | null>(null)
-  const [tagInput, setTagInput] = useState<Record<string, string>>({})
   const [fpModal, setFpModal] = useState<{ id: string; title: string } | null>(null)
   const [fpReason, setFpReason] = useState('')
   const [fpSaving, setFpSaving] = useState(false)
   const [showFp, setShowFp] = useState(false)
+  const [tagInputs, setTagInputs] = useState<Record<string, string>>({})
   const exportRef = useRef<HTMLDivElement>(null)
 
-  // FP suppression rules state
+  // FP rules state
   interface FPRule { id: string; tool: string | null; title_contains: string; created_at: string }
   interface ProjectOpt { id: string; name: string }
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -82,18 +320,38 @@ export default function AllFindings() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Close status dropdown when clicking outside
   useEffect(() => {
-    function handler() { setStatusDropdown(null) }
-    if (statusDropdown) document.addEventListener('click', handler)
-    return () => document.removeEventListener('click', handler)
-  }, [statusDropdown])
+    fetch(`${getApiBase()}/findings`)
+      .then(r => r.json())
+      .then(setFindings)
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!rulesOpen) return
+    fetch(`${getApiBase()}/projects`).then(r => r.json()).then((data: ProjectOpt[]) => {
+      setRuleProjects(data)
+      if (data.length > 0 && !ruleProjectId) setRuleProjectId(data[0].id)
+    }).catch(() => {})
+  }, [rulesOpen])
+
+  useEffect(() => {
+    if (!ruleProjectId) return
+    fetch(`${getApiBase()}/projects/${ruleProjectId}/fp-rules`).then(r => r.json()).then(setFpRules).catch(() => setFpRules([]))
+  }, [ruleProjectId])
+
+  function updateFilter(sev: string, q: string, stat: string) {
+    const params: Record<string, string> = {}
+    if (sev !== 'all') params.severity = sev
+    if (q) params.q = q
+    if (stat !== 'all') params.status = stat
+    setSearchParams(params, { replace: true })
+  }
 
   function exportCSV() {
-    const header = 'severity,status,title,target,project,cve_id,cvss_score,tags,created_at,description'
+    const header = 'severity,status,title,target,project,cve_id,cvss_score,created_at,description'
     const rows = filtered.map(f =>
-      [f.severity, f.status, f.title, f.target, f.project, f.cve_id ?? '', f.cvss_score ?? '',
-       f.tags ?? '', f.created_at ?? '', f.description ?? '']
+      [f.severity, f.status, f.title, f.target, f.project, f.cve_id ?? '', f.cvss_score ?? '', f.created_at ?? '', f.description ?? '']
         .map(v => `"${String(v).replace(/"/g, '""')}"`)
         .join(',')
     )
@@ -112,21 +370,42 @@ export default function AllFindings() {
     setExportOpen(false)
   }
 
-  function updateFilter(sev: string, q: string, stat: string, tag: string) {
-    const params: Record<string, string> = {}
-    if (sev !== 'all') params.severity = sev
-    if (q) params.q = q
-    if (stat !== 'all') params.status = stat
-    if (tag) params.tag = tag
-    setSearchParams(params, { replace: true })
+  function changeStatus(id: string, newStatus: FindingStatus) {
+    fetch(`${getApiBase()}/findings/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    }).then(() => setFindings(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f)))
   }
 
-  useEffect(() => {
-    fetch(`${getApiBase()}/findings`)
-      .then(r => r.json())
-      .then(setFindings)
-      .finally(() => setLoading(false))
-  }, [])
+  function addTag(id: string) {
+    const raw = (tagInputs[id] ?? '').trim()
+    if (!raw) return
+    const finding = findings.find(f => f.id === id)
+    if (!finding) return
+    const existing = (finding.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
+    if (existing.includes(raw)) { setTagInputs(p => ({ ...p, [id]: '' })); return }
+    const newTags = [...existing, raw]
+    fetch(`${getApiBase()}/findings/${id}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: newTags }),
+    }).then(() => {
+      setFindings(prev => prev.map(f => f.id === id ? { ...f, tags: newTags.join(',') } : f))
+      setTagInputs(p => ({ ...p, [id]: '' }))
+    })
+  }
+
+  function removeTag(id: string, tag: string) {
+    const finding = findings.find(f => f.id === id)
+    if (!finding) return
+    const newTags = (finding.tags ?? '').split(',').map(t => t.trim()).filter(t => t && t !== tag)
+    fetch(`${getApiBase()}/findings/${id}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: newTags }),
+    }).then(() => setFindings(prev => prev.map(f => f.id === id ? { ...f, tags: newTags.join(',') } : f)))
+  }
 
   async function suppressFinding(id: string, reason: string) {
     setFpSaving(true)
@@ -149,99 +428,14 @@ export default function AllFindings() {
     setFindings(prev => prev.map(f => f.id === id ? { ...f, status: 'open', fp_reason: null } : f))
   }
 
-  const filtered = findings.filter(f => {
-    if (!showFp && f.status === 'false_positive') return false
-    if (sevFilter !== 'all' && f.severity !== sevFilter) return false
-    if (statusFilter !== 'all' && f.status !== statusFilter) return false
-    if (tagFilter) {
-      const tags = (f.tags ?? '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
-      if (!tags.includes(tagFilter.toLowerCase())) return false
-    }
-    if (search) {
-      const q = search.toLowerCase()
-      return (
-        f.title.toLowerCase().includes(q) ||
-        f.target.toLowerCase().includes(q) ||
-        f.project.toLowerCase().includes(q) ||
-        (f.cve_id?.toLowerCase().includes(q) ?? false)
-      )
-    }
-    return true
-  })
-
-  const counts = findings.reduce<Record<string, number>>((acc, f) => {
-    acc[f.severity] = (acc[f.severity] || 0) + 1
-    return acc
-  }, {})
-
-  const statusCounts = findings.reduce<Record<string, number>>((acc, f) => {
-    const s = f.status || 'open'
-    acc[s] = (acc[s] || 0) + 1
-    return acc
-  }, {})
-
-  function changeStatus(id: string, newStatus: FindingStatus) {
-    fetch(`${getApiBase()}/findings/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    }).then(() => {
-      setFindings(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f))
-    })
-    setStatusDropdown(null)
-  }
-
-  function addTag(id: string) {
-    const raw = (tagInput[id] ?? '').trim()
-    if (!raw) return
-    const finding = findings.find(f => f.id === id)
-    if (!finding) return
-    const existing = (finding.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
-    if (existing.includes(raw)) { setTagInput(p => ({ ...p, [id]: '' })); return }
-    const newTags = [...existing, raw]
-    fetch(`${getApiBase()}/findings/${id}/tags`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags: newTags }),
-    }).then(() => {
-      setFindings(prev => prev.map(f => f.id === id ? { ...f, tags: newTags.join(',') } : f))
-      setTagInput(p => ({ ...p, [id]: '' }))
-    })
-  }
-
-  function removeTag(id: string, tag: string) {
-    const finding = findings.find(f => f.id === id)
-    if (!finding) return
-    const newTags = (finding.tags ?? '').split(',').map(t => t.trim()).filter(t => t && t !== tag)
-    fetch(`${getApiBase()}/findings/${id}/tags`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags: newTags }),
-    }).then(() => {
-      setFindings(prev => prev.map(f => f.id === id ? { ...f, tags: newTags.join(',') } : f))
-    })
-  }
-
   function deleteFinding(id: string) {
     fetch(`${getApiBase()}/findings/${id}`, { method: 'DELETE' }).then(res => {
-      if (res.ok) setFindings(prev => prev.filter(f => f.id !== id))
+      if (res.ok) {
+        setFindings(prev => prev.filter(f => f.id !== id))
+        if (selectedId === id) setSelectedId(null)
+      }
     })
   }
-
-  // Load project list once when rules panel opens
-  useEffect(() => {
-    if (!rulesOpen) return
-    fetch(`${getApiBase()}/projects`).then(r => r.json()).then((data: ProjectOpt[]) => {
-      setRuleProjects(data)
-      if (data.length > 0 && !ruleProjectId) setRuleProjectId(data[0].id)
-    }).catch(() => {})
-  }, [rulesOpen])
-
-  // Load rules when project changes
-  useEffect(() => {
-    if (!ruleProjectId) return
-    fetch(`${getApiBase()}/projects/${ruleProjectId}/fp-rules`).then(r => r.json()).then(setFpRules).catch(() => setFpRules([]))
-  }, [ruleProjectId])
 
   async function addFpRule() {
     if (!ruleProjectId || !ruleTitleContains.trim()) return
@@ -268,316 +462,219 @@ export default function AllFindings() {
     setFpRules(prev => prev.filter(r => r.id !== ruleId))
   }
 
-  const statusBadgeStyle = (status: string): React.CSSProperties => {
-    const ss = STATUS_STYLES[status] ?? STATUS_STYLES.open
-    return { fontSize: 9, fontWeight: 500, padding: '1px 7px', borderRadius: 10, fontFamily: 'var(--font-sans)', color: ss.color, background: ss.background, border: ss.border, cursor: 'pointer' }
-  }
+  const filtered = findings.filter(f => {
+    if (!showFp && f.status === 'false_positive') return false
+    if (sevFilter !== 'all' && f.severity !== sevFilter) return false
+    if (statusFilter !== 'all' && f.status !== statusFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return (
+        f.title.toLowerCase().includes(q) ||
+        f.target.toLowerCase().includes(q) ||
+        f.project.toLowerCase().includes(q) ||
+        (f.cve_id?.toLowerCase().includes(q) ?? false)
+      )
+    }
+    return true
+  })
 
-  const inputStyle: React.CSSProperties = {
-    background: 'var(--bg)', border: ruleStrong, borderRadius: 4,
-    color: 'var(--fg)', fontFamily: 'var(--font-sans)', fontSize: 13,
-    padding: '6px 12px', outline: 'none',
-  }
+  const counts = findings.reduce<Record<string, number>>((acc, f) => {
+    if (f.status !== 'false_positive') acc[f.severity] = (acc[f.severity] || 0) + 1
+    return acc
+  }, {})
+
+  const selectedFinding = filtered.find(f => f.id === selectedId) ?? null
 
   return (
-    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-2)', padding: 0 }}>
-          <ArrowLeft size={18} />
-        </button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>All Findings</h1>
-          <p style={{ color: 'var(--fg-2)', fontSize: 13, marginTop: 2 }}>{findings.length} findings across all projects</p>
-        </div>
-        {/* Export dropdown */}
-        <div style={{ position: 'relative' }} ref={exportRef}>
-          <button
-            onClick={() => setExportOpen(o => !o)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: 'var(--fg-2)', border: ruleStrong, background: 'var(--bg-2)', cursor: 'pointer' }}
-          >
-            <Download size={13} />
-            Export
-            <ChevronDown size={11} style={{ color: 'var(--fg-3)', transform: exportOpen ? 'rotate(180deg)' : 'none' }} />
-          </button>
-          {exportOpen && (
-            <div style={{ position: 'absolute', right: 0, marginTop: 4, width: 144, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, zIndex: 10, overflow: 'hidden' }}>
-              <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                Download CSV
-              </button>
-              <button onClick={exportJSON} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer', borderTop: rule }}>
-                Download JSON
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Search */}
-          <div style={{ position: 'relative' }}>
-            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }} />
-            <input
-              type="text"
-              placeholder="Search title, target, CVE…"
-              value={search}
-              onChange={e => { setSearch(e.target.value); updateFilter(sevFilter, e.target.value, statusFilter, tagFilter) }}
-              style={{ ...inputStyle, paddingLeft: 30, width: 256 }}
-            />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Page header */}
+      <div style={{ borderBottom: rule, padding: '18px var(--pad)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexShrink: 0 }}>
+        <div>
+          <div className="smcap" style={{ marginBottom: 4 }}>Findings & Vulnerabilities</div>
+          <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>All Findings</h1>
+          <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 6 }}>
+            {filtered.length} of {findings.length} findings
+            {counts.critical ? ` · ${counts.critical} critical` : ''}
+            {counts.high ? ` · ${counts.high} high` : ''}
           </div>
-
-          {/* Tag filter */}
-          <div style={{ position: 'relative' }}>
-            <Tag size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }} />
-            <input
-              type="text"
-              placeholder="Filter by tag…"
-              value={tagFilter}
-              onChange={e => { setTagFilter(e.target.value); updateFilter(sevFilter, search, statusFilter, e.target.value) }}
-              style={{ ...inputStyle, paddingLeft: 30, width: 160 }}
-            />
-          </div>
-
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           <button
             onClick={() => setShowFp(p => !p)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 4, fontSize: 11, border: showFp ? '1px solid rgba(167,139,250,0.3)' : ruleStrong, background: showFp ? 'rgba(167,139,250,0.08)' : 'none', color: showFp ? '#a78bfa' : 'var(--fg-3)', cursor: 'pointer' }}
+            className={`btn ${showFp ? '' : 'btn-ghost'}`}
+            style={showFp ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' } : {}}
           >
-            <EyeOff size={12} />
-            {showFp ? 'Hide' : 'Show'} false positives
+            <EyeOff size={11} /> {showFp ? 'Hide FPs' : 'Show FPs'}
           </button>
-          <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{filtered.length} shown</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Severity chips */}
-          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
-            <button
-              onClick={() => { setSevFilter('all'); updateFilter('all', search, statusFilter, tagFilter) }}
-              style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: sevFilter === 'all' ? 'rgba(100,116,139,0.2)' : 'none', color: sevFilter === 'all' ? 'var(--fg)' : 'var(--fg-3)' }}
-            >
-              All ({findings.length})
+          <div style={{ position: 'relative' }} ref={exportRef}>
+            <button onClick={() => setExportOpen(o => !o)} className="btn">
+              <Download size={11} /> Export <ChevronDown size={10} />
             </button>
-            {SEV_ORDER.map(s => (
-              counts[s] ? (
-                <button
-                  key={s}
-                  onClick={() => { setSevFilter(s); updateFilter(s, search, statusFilter, tagFilter) }}
-                  style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, textTransform: 'capitalize', border: 'none', cursor: 'pointer', background: sevFilter === s ? SEV_BG[s] : 'none', color: sevFilter === s ? SEV_COLOR[s] : 'var(--fg-3)' }}
-                >
-                  {s} ({counts[s]})
+            {exportOpen && (
+              <div style={{ position: 'absolute', right: 0, marginTop: 4, width: 144, background: 'var(--bg-2)', border: rule, zIndex: 10, overflow: 'hidden' }}>
+                <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                  Download CSV
                 </button>
-              ) : null
-            ))}
-          </div>
-
-          {/* Status chips */}
-          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: 4 }}>
-            <button
-              onClick={() => { setStatusFilter('all'); updateFilter(sevFilter, search, 'all', tagFilter) }}
-              style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer', background: statusFilter === 'all' ? 'rgba(100,116,139,0.2)' : 'none', color: statusFilter === 'all' ? 'var(--fg)' : 'var(--fg-3)' }}
-            >
-              Any status
-            </button>
-            {STATUS_OPTIONS.map(s => {
-              const ss = STATUS_STYLES[s]
-              return statusCounts[s] ? (
-                <button
-                  key={s}
-                  onClick={() => { setStatusFilter(s); updateFilter(sevFilter, search, s, tagFilter) }}
-                  style={{ padding: '4px 12px', borderRadius: 4, fontSize: 11, fontWeight: 500, textTransform: 'capitalize', border: statusFilter === s ? ss.border : 'none', cursor: 'pointer', background: statusFilter === s ? ss.background : 'none', color: statusFilter === s ? ss.color : 'var(--fg-3)' }}
-                >
-                  {s} ({statusCounts[s]})
+                <button onClick={exportJSON} style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 11, color: 'var(--fg-2)', background: 'none', border: 'none', cursor: 'pointer', borderTop: rule, fontFamily: 'var(--font-mono)' }}>
+                  Download JSON
                 </button>
-              ) : null
-            })}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* List */}
-      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
-        {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>No findings match the current filter.</div>
-        ) : (
-          <div>
-            {filtered.map((f, idx) => {
-              const fStatus = (f.status || 'open') as FindingStatus
-              const fTags = (f.tags ?? '').split(',').map(t => t.trim()).filter(Boolean)
-              return (
-                <div key={f.id} style={{ borderBottom: idx < filtered.length - 1 ? rule : 'none' }}>
-                  <button
-                    onClick={() => setExpanded(expanded === f.id ? null : f.id)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+      {/* Filter strip */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px var(--pad)', borderBottom: rule, background: 'var(--bg-2)', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <Search size={12} color="var(--fg-3)" />
+          <input
+            placeholder="search · cve · title"
+            value={search}
+            onChange={e => { setSearch(e.target.value); updateFilter(sevFilter, e.target.value, statusFilter) }}
+            style={{ width: 220 }}
+          />
+        </div>
+        <div style={{ width: 1, height: 18, background: 'var(--rule)' }} />
+        <SegBtns
+          options={['all', ...SEV_ORDER.filter(s => counts[s])]}
+          value={sevFilter}
+          onChange={v => { setSevFilter(v); updateFilter(v, search, statusFilter) }}
+        />
+        <div style={{ width: 1, height: 18, background: 'var(--rule)' }} />
+        <SegBtns
+          options={['all', 'open', 'in-review', 'remediated', 'accepted']}
+          value={statusFilter}
+          onChange={v => { setStatusFilter(v); updateFilter(sevFilter, search, v) }}
+        />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
+          <Counter label="critical" v={counts.critical ?? 0} color="var(--crit)" />
+          <Counter label="high"     v={counts.high     ?? 0} color="var(--high)" />
+          <Counter label="medium"   v={counts.medium   ?? 0} color="var(--med)" />
+          <Counter label="low"      v={counts.low      ?? 0} color="var(--ok)" />
+        </div>
+      </div>
+
+      {/* Main split */}
+      <div style={{ display: 'grid', gridTemplateColumns: selectedFinding ? '1fr 480px' : '1fr', flex: 1, minHeight: 0 }}>
+        {/* List */}
+        <div style={{ overflowY: 'auto', borderRight: selectedFinding ? rule : 'none' }}>
+          {loading ? (
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No findings match the current filter.</div>
+          ) : (
+            <table className="data">
+              <thead>
+                <tr>
+                  <th style={{ width: 26 }}></th>
+                  <th style={{ width: 58 }}>CVSS</th>
+                  <th>Finding</th>
+                  <th style={{ width: 190 }}>Target</th>
+                  <th style={{ width: 100 }}>Status</th>
+                  <th style={{ width: 120 }}>Project</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(f => (
+                  <tr
+                    key={f.id}
+                    className={selectedId === f.id ? 'selected' : ''}
+                    onClick={() => setSelectedId(selectedId === f.id ? null : f.id)}
+                    style={{ cursor: 'pointer' }}
                   >
-                    <span
-                      style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 10, textTransform: 'uppercase', flexShrink: 0, width: 56, textAlign: 'center', background: SEV_BG[f.severity] ?? 'rgba(100,116,139,0.1)', color: SEV_COLOR[f.severity] ?? 'var(--fg-3)' }}
-                    >
-                      {f.severity}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{f.title}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 2 }}>
-                        <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.target}</span>
-                        <span style={{ fontSize: 11, color: 'var(--fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.project}</span>
+                    <td><SevSquare sev={f.severity} /></td>
+                    <td className="mono tnum" style={{
+                      color: f.cvss_score
+                        ? parseFloat(f.cvss_score) >= 9 ? 'var(--crit)' : parseFloat(f.cvss_score) >= 7 ? 'var(--high)' : 'var(--fg-2)'
+                        : 'var(--fg-4)',
+                    }}>
+                      {f.cvss_score ?? '—'}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 500, fontSize: 12.5 }}>{f.title}</div>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 2 }}>
+                        {f.cve_id ?? 'no cve'}
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      {f.cve_id && (
-                        <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{f.cve_id}</span>
-                      )}
-                      {f.cvss_score && (
-                        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 4, border: ruleStrong, color: 'var(--fg-2)' }}>
-                          CVSS {f.cvss_score}
-                        </span>
-                      )}
-                      {/* Status badge — inline dropdown */}
-                      <div
-                        style={{ position: 'relative' }}
-                        onClick={e => { e.stopPropagation(); setStatusDropdown(statusDropdown === f.id ? null : f.id) }}
-                      >
-                        <span style={statusBadgeStyle(fStatus)}>{fStatus}</span>
-                        {statusDropdown === f.id && (
-                          <div style={{ position: 'absolute', right: 0, top: 24, width: 112, background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, zIndex: 20, overflow: 'hidden' }}>
-                            {STATUS_OPTIONS.map(opt => {
-                              const oss = STATUS_STYLES[opt]
-                              return (
-                                <button
-                                  key={opt}
-                                  onClick={e => { e.stopPropagation(); changeStatus(f.id, opt) }}
-                                  style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 500, background: opt === fStatus ? oss.background : 'none', color: opt === fStatus ? oss.color : 'var(--fg-3)', border: 'none', cursor: 'pointer' }}
-                                >
-                                  {opt}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      <ChevronDown
-                        size={12}
-                        style={{ color: 'var(--fg-4)', transition: 'transform 0.15s', transform: expanded === f.id ? 'rotate(180deg)' : 'none' }}
-                      />
-                    </div>
-                  </button>
-                  {expanded === f.id && (
-                    <div style={{ padding: '4px 20px 16px 96px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <p style={{ fontSize: 11, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0 }}>{f.description}</p>
-                      {/* Tags */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        {fTags.map(tag => (
-                          <span key={tag} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', borderRadius: 10, padding: '1px 8px' }}>
-                            {tag}
-                            <button onClick={() => removeTag(f.id, tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, display: 'flex', alignItems: 'center' }}>
-                              <X size={9} />
-                            </button>
-                          </span>
-                        ))}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Tag size={10} style={{ color: 'var(--fg-4)' }} />
-                          <input
-                            type="text"
-                            placeholder="add tag…"
-                            value={tagInput[f.id] ?? ''}
-                            onChange={e => setTagInput(p => ({ ...p, [f.id]: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Enter') addTag(f.id) }}
-                            style={{ background: 'transparent', fontSize: 10, color: 'var(--fg-3)', outline: 'none', width: 80, border: 'none', borderBottom: rule }}
-                          />
-                        </div>
-                        {/* False positive controls */}
-                        {f.status === 'false_positive' ? (
-                          <button
-                            onClick={e => { e.stopPropagation(); restoreFinding(f.id) }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
-                          >
-                            <RotateCcw size={9} /> Restore
-                          </button>
-                        ) : (
-                          <button
-                            onClick={e => { e.stopPropagation(); setFpModal({ id: f.id, title: f.title }); setFpReason('') }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--fg-3)', border: ruleStrong, borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
-                          >
-                            <EyeOff size={9} /> False positive
-                          </button>
-                        )}
-                        {f.fp_reason && (
-                          <div style={{ width: '100%', marginTop: 4, fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 4, padding: '4px 8px' }}>
-                            FP reason: {f.fp_reason}
-                          </div>
-                        )}
-                        <button
-                          onClick={e => { e.stopPropagation(); deleteFinding(f.id) }}
-                          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--crit)', border: '1px solid rgba(232,64,64,0.25)', borderRadius: 10, padding: '1px 8px', background: 'none', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={9} /> Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                    </td>
+                    <td className="mono" style={{ fontSize: 11, color: 'var(--fg-2)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.target}
+                    </td>
+                    <td><StatusPill status={f.status || 'open'} /></td>
+                    <td className="mono" style={{ fontSize: 10.5, color: 'var(--fg-3)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.project}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Detail panel */}
+        {selectedFinding && (
+          <FindingDetail
+            finding={selectedFinding}
+            tagInput={tagInputs[selectedFinding.id] ?? ''}
+            setTagInput={v => setTagInputs(p => ({ ...p, [selectedFinding.id]: v }))}
+            onAddTag={() => addTag(selectedFinding.id)}
+            onRemoveTag={tag => removeTag(selectedFinding.id, tag)}
+            onChangeStatus={changeStatus}
+            onShowFpModal={() => { setFpModal({ id: selectedFinding.id, title: selectedFinding.title }); setFpReason('') }}
+            onRestore={restoreFinding}
+            onDelete={deleteFinding}
+            onClose={() => setSelectedId(null)}
+          />
         )}
       </div>
 
-      {/* Suppression Rules Panel */}
-      <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
+      {/* FP Suppression Rules — collapsible footer */}
+      <div style={{ borderTop: rule, flexShrink: 0 }}>
         <button
           onClick={() => setRulesOpen(o => !o)}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px var(--pad)', background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <ShieldOff size={14} style={{ color: '#a78bfa' }} />
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-2)' }}>Auto-suppression Rules</span>
-          <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 4 }}>— apply at parse time to auto-mark FPs</span>
-          <ChevronDown size={12} style={{ color: 'var(--fg-4)', marginLeft: 'auto', transform: rulesOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          <ShieldOff size={13} style={{ color: '#a78bfa' }} />
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)' }}>Auto-suppression Rules</span>
+          <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 4 }}>— auto-mark FPs at parse time</span>
+          <ChevronDown size={11} style={{ color: 'var(--fg-4)', marginLeft: 'auto', transform: rulesOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
         </button>
         {rulesOpen && (
-          <div style={{ padding: '8px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16, borderTop: rule }}>
-            {/* Project picker */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <label style={{ fontSize: 11, color: 'var(--fg-2)' }}>Project:</label>
+          <div style={{ padding: '0 var(--pad) 16px', display: 'flex', flexDirection: 'column', gap: 12, borderTop: rule }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+              <label style={{ fontSize: 11, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)' }}>Project:</label>
               <select
                 value={ruleProjectId}
                 onChange={e => setRuleProjectId(e.target.value)}
-                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '4px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none' }}
+                style={{ background: 'var(--bg)', border: rule, padding: '4px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none' }}
               >
                 {ruleProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-
-            {/* Rules list */}
             {fpRules.length === 0 ? (
-              <p style={{ fontSize: 11, color: 'var(--fg-3)' }}>No rules yet. Rules added here will auto-suppress matching findings when scans are parsed.</p>
+              <p style={{ fontSize: 11, color: 'var(--fg-3)', margin: 0 }}>No rules yet. Rules here will auto-suppress matching findings when scans are parsed.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {fpRules.map(rule => (
-                  <div key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 4, background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
+                  <div key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.15)' }}>
                     {rule.tool && (
-                      <span style={{ fontSize: 10, background: 'rgba(100,116,139,0.2)', color: 'var(--fg-2)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--font-mono)' }}>{rule.tool}</span>
+                      <span className="mono" style={{ fontSize: 10, background: 'rgba(100,116,139,0.2)', color: 'var(--fg-2)', padding: '1px 6px' }}>{rule.tool}</span>
                     )}
                     <span style={{ fontSize: 11, color: 'var(--fg-2)', flex: 1 }}>title contains <span style={{ color: '#a78bfa', fontWeight: 500 }}>"{rule.title_contains}"</span></span>
-                    <button
-                      onClick={() => deleteFpRule(rule.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}
-                    >
+                    <button onClick={() => deleteFpRule(rule.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', padding: 0 }}>
                       <X size={12} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-
-            {/* Add rule form */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 type="text"
-                placeholder="Tool (optional, e.g. nikto)"
+                placeholder="Tool (e.g. nikto)"
                 value={ruleTool}
                 onChange={e => setRuleTool(e.target.value)}
-                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '6px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 144 }}
+                style={{ padding: '5px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 130 }}
               />
               <input
                 type="text"
@@ -585,49 +682,44 @@ export default function AllFindings() {
                 value={ruleTitleContains}
                 onChange={e => setRuleTitleContains(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') addFpRule() }}
-                style={{ background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '6px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 224 }}
+                style={{ padding: '5px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', width: 210 }}
               />
               <button
                 onClick={addFpRule}
                 disabled={!ruleTitleContains.trim() || !ruleProjectId || ruleSaving}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 4, fontSize: 11, background: '#a78bfa', color: '#0d0c0a', border: 'none', cursor: (!ruleTitleContains.trim() || !ruleProjectId || ruleSaving) ? 'not-allowed' : 'pointer', opacity: (!ruleTitleContains.trim() || !ruleProjectId || ruleSaving) ? 0.5 : 1, fontWeight: 600 }}
+                className="btn btn-sm"
+                style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' }}
               >
-                <Plus size={11} /> Add Rule
+                <Plus size={10} /> Add Rule
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* False Positive Modal */}
+      {/* FP Modal */}
       {fpModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
-          <div
-            style={{ width: '100%', maxWidth: 480, borderRadius: 4, border: ruleStrong, boxShadow: '0 8px 40px rgba(0,0,0,0.5)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, background: 'var(--bg-2)' }}
-          >
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', margin: 0 }}>Mark as False Positive</h2>
-            <p style={{ fontSize: 13, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{fpModal.title}</p>
+          <div style={{ width: '100%', maxWidth: 480, background: 'var(--bg-2)', border: rule, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', margin: 0, fontFamily: 'var(--font-mono)' }}>Mark as False Positive</h2>
+            <p style={{ fontSize: 12, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{fpModal.title}</p>
             <div>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4 }}>Reason <span style={{ color: 'var(--crit)' }}>*</span></label>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--fg-2)', marginBottom: 4, fontFamily: 'var(--font-mono)' }}>Reason *</label>
               <textarea
                 value={fpReason}
                 onChange={e => setFpReason(e.target.value)}
                 placeholder="Explain why this is a false positive…"
                 rows={3}
-                style={{ width: '100%', background: 'var(--bg)', border: ruleStrong, borderRadius: 4, padding: '8px 12px', fontSize: 13, color: 'var(--fg)', outline: 'none', resize: 'none', fontFamily: 'var(--font-sans)', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 13, color: 'var(--fg)', outline: 'none', resize: 'none', fontFamily: 'var(--font-sans)', boxSizing: 'border-box' }}
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button
-                onClick={() => setFpModal(null)}
-                style={{ padding: '8px 16px', fontSize: 13, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
+              <button onClick={() => setFpModal(null)} className="btn btn-ghost">Cancel</button>
               <button
                 onClick={() => suppressFinding(fpModal.id, fpReason)}
                 disabled={!fpReason.trim() || fpSaving}
-                style={{ padding: '8px 16px', borderRadius: 4, fontSize: 13, color: '#0d0c0a', background: '#a78bfa', border: 'none', cursor: (!fpReason.trim() || fpSaving) ? 'not-allowed' : 'pointer', opacity: (!fpReason.trim() || fpSaving) ? 0.5 : 1, fontWeight: 600 }}
+                className="btn btn-primary"
+                style={{ color: '#a78bfa', background: 'rgba(167,139,250,0.15)', borderColor: 'rgba(167,139,250,0.4)' }}
               >
                 {fpSaving ? 'Saving…' : 'Suppress'}
               </button>
