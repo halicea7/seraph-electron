@@ -5,6 +5,7 @@ import { Brain, Sparkles, AlertTriangle } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
 import { useAppStore } from '@/stores/appStore'
+import ReactMarkdown from 'react-markdown'
 
 const rule = '1px solid var(--rule)'
 
@@ -882,7 +883,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
     try {
       const settings = await window.electronAPI.ollamaGetSettings()
       const base = settings.localOllamaUrl.replace(/\/$/, '')
-      const prompt = `You are a cybersecurity expert. Provide concise, actionable remediation steps for this vulnerability:\n\nTitle: ${finding.title}\nSeverity: ${finding.severity}\nCVE: ${finding.cve_id ?? 'N/A'}\nTarget: ${finding.target ?? 'N/A'}\nDescription: ${finding.description ?? 'No description'}\n\nProvide:\n1. Immediate mitigation\n2. Long-term remediation\n3. Verification command`
+      const prompt = `You are a senior penetration tester and security engineer. Give direct, technical remediation guidance for the following vulnerability. No emojis. No decorative symbols. No disclaimers. No preamble. Use plain markdown with headers and lists only where they add clarity.\n\nTitle: ${finding.title}\nSeverity: ${finding.severity}\nCVE: ${finding.cve_id ?? 'N/A'}\nTarget: ${finding.target ?? 'N/A'}\nDescription: ${finding.description ?? 'No description'}\n\n## Immediate Mitigation\nState the fastest way to reduce exposure right now.\n\n## Remediation\nExplain the proper long-term fix with specific configuration changes, commands, or code where applicable.\n\n## Verification\nProvide a command or test to confirm the issue is resolved.`
       const res = await fetch(`${base}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1047,8 +1048,23 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
             </button>
           </div>
           {aiResult && (
-            <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.65, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(168,85,247,0.2)', fontFamily: 'var(--font-sans)' }}>
-              {aiResult}
+            <div style={{ padding: '10px 14px', fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.7, borderTop: '1px solid rgba(168,85,247,0.2)', fontFamily: 'var(--font-sans)' }}>
+              <ReactMarkdown
+                components={{
+                  h2: ({ children }) => <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', margin: '12px 0 4px' }}>{children}</p>,
+                  h3: ({ children }) => <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', margin: '10px 0 3px' }}>{children}</p>,
+                  p: ({ children }) => <p style={{ margin: '0 0 6px', fontSize: 11.5, color: 'var(--fg-2)' }}>{children}</p>,
+                  ul: ({ children }) => <ul style={{ margin: '0 0 6px', paddingLeft: 16 }}>{children}</ul>,
+                  ol: ({ children }) => <ol style={{ margin: '0 0 6px', paddingLeft: 16 }}>{children}</ol>,
+                  li: ({ children }) => <li style={{ fontSize: 11.5, color: 'var(--fg-2)', marginBottom: 2 }}>{children}</li>,
+                  code: ({ children, className }) => className
+                    ? <pre style={{ background: 'var(--bg-3)', border: '1px solid var(--rule)', padding: '8px 10px', fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'var(--fg)', overflowX: 'auto', margin: '6px 0' }}><code>{children}</code></pre>
+                    : <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--accent)', background: 'var(--bg-3)', padding: '1px 4px' }}>{children}</code>,
+                  strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'var(--fg)' }}>{children}</strong>,
+                }}
+              >
+                {aiResult}
+              </ReactMarkdown>
             </div>
           )}
           {!aiResult && !aiGenerating && (
