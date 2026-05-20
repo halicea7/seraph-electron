@@ -118,23 +118,34 @@ function PageHeader({ title, sub, right }: { title: string; sub: string; right?:
 
 // ── Preview sub-components ────────────────────────────────────────────────────
 
-function ExecReport({ auditor, findings }: { auditor: string; findings: Finding[] }) {
+function ExecReport({ auditor, findings, project }: { auditor: string; findings: Finding[]; project: { name: string; created_at?: string } | null }) {
   const counts = {
     critical: findings.filter(f => f.severity === 'critical').length,
     high:     findings.filter(f => f.severity === 'high').length,
     medium:   findings.filter(f => f.severity === 'medium').length,
     low:      findings.filter(f => f.severity === 'low').length,
   }
+  const total = findings.length
+  const projName = project?.name ?? 'Untitled Project'
+  const startDate = project?.created_at ? new Date(project.created_at).toISOString().slice(0, 10) : '—'
+  const endDate = new Date().toISOString().slice(0, 10)
+
+  const critHigh = findings.filter(f => f.severity === 'critical' || f.severity === 'high')
+  const sevOrder = ['critical', 'high', 'medium', 'low']
+  const sortedFindings = [...findings].sort((a, b) => sevOrder.indexOf(a.severity) - sevOrder.indexOf(b.severity))
+
+  const riskLevel = counts.critical > 0 ? 'Critical' : counts.high > 3 ? 'High' : counts.high > 0 ? 'Medium-High' : counts.medium > 0 ? 'Medium' : 'Low'
+
   return (
     <div style={{ fontFamily: 'var(--font-serif)', color: 'var(--fg)' }}>
       <div className="mono" style={{ fontSize: 10, letterSpacing: '0.22em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>
         EXECUTIVE SUMMARY · CONFIDENTIAL
       </div>
       <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 36, letterSpacing: '-0.01em', lineHeight: 1.15, margin: '12px 0 6px' }}>
-        External Pentest Assessment
+        {projName}
       </h1>
       <h2 style={{ fontFamily: 'var(--font-sans)', fontWeight: 400, fontSize: 16, color: 'var(--fg-3)', margin: '0 0 32px' }}>
-        Northwind Logistics · 2026-04-22 to 2026-05-22
+        Penetration Test Report · {startDate} to {endDate}
       </h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, border: '1px solid var(--rule)', marginBottom: 28 }}>
@@ -142,7 +153,7 @@ function ExecReport({ auditor, findings }: { auditor: string; findings: Finding[
           { k: 'critical', v: counts.critical, c: 'var(--crit)' },
           { k: 'high',     v: counts.high,     c: 'var(--high)' },
           { k: 'medium',   v: counts.medium,   c: 'var(--med)' },
-          { k: 'low',      v: counts.low,       c: 'var(--low)' },
+          { k: 'low',      v: counts.low,      c: 'var(--low)' },
         ] as const).map((d, i) => (
           <div key={d.k} style={{ padding: 14, borderLeft: i > 0 ? '1px solid var(--rule)' : 'none' }}>
             <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.16em' }}>{d.k}</div>
@@ -151,83 +162,140 @@ function ExecReport({ auditor, findings }: { auditor: string; findings: Finding[
         ))}
       </div>
 
-      <p style={{ fontSize: 15, lineHeight: 1.7, marginTop: 0 }}>
-        Over a 30-day window we assessed Northwind Logistics' external attack surface, comprising 142 hosts across two datacenter ranges and a small SaaS perimeter. The engagement progressed through reconnaissance, scanning, exploitation, and post-exploitation phases under a non-destructive rules of engagement.
-      </p>
-      <p style={{ fontSize: 15, lineHeight: 1.7 }}>
-        We obtained <strong>initial access</strong> within 6 hours via a path-traversal-to-RCE chain on the Mira commerce portal (<span className="mono" style={{ fontSize: 12 }}>CVE-2023-50164</span>). From there, harvested service-account material enabled lateral movement into the internal corporate domain, culminating in recovery of a Domain Admin equivalent within 36 hours. <strong>The blast radius is total</strong>.
-      </p>
+      {total === 0 ? (
+        <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--fg-3)' }}>
+          No findings have been recorded for this project yet. Generate a report after completing scans.
+        </p>
+      ) : (
+        <>
+          <p style={{ fontSize: 15, lineHeight: 1.7, marginTop: 0 }}>
+            This report documents a security assessment of <strong>{projName}</strong> conducted between {startDate} and {endDate}.
+            A total of <strong>{total} finding{total !== 1 ? 's' : ''}</strong> were identified across the assessed scope,
+            with an overall risk rating of <strong>{riskLevel}</strong>.
+            {counts.critical > 0 && ` The engagement identified ${counts.critical} critical-severity issue${counts.critical !== 1 ? 's' : ''} requiring immediate remediation.`}
+          </p>
+          {critHigh.length > 0 && (
+            <p style={{ fontSize: 15, lineHeight: 1.7 }}>
+              The highest-priority finding is <strong>{critHigh[0].title}</strong>
+              {critHigh[0].cve_id ? ` (${critHigh[0].cve_id})` : ''}.
+              {critHigh.length > 1 && ` An additional ${critHigh.length - 1} critical or high severity finding${critHigh.length > 2 ? 's' : ''} ${critHigh.length > 2 ? 'require' : 'requires'} prompt attention.`}
+            </p>
+          )}
+        </>
+      )}
 
-      <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', marginTop: 32 }}>
-        Top-line recommendations
-      </h3>
-      <ol style={{ fontSize: 14.5, lineHeight: 1.65, paddingLeft: 18 }}>
-        <li>Patch the Apache Struts and PuTTY components flagged in Appendix A within 72 hours.</li>
-        <li>Enforce SMB signing across the corp.argent.local domain. This single change closes three lateral-movement paths observed in this engagement.</li>
-        <li>Rotate service account credentials and remove plaintext passwords from SYSVOL group policy preferences.</li>
-        <li>Adopt a tiered administration model — currently a single account class has unrestricted access from workstation to domain controller.</li>
-      </ol>
+      {critHigh.length > 0 && (
+        <>
+          <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', marginTop: 32 }}>
+            Top-line recommendations
+          </h3>
+          <ol style={{ fontSize: 14.5, lineHeight: 1.65, paddingLeft: 18 }}>
+            {sortedFindings.slice(0, 5).map((f, i) => {
+              const rem = f.remediation ?? 'Refer to the technical findings section for detailed remediation guidance.'
+              return (
+                <li key={i}>
+                  <strong>{f.title}</strong>
+                  {f.cve_id ? ` (${f.cve_id})` : ''} — {rem.replace(/\n/g, ' ').slice(0, 160)}{rem.length > 160 ? '…' : ''}
+                </li>
+              )
+            })}
+          </ol>
+        </>
+      )}
 
       <div style={{ marginTop: 40, paddingTop: 18, borderTop: '1px solid var(--rule)', display: 'flex', justifyContent: 'space-between' }}>
         <div>
           <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>auditor</div>
-          <div className="mono" style={{ fontSize: 13, marginTop: 4 }}>{auditor || 'Margot Chen'}</div>
+          <div className="mono" style={{ fontSize: 13, marginTop: 4 }}>{auditor || 'Seraph (Automated)'}</div>
         </div>
-        <div>
-          <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>page</div>
-          <div className="mono" style={{ fontSize: 13, marginTop: 4 }}>1 / 28</div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>findings</div>
+          <div className="mono" style={{ fontSize: 13, marginTop: 4 }}>{total}</div>
         </div>
       </div>
     </div>
   )
 }
 
-function TechReport() {
+function TechReport({ findings }: { findings: Finding[] }) {
+  const sevOrder = ['critical', 'high', 'medium', 'low']
+  const sorted = [...findings].sort((a, b) => sevOrder.indexOf(a.severity) - sevOrder.indexOf(b.severity))
+  const [idx, setIdx] = useState(0)
+  const f = sorted[idx] ?? null
+
+  if (!f) {
+    return (
+      <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>
+        No findings loaded. Select a project with findings to preview technical detail.
+      </div>
+    )
+  }
+
+  const foundDate = f.created_at ? new Date(f.created_at).toISOString().slice(0, 16).replace('T', ' ') : '—'
+
   return (
     <div style={{ fontFamily: 'var(--font-serif)', color: 'var(--fg)' }}>
-      <div className="mono" style={{ fontSize: 10, letterSpacing: '0.22em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>
-        TECHNICAL FINDINGS · 47 ITEMS
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div className="mono" style={{ fontSize: 10, letterSpacing: '0.22em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>
+          TECHNICAL FINDINGS · {sorted.length} ITEM{sorted.length !== 1 ? 'S' : ''}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}
+            style={{ background: 'none', border: '1px solid var(--rule)', padding: '2px 8px', fontSize: 10, color: 'var(--fg-3)', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}>
+            ←
+          </button>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', lineHeight: '22px' }}>{idx + 1} / {sorted.length}</span>
+          <button onClick={() => setIdx(i => Math.min(sorted.length - 1, i + 1))} disabled={idx === sorted.length - 1}
+            style={{ background: 'none', border: '1px solid var(--rule)', padding: '2px 8px', fontSize: 10, color: 'var(--fg-3)', cursor: idx === sorted.length - 1 ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}>
+            →
+          </button>
+        </div>
       </div>
-      <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 30, margin: '12px 0 24px' }}>
-        Finding 01 / 47
+      <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 26, margin: '10px 0 20px', lineHeight: 1.25 }}>
+        {f.title}
       </h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
         <KV items={[
-          { k: 'identifier', v: 'CVE-2024-31497' },
-          { k: 'severity',   v: 'Critical' },
-          { k: 'cvss 3.1',   v: '9.4' },
-          { k: 'host',       v: 'DC01.corp.argent.local' },
+          { k: 'identifier', v: f.cve_id ?? '—' },
+          { k: 'severity',   v: f.severity ? f.severity.charAt(0).toUpperCase() + f.severity.slice(1) : '—' },
+          { k: 'cvss 3.1',   v: f.cvss_score != null ? String(f.cvss_score) : '—' },
+          { k: 'framework',  v: f.framework ?? '—' },
         ]} />
         <KV items={[
-          { k: 'service',     v: 'ssh / 22' },
-          { k: 'found',       v: '2026-05-15 14:32' },
-          { k: 'exploitable', v: 'yes — public PoC' },
-          { k: 'owner',       v: 'M. Chen' },
+          { k: 'status',  v: f.status ?? 'open' },
+          { k: 'found',   v: foundDate },
+          { k: 'control', v: f.control_id ?? '—' },
+          { k: 'tags',    v: f.tags ? f.tags.split(',')[0].trim() : '—' },
         ]} />
       </div>
 
       <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', marginTop: 0 }}>
-        Summary
+        Description
       </h3>
       <p style={{ fontSize: 14.5, lineHeight: 1.7 }}>
-        The deployed PuTTY release is affected by a private-key recovery flaw in its ECDSA-P521 nonce generation. An attacker that observes approximately 60 signed messages can recover the private key, after which they may impersonate the user against any service that trusts the key.
+        {f.description ?? 'No description available.'}
       </p>
 
-      <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)' }}>
-        Reproduction
-      </h3>
-      <div className="term rule" style={{ padding: 12, fontSize: 11.5, fontFamily: 'var(--font-mono)' }}>
-        <div><span className="pr">$</span> nuclei -u ssh://DC01.corp.argent.local:22 -id CVE-2024-31497</div>
-        <div className="ok">[CVE-2024-31497] [tcp] [critical] DC01.corp.argent.local:22 — confirmed</div>
-      </div>
+      {f.remediation && (
+        <>
+          <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+            Remediation
+          </h3>
+          <p style={{ fontSize: 14.5, lineHeight: 1.7 }}>{f.remediation}</p>
+        </>
+      )}
 
-      <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)' }}>
-        Remediation
-      </h3>
-      <p style={{ fontSize: 14.5, lineHeight: 1.7 }}>
-        Upgrade PuTTY and its derivatives (FileZilla, WinSCP) to versions released after 2024-04-15. Rotate any P-521 ECDSA keys that may have been used with vulnerable clients; the safest assumption is that all such keys are compromised.
-      </p>
+      {f.evidence && (
+        <>
+          <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+            Evidence
+          </h3>
+          <div className="term rule" style={{ padding: 12, fontSize: 11.5, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {f.evidence}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -277,24 +345,56 @@ function FindingsMatrix({ findings }: { findings: Finding[] }) {
   )
 }
 
-function EvidencePreview() {
+function EvidencePreview({ projectId }: { projectId: string }) {
+  const [items, setItems] = useState<Array<{ id: string; filename: string; type: string; created_at?: string; url?: string }>>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!projectId) { setLoaded(true); return }
+    fetch(`${getApiBase()}/evidence?project_id=${projectId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { setItems(Array.isArray(data) ? data : []); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [projectId])
+
+  if (!loaded) {
+    return <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11, paddingTop: 40 }}>Loading evidence…</div>
+  }
+
   return (
     <div>
       <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 26, margin: '0 0 6px' }}>Evidence pack</h1>
-      <p className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>14 screenshots · 31 terminal captures · 6 loot artifacts</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 24 }}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rule" style={{ padding: 8 }}>
-            <div className="hatch" style={{ aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
-                screenshot · 00{i + 1}
-              </span>
+      <p className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+        {items.length > 0
+          ? `${items.length} artifact${items.length !== 1 ? 's' : ''} attached to this engagement`
+          : 'No evidence uploaded for this project'}
+      </p>
+      {items.length === 0 ? (
+        <div style={{ marginTop: 32, padding: 24, border: '1px dashed var(--rule)', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          Evidence files (screenshots, terminal captures, loot) can be attached to findings<br />in the Vuln Tracker view.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 24 }}>
+          {items.map((item, i) => (
+            <div key={item.id ?? i} className="rule" style={{ padding: 8 }}>
+              <div className="hatch" style={{ aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {item.url
+                  ? <img src={item.url} alt={item.filename} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  : <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+                      {item.type ?? 'file'}
+                    </span>
+                }
+              </div>
+              <div className="mono" style={{ fontSize: 10.5, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.filename}</div>
+              {item.created_at && (
+                <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-3)', marginTop: 2 }}>
+                  {new Date(item.created_at).toISOString().slice(0, 16).replace('T', ' ')}
+                </div>
+              )}
             </div>
-            <div className="mono" style={{ fontSize: 10.5, marginTop: 6 }}>capture-{String(i + 1).padStart(3, '0')}.png</div>
-            <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-3)', marginTop: 2 }}>14:{20 + i} · session {i % 3 + 1}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -533,7 +633,7 @@ export default function Reports() {
         lines.push(`The following high-priority items should be addressed immediately:`)
         lines.push(``)
         critHigh.slice(0, 10).forEach((f, idx) => {
-          const rem = f.remediation ?? f.recommendation ?? 'Refer to finding details for remediation guidance.'
+          const rem = f.remediation ?? 'Refer to finding details for remediation guidance.'
           lines.push(`${idx + 1}. **${f.title}** — ${rem.replace(/\n/g, ' ').slice(0, 200)}`)
         })
       } else {
@@ -933,10 +1033,10 @@ export default function Reports() {
               borderLeft: '1px solid var(--rule)', borderRight: '1px solid var(--rule)',
               minHeight: '100%',
             }}>
-              {previewTab === 'exec' && <ExecReport auditor={auditor} findings={findings} />}
-              {previewTab === 'tech' && <TechReport />}
+              {previewTab === 'exec' && <ExecReport auditor={auditor} findings={findings} project={selectedProj ?? null} />}
+              {previewTab === 'tech' && <TechReport findings={findings} />}
               {previewTab === 'findings' && <FindingsMatrix findings={displayFindings} />}
-              {previewTab === 'evid' && <EvidencePreview />}
+              {previewTab === 'evid' && <EvidencePreview projectId={projectId} />}
               {previewTab === 'report' && (
                 localReport
                   ? <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg)', margin: 0 }}>{localReport}</pre>
