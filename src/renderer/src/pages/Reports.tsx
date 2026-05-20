@@ -937,7 +937,6 @@ export default function Reports() {
                   <span style={{ position: 'absolute', top: 3, right: 8, width: 5, height: 5, borderRadius: '50%', background: 'var(--crit)' }} />
                 )}
               </button>
-              </div>
 
               {/* Progress + streaming log */}
               {(localGen.running || localGen.done) && (
