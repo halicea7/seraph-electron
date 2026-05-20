@@ -6,6 +6,7 @@ import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
 import { useAppStore } from '@/stores/appStore'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const rule = '1px solid var(--rule)'
 
@@ -1050,6 +1051,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
           {aiResult && (
             <div style={{ padding: '10px 14px', fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.7, borderTop: '1px solid rgba(168,85,247,0.2)', fontFamily: 'var(--font-sans)' }}>
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                   h2: ({ children }) => <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', margin: '12px 0 4px' }}>{children}</p>,
                   h3: ({ children }) => <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', margin: '10px 0 3px' }}>{children}</p>,

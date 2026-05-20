@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Brain, BookmarkCheck } from 'lucide-react'
 import Icon from '../components/Icon'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { Finding } from '../types'
 import { getFindings, generateReport, getStats, type PlatformStats } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -986,7 +987,7 @@ export default function Reports() {
                         </button>
                       </div>
                       <div style={{ borderLeft: '2px solid rgba(168,85,247,0.4)', paddingLeft: 10, fontSize: 11, lineHeight: 1.6, color: 'var(--fg-2)' }}>
-                        <ReactMarkdown>{narrative}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{narrative}</ReactMarkdown>
                       </div>
                     </div>
                   )}
@@ -1042,6 +1043,7 @@ export default function Reports() {
                 localReport
                   ? <div style={{ fontFamily: 'var(--font-serif)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--fg)' }}>
                       <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
                         components={{
                           h1: ({ children }) => <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 32, letterSpacing: '-0.01em', margin: '0 0 8px' }}>{children}</h1>,
                           h2: ({ children }) => <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', margin: '32px 0 12px', fontWeight: 500 }}>{children}</h2>,
