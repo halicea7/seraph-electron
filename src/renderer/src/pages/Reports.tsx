@@ -540,9 +540,10 @@ export default function Reports() {
         const data = await findingsRes.value.json()
         reportFindings = Array.isArray(data) ? data : (data.findings ?? data.items ?? [])
       } else {
-        // Fall back to already-loaded findings
         reportFindings = findings
       }
+      // Update findings state so Executive / Technical / Findings Matrix tabs populate
+      if (reportFindings.length > 0) setFindings(reportFindings)
 
       let scans: any[] = []
       if (scansRes.status === 'fulfilled' && scansRes.value.ok) {
@@ -649,7 +650,7 @@ export default function Reports() {
       clearInterval(stepInterval)
       setLocalReport(reportMd)
       setLocalGen(g => ({ ...g, p: 100, lines: [...g.lines, 'report ready.'], running: false, done: true }))
-      setPreviewTab('report')
+      setPreviewTab('exec')
     } catch (err: any) {
       clearInterval(stepInterval)
       setLocalGen(g => ({ ...g, running: false, done: true, lines: [...g.lines, `error: ${err.message}`] }))
@@ -1039,8 +1040,27 @@ export default function Reports() {
               {previewTab === 'evid' && <EvidencePreview projectId={projectId} />}
               {previewTab === 'report' && (
                 localReport
-                  ? <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg)', margin: 0 }}>{localReport}</pre>
-                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No report generated yet. Use "Generate narrative" to build one.</div>
+                  ? <div style={{ fontFamily: 'var(--font-serif)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--fg)' }}>
+                      <ReactMarkdown
+                        components={{
+                          h1: ({ children }) => <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 32, letterSpacing: '-0.01em', margin: '0 0 8px' }}>{children}</h1>,
+                          h2: ({ children }) => <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', margin: '32px 0 12px', fontWeight: 500 }}>{children}</h2>,
+                          h3: ({ children }) => <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-2)', margin: '20px 0 8px', fontWeight: 500 }}>{children}</h3>,
+                          p: ({ children }) => <p style={{ margin: '0 0 12px', fontSize: 14.5, lineHeight: 1.75 }}>{children}</p>,
+                          table: ({ children }) => <table style={{ width: '100%', borderCollapse: 'collapse', margin: '12px 0', fontSize: 13 }}>{children}</table>,
+                          th: ({ children }) => <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--rule-strong)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-3)' }}>{children}</th>,
+                          td: ({ children }) => <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--rule)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{children}</td>,
+                          ol: ({ children }) => <ol style={{ paddingLeft: 20, margin: '0 0 12px' }}>{children}</ol>,
+                          li: ({ children }) => <li style={{ margin: '4px 0', fontSize: 14.5, lineHeight: 1.65 }}>{children}</li>,
+                          hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--rule)', margin: '24px 0' }} />,
+                          strong: ({ children }) => <strong style={{ fontWeight: 600 }}>{children}</strong>,
+                          em: ({ children }) => <em style={{ color: 'var(--fg-3)', fontStyle: 'italic' }}>{children}</em>,
+                        }}
+                      >
+                        {localReport}
+                      </ReactMarkdown>
+                    </div>
+                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No report generated yet — click "Generate narrative" in the sidebar.</div>
               )}
               {previewTab === 'ai' && (
                 narrative
