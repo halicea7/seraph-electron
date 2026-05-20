@@ -251,13 +251,8 @@ function VulnRecords({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (aiModels.length > 0) return
-    fetch(`${getApiBase()}/settings/ai`)
-      .then(r => r.json())
-      .then(async cfg => {
-        const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
-        const r2 = await fetch(`${base}/api/tags`)
-        const d = await r2.json()
-        const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name)
+    window.electronAPI.ollamaModels()
+      .then(models => {
         setAiModels(models)
         if (models.length) setAiModel(models[0])
       })
@@ -872,13 +867,8 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 
   useEffect(() => {
     if (aiModels.length > 0) return
-    fetch(`${getApiBase()}/settings/ai`)
-      .then(r => r.json())
-      .then(async cfg => {
-        const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
-        const r2 = await fetch(`${base}/api/tags`)
-        const d = await r2.json()
-        const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name)
+    window.electronAPI.ollamaModels()
+      .then(models => {
         setAiModels(models)
         if (models.length && !aiModel) setAiModel(models[0])
       })
@@ -890,8 +880,8 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
     setAiGenerating(true)
     setAiResult(null)
     try {
-      const cfg = await fetch(`${getApiBase()}/settings/ai`).then(r => r.json())
-      const base = ((cfg.base_url || cfg.ollama_url || 'http://localhost:11434') as string).replace(/\/$/, '')
+      const settings = await window.electronAPI.ollamaGetSettings()
+      const base = settings.localOllamaUrl.replace(/\/$/, '')
       const prompt = `You are a cybersecurity expert. Provide concise, actionable remediation steps for this vulnerability:\n\nTitle: ${finding.title}\nSeverity: ${finding.severity}\nCVE: ${finding.cve_id ?? 'N/A'}\nTarget: ${finding.target ?? 'N/A'}\nDescription: ${finding.description ?? 'No description'}\n\nProvide:\n1. Immediate mitigation\n2. Long-term remediation\n3. Verification command`
       const res = await fetch(`${base}/api/generate`, {
         method: 'POST',
