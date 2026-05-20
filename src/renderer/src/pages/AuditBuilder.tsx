@@ -47,86 +47,394 @@ const STATIC_BENCHMARKS: BenchmarkEntry[] = [
 
 const STATIC_TARGETS_DEMO = ['app-01', 'app-02', 'db-01', 'redis-01']
 
-const STATIC_CONTROLS: CisControl[] = [
-  {
-    id: 'cis-1', code: '1.1.1.1', title: 'Ensure mounting of cramfs is disabled', sev: 'Medium', state: 'pass',
-    rationale: 'The cramfs filesystem type is not required for normal operation. Disabling it reduces the attack surface against kernel filesystem vulnerabilities.',
-    audit_cmd: ['modprobe -n -v cramfs', 'lsmod | grep cramfs'],
-    audit_expected: 'install /bin/true (modprobe output); no output from lsmod',
-    remediation: [
-      'echo "install cramfs /bin/true" >> /etc/modprobe.d/CIS.conf',
-      'rmmod cramfs 2>/dev/null || true',
-    ],
-  },
-  {
-    id: 'cis-2', code: '1.4.1', title: 'Ensure bootloader password is set', sev: 'High', state: 'fail',
-    rationale: 'Without a GRUB password, any user with physical access can boot into single-user mode or modify kernel parameters to bypass authentication.',
-    audit_cmd: ['grep "^set superusers" /boot/grub/grub.cfg', 'grep "^password" /boot/grub/grub.cfg'],
-    audit_expected: 'Both lines should be present with non-empty values',
-    remediation: [
-      'grub-mkpasswd-pbkdf2   # copy hash output',
-      '# Add to /etc/grub.d/40_custom:',
-      'set superusers="root"',
-      'password_pbkdf2 root <hash>',
-      'update-grub',
-    ],
-  },
-  {
-    id: 'cis-3', code: '3.1.1', title: 'Ensure source-routed packets are not accepted', sev: 'Medium', state: 'pass',
-    rationale: 'Source-routed packets allow the sender to specify the route, enabling traffic to bypass firewall rules and network monitoring controls.',
-    audit_cmd: ['sysctl net.ipv4.conf.all.accept_source_route', 'sysctl net.ipv4.conf.default.accept_source_route'],
-    audit_expected: 'net.ipv4.conf.all.accept_source_route = 0\nnet.ipv4.conf.default.accept_source_route = 0',
-    remediation: [
-      'sysctl -w net.ipv4.conf.all.accept_source_route=0',
-      'sysctl -w net.ipv4.conf.default.accept_source_route=0',
-      'echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.d/99-cis.conf',
-    ],
-  },
-  {
-    id: 'cis-4', code: '5.2.5', title: 'Ensure SSH PermitRootLogin is disabled', sev: 'High', state: 'fail',
-    rationale: 'Disabling root login over SSH narrows the attack surface considerably. Privileged operations should be performed through sudo by named users, leaving an auditable trail.',
-    audit_cmd: ['grep "^PermitRootLogin" /etc/ssh/sshd_config'],
-    audit_expected: 'PermitRootLogin no',
-    remediation: [
-      "sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config",
-      'systemctl reload sshd',
-    ],
-  },
-  {
-    id: 'cis-5', code: '5.4.1', title: 'Ensure password expiration ≤ 365 days', sev: 'Medium', state: 'warn',
-    rationale: 'Enforcing periodic password changes limits the window of opportunity for compromised credentials to be exploited.',
-    audit_cmd: ['grep "^PASS_MAX_DAYS" /etc/login.defs', 'awk -F: \'($5 > 365) {print $1, $5}\' /etc/shadow'],
-    audit_expected: 'PASS_MAX_DAYS 365 (or lower); no users with expiry > 365',
-    remediation: [
-      "sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 365/' /etc/login.defs",
-      '# For existing users: chage --maxdays 365 <username>',
-    ],
-  },
-  {
-    id: 'cis-6', code: '6.1.1', title: 'Audit system file permissions', sev: 'Low', state: 'pass',
-    rationale: 'Incorrect file permissions on system files can allow unprivileged users to read sensitive configuration or escalate privileges.',
-    audit_cmd: ['dpkg --verify 2>&1 | grep -v "^$"', 'find /etc -maxdepth 1 -perm /o+w -ls'],
-    audit_expected: 'No output from dpkg --verify; no world-writable files in /etc',
-    remediation: [
-      '# Reinstall affected packages to restore permissions:',
-      'dpkg --verify | awk \'{print $NF}\' | xargs dpkg -S | cut -d: -f1 | sort -u | xargs apt-get install --reinstall',
-    ],
-  },
-  {
-    id: 'cis-7', code: '4.1.4', title: 'Ensure events that modify date/time are collected', sev: 'Medium', state: 'fail',
-    rationale: 'Unauthorised date/time changes can be used to cover tracks or manipulate log timestamps, undermining forensic integrity.',
-    audit_cmd: ['grep time-change /etc/audit/audit.rules', 'auditctl -l | grep time-change'],
-    audit_expected: 'Rules for adjtimex, settimeofday, stime, clock_settime, and /etc/localtime present',
-    remediation: [
-      '# Add to /etc/audit/audit.rules:',
-      '-a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change',
-      '-a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change',
-      '-a always,exit -F arch=b64 -S clock_settime -k time-change',
-      '-w /etc/localtime -p wa -k time-change',
-      'service auditd restart',
-    ],
-  },
-]
+const BENCH_CONTROLS: Record<string, CisControl[]> = {
+  'cis-l1': [
+    {
+      id: 'l1-1', code: '1.1.1.1', title: 'Ensure mounting of cramfs is disabled', sev: 'Medium', state: 'pass',
+      rationale: 'The cramfs filesystem type is not required for normal operation. Disabling it reduces the attack surface against kernel filesystem vulnerabilities.',
+      audit_cmd: ['modprobe -n -v cramfs', 'lsmod | grep cramfs'],
+      audit_expected: 'install /bin/true (modprobe output); no output from lsmod',
+      remediation: [
+        'echo "install cramfs /bin/true" >> /etc/modprobe.d/CIS.conf',
+        'rmmod cramfs 2>/dev/null || true',
+      ],
+    },
+    {
+      id: 'l1-2', code: '1.4.1', title: 'Ensure bootloader password is set', sev: 'High', state: 'fail',
+      rationale: 'Without a GRUB password, any user with physical access can boot into single-user mode or modify kernel parameters to bypass authentication.',
+      audit_cmd: ['grep "^set superusers" /boot/grub/grub.cfg', 'grep "^password" /boot/grub/grub.cfg'],
+      audit_expected: 'Both lines should be present with non-empty values',
+      remediation: [
+        'grub-mkpasswd-pbkdf2   # copy hash output',
+        '# Add to /etc/grub.d/40_custom:',
+        'set superusers="root"',
+        'password_pbkdf2 root <hash>',
+        'update-grub',
+      ],
+    },
+    {
+      id: 'l1-3', code: '3.1.1', title: 'Ensure source-routed packets are not accepted', sev: 'Medium', state: 'pass',
+      rationale: 'Source-routed packets allow the sender to specify the route, enabling traffic to bypass firewall rules and network monitoring controls.',
+      audit_cmd: ['sysctl net.ipv4.conf.all.accept_source_route', 'sysctl net.ipv4.conf.default.accept_source_route'],
+      audit_expected: 'net.ipv4.conf.all.accept_source_route = 0\nnet.ipv4.conf.default.accept_source_route = 0',
+      remediation: [
+        'sysctl -w net.ipv4.conf.all.accept_source_route=0',
+        'sysctl -w net.ipv4.conf.default.accept_source_route=0',
+        'echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.d/99-cis.conf',
+      ],
+    },
+    {
+      id: 'l1-4', code: '5.2.5', title: 'Ensure SSH PermitRootLogin is disabled', sev: 'High', state: 'fail',
+      rationale: 'Disabling root login over SSH narrows the attack surface considerably. Privileged operations should be performed through sudo by named users, leaving an auditable trail.',
+      audit_cmd: ['grep "^PermitRootLogin" /etc/ssh/sshd_config'],
+      audit_expected: 'PermitRootLogin no',
+      remediation: [
+        "sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config",
+        'systemctl reload sshd',
+      ],
+    },
+    {
+      id: 'l1-5', code: '5.4.1', title: 'Ensure password expiration ≤ 365 days', sev: 'Medium', state: 'warn',
+      rationale: 'Enforcing periodic password changes limits the window of opportunity for compromised credentials to be exploited.',
+      audit_cmd: ['grep "^PASS_MAX_DAYS" /etc/login.defs', "awk -F: '($5 > 365) {print $1, $5}' /etc/shadow"],
+      audit_expected: 'PASS_MAX_DAYS 365 (or lower); no users with expiry > 365',
+      remediation: [
+        "sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 365/' /etc/login.defs",
+        '# For existing users: chage --maxdays 365 <username>',
+      ],
+    },
+    {
+      id: 'l1-6', code: '6.1.1', title: 'Audit system file permissions', sev: 'Low', state: 'pass',
+      rationale: 'Incorrect file permissions on system files can allow unprivileged users to read sensitive configuration or escalate privileges.',
+      audit_cmd: ['dpkg --verify 2>&1 | grep -v "^$"', 'find /etc -maxdepth 1 -perm /o+w -ls'],
+      audit_expected: 'No output from dpkg --verify; no world-writable files in /etc',
+      remediation: [
+        '# Reinstall affected packages to restore permissions:',
+        "dpkg --verify | awk '{print $NF}' | xargs dpkg -S | cut -d: -f1 | sort -u | xargs apt-get install --reinstall",
+      ],
+    },
+    {
+      id: 'l1-7', code: '4.1.4', title: 'Ensure events that modify date/time are collected', sev: 'Medium', state: 'fail',
+      rationale: 'Unauthorised date/time changes can be used to cover tracks or manipulate log timestamps, undermining forensic integrity.',
+      audit_cmd: ['grep time-change /etc/audit/audit.rules', 'auditctl -l | grep time-change'],
+      audit_expected: 'Rules for adjtimex, settimeofday, stime, clock_settime, and /etc/localtime present',
+      remediation: [
+        '# Add to /etc/audit/audit.rules:',
+        '-a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change',
+        '-a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change',
+        '-a always,exit -F arch=b64 -S clock_settime -k time-change',
+        '-w /etc/localtime -p wa -k time-change',
+        'service auditd restart',
+      ],
+    },
+  ],
+
+  'cis-l2': [
+    {
+      id: 'l2-1', code: '1.8.1', title: 'Ensure GNOME Display Manager is not installed', sev: 'Medium', state: 'pass',
+      rationale: 'A GUI desktop environment is not required on a server and increases the attack surface. GDM3 ships with browser integration and additional D-Bus services that should not be present on hardened systems.',
+      audit_cmd: ['dpkg -l gdm3 | grep -E "^ii"'],
+      audit_expected: 'No output — package should not be installed',
+      remediation: ['apt purge gdm3 -y', 'apt autoremove -y'],
+    },
+    {
+      id: 'l2-2', code: '2.2.1', title: 'Ensure time synchronization is configured', sev: 'Medium', state: 'pass',
+      rationale: 'Accurate time is required for log correlation, Kerberos authentication, and certificate validation. Unsynchronised clocks skew audit trails and can enable replay attacks.',
+      audit_cmd: ['systemctl is-enabled systemd-timesyncd', 'timedatectl show | grep NTPSynchronized'],
+      audit_expected: 'enabled; NTPSynchronized=yes',
+      remediation: [
+        'systemctl enable --now systemd-timesyncd',
+        'timedatectl set-ntp true',
+      ],
+    },
+    {
+      id: 'l2-3', code: '3.5.1', title: 'Ensure DCCP is disabled', sev: 'Low', state: 'pass',
+      rationale: 'DCCP (Datagram Congestion Control Protocol) is an unused transport layer protocol. Loading unused kernel modules increases the risk of kernel-level exploitation.',
+      audit_cmd: ['modprobe -n -v dccp', 'lsmod | grep dccp'],
+      audit_expected: 'install /bin/true; no lsmod output',
+      remediation: [
+        'echo "install dccp /bin/true" >> /etc/modprobe.d/CIS.conf',
+        'rmmod dccp 2>/dev/null || true',
+      ],
+    },
+    {
+      id: 'l2-4', code: '4.1.1', title: 'Ensure auditd is installed', sev: 'High', state: 'fail',
+      rationale: 'auditd provides the Linux kernel audit framework. Without it, no kernel-level syscall auditing is available, making intrusion detection and forensic reconstruction impossible.',
+      audit_cmd: ['dpkg -l auditd | grep "^ii"', 'systemctl is-enabled auditd'],
+      audit_expected: 'Package present and service enabled',
+      remediation: [
+        'apt install auditd audispd-plugins -y',
+        'systemctl enable --now auditd',
+      ],
+    },
+    {
+      id: 'l2-5', code: '5.3.4', title: 'Ensure password creation requirements are configured', sev: 'High', state: 'warn',
+      rationale: 'Weak password policies allow users to set trivially guessable passwords. pam_pwquality enforces minimum complexity rules at the PAM layer before credentials are stored.',
+      audit_cmd: ['grep -E "^minlen|^minclass|^dcredit|^ucredit|^ocredit|^lcredit" /etc/security/pwquality.conf'],
+      audit_expected: 'minlen=14, minclass=4 (or equivalent credit values)',
+      remediation: [
+        '# /etc/security/pwquality.conf:',
+        'minlen = 14',
+        'dcredit = -1',
+        'ucredit = -1',
+        'ocredit = -1',
+        'lcredit = -1',
+      ],
+    },
+    {
+      id: 'l2-6', code: '1.6.1', title: 'Ensure core dumps are restricted', sev: 'Medium', state: 'fail',
+      rationale: 'Core dumps may contain sensitive information such as passwords, encryption keys, or session tokens. Restricting them prevents unprivileged users from extracting process memory.',
+      audit_cmd: ['grep "hard core" /etc/security/limits.conf /etc/security/limits.d/*', 'sysctl fs.suid_dumpable'],
+      audit_expected: '* hard core 0; fs.suid_dumpable = 0',
+      remediation: [
+        'echo "* hard core 0" >> /etc/security/limits.conf',
+        'echo "fs.suid_dumpable = 0" >> /etc/sysctl.d/99-cis.conf',
+        'sysctl -w fs.suid_dumpable=0',
+      ],
+    },
+    {
+      id: 'l2-7', code: '6.2.8', title: 'Ensure users\' home directories are not group-writable', sev: 'Medium', state: 'pass',
+      rationale: 'Group-writable home directories allow members of the same group to modify or plant files in another user\'s home directory, enabling privilege escalation or session hijacking.',
+      audit_cmd: ["awk -F: '($3 >= 1000 && $7 != \"/usr/sbin/nologin\") {print $6}' /etc/passwd | xargs -I{} stat -c '%n %a' {}"],
+      audit_expected: 'No directory with mode containing group-write (g+w)',
+      remediation: [
+        '# For each offending directory:',
+        'chmod g-w /home/<user>',
+      ],
+    },
+  ],
+
+  'nist': [
+    {
+      id: 'nist-1', code: 'AC-2', title: 'Account Management', sev: 'High', state: 'warn',
+      rationale: 'Proper account management ensures that only authorised individuals have access to the system and that inactive or unnecessary accounts are promptly disabled.',
+      audit_cmd: ['awk -F: \'($3 >= 1000) {print $1, $3, $7}\' /etc/passwd', 'lastlog | awk \'NR>1 && $2=="**Never"\' | head -20'],
+      audit_expected: 'No accounts inactive for more than 90 days; no unexpected UID ≥ 1000 accounts',
+      remediation: [
+        '# Disable dormant accounts:',
+        'usermod --expiredate 1 <username>',
+        '# Review accounts with shells:',
+        "grep -E '/bash|/sh|/zsh' /etc/passwd",
+      ],
+    },
+    {
+      id: 'nist-2', code: 'AC-17', title: 'Remote Access controls', sev: 'High', state: 'fail',
+      rationale: 'Remote access sessions must use encrypted channels, enforce MFA where possible, and be restricted to authorised users. Uncontrolled remote access is the most common initial access vector.',
+      audit_cmd: ['sshd -T | grep -E "passwordauthentication|pubkeyauthentication|permitemptypasswords|protocol"'],
+      audit_expected: 'PasswordAuthentication no, PubkeyAuthentication yes, PermitEmptyPasswords no',
+      remediation: [
+        "sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
+        "sed -i 's/^#\\?PermitEmptyPasswords.*/PermitEmptyPasswords no/' /etc/ssh/sshd_config",
+        'systemctl reload sshd',
+      ],
+    },
+    {
+      id: 'nist-3', code: 'AU-2', title: 'Event Logging', sev: 'High', state: 'fail',
+      rationale: 'Audit logs are the primary evidence source for incident response. NIST requires logging of logons, privilege use, configuration changes, and object access at minimum.',
+      audit_cmd: ['auditctl -l | wc -l', 'systemctl is-active auditd', 'grep "max_log_file " /etc/audit/auditd.conf'],
+      audit_expected: '>20 active rules; auditd active; max_log_file ≥ 8',
+      remediation: [
+        'apt install auditd -y',
+        'systemctl enable --now auditd',
+        '# Apply NIST baseline rules:',
+        'curl -o /etc/audit/rules.d/nist.rules https://github.com/linux-audit/audit-userspace/raw/master/rules/30-nist-800-171.rules',
+        'augenrules --load',
+      ],
+    },
+    {
+      id: 'nist-4', code: 'CM-6', title: 'Configuration Settings', sev: 'Medium', state: 'warn',
+      rationale: 'Systems must be configured using established security baselines. Deviations from the approved configuration baseline introduce unknown risk and must be tracked.',
+      audit_cmd: ['debsums -c 2>/dev/null | head -20', "find /etc -newer /etc/passwd -not -name '*.dpkg*' -ls 2>/dev/null | head -20"],
+      audit_expected: 'No unexpected package file modifications; no unaccounted /etc changes',
+      remediation: [
+        '# Restore modified package files:',
+        "debsums -c | awk '{print $1}' | xargs dpkg -S | cut -d: -f1 | sort -u | xargs apt reinstall",
+      ],
+    },
+    {
+      id: 'nist-5', code: 'IA-5', title: 'Authenticator Management', sev: 'High', state: 'pass',
+      rationale: 'Authenticators (passwords, keys, tokens) must meet complexity requirements, have defined lifetimes, and be protected from disclosure. Weak authenticator management is the leading cause of credential compromise.',
+      audit_cmd: ['grep -E "^PASS_MIN_LEN|^PASS_MAX_DAYS|^PASS_WARN_AGE" /etc/login.defs', "awk -F: '($2 == \"\") {print $1}' /etc/shadow"],
+      audit_expected: 'PASS_MIN_LEN ≥ 12; PASS_MAX_DAYS ≤ 90; no accounts with empty password hash',
+      remediation: [
+        "sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/' /etc/login.defs",
+        "sed -i 's/^PASS_MIN_LEN.*/PASS_MIN_LEN 14/' /etc/login.defs",
+        '# Lock accounts with empty passwords:',
+        "awk -F: '($2 == \"\") {print $1}' /etc/shadow | xargs -I{} passwd -l {}",
+      ],
+    },
+    {
+      id: 'nist-6', code: 'SC-28', title: 'Protection of Information at Rest', sev: 'High', state: 'fail',
+      rationale: 'Sensitive data must be encrypted at rest to protect against physical theft or unauthorized access to storage media. Unencrypted /home and /var partitions expose credentials, logs, and application data.',
+      audit_cmd: ['lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE', 'cryptsetup status /dev/mapper/* 2>/dev/null'],
+      audit_expected: 'Sensitive mount points (/, /home, /var) should use LUKS encryption or equivalent',
+      remediation: [
+        '# Full disk encryption must be configured at install time via LUKS.',
+        '# For existing systems, encrypt specific directories using eCryptfs:',
+        'apt install ecryptfs-utils -y',
+        'ecryptfs-migrate-home -u <username>',
+      ],
+    },
+  ],
+
+  'cis-win': [
+    {
+      id: 'win-1', code: '1.1.1', title: 'Ensure password history is configured (24+ passwords)', sev: 'Medium', state: 'warn',
+      rationale: 'Password history prevents users from rotating through a small set of passwords and immediately reverting to a preferred insecure one.',
+      audit_cmd: ['net accounts | findstr "Password history"', 'secedit /export /cfg C:\\secpol.cfg /areas SECURITYPOLICY && findstr "PasswordHistorySize" C:\\secpol.cfg'],
+      audit_expected: 'PasswordHistorySize = 24',
+      remediation: [
+        '# Group Policy: Computer Config → Windows Settings → Security Settings → Account Policies → Password Policy',
+        '# Enforce password history: 24 passwords remembered',
+        '# Or via secedit:',
+        'secedit /configure /db %windir%\\security\\new.sdb /cfg custom.inf /areas SECURITYPOLICY',
+      ],
+    },
+    {
+      id: 'win-2', code: '1.1.2', title: 'Ensure maximum password age is ≤ 365 days', sev: 'Medium', state: 'pass',
+      rationale: 'Passwords that never expire remain valid indefinitely after compromise. Periodic forced rotation limits the window of credential exploitation.',
+      audit_cmd: ['net accounts | findstr "Maximum password age"'],
+      audit_expected: 'Maximum password age: 365 (or less)',
+      remediation: [
+        'net accounts /maxpwage:90',
+        '# Or via GPO: Computer Config → Security Settings → Account Policies → Max Password Age = 90',
+      ],
+    },
+    {
+      id: 'win-3', code: '2.2.1', title: 'Ensure "Access Credential Manager as trusted caller" is denied', sev: 'High', state: 'pass',
+      rationale: 'Credential Manager stores user credentials. Granting untrusted processes access allows them to extract stored passwords for lateral movement.',
+      audit_cmd: ['secedit /export /cfg %temp%\\secpol.cfg /areas USER_RIGHTS', 'findstr "SeTrustedCredManAccessPrivilege" %temp%\\secpol.cfg'],
+      audit_expected: 'SeTrustedCredManAccessPrivilege = (empty — no accounts assigned)',
+      remediation: [
+        '# GPO: Computer Config → Windows Settings → Security Settings → Local Policies → User Rights Assignment',
+        '# "Access Credential Manager as a trusted caller" — set to: (no accounts)',
+      ],
+    },
+    {
+      id: 'win-4', code: '9.1.1', title: 'Ensure Windows Firewall (Domain) is enabled', sev: 'High', state: 'fail',
+      rationale: 'The Windows Firewall provides host-based packet filtering. Disabling it on domain-joined machines eliminates a critical defense layer even when perimeter firewalls exist.',
+      audit_cmd: ['netsh advfirewall show domainprofile state', 'Get-NetFirewallProfile -Profile Domain | Select Enabled'],
+      audit_expected: 'State ON; Enabled: True',
+      remediation: [
+        'netsh advfirewall set domainprofile state on',
+        '# Or PowerShell:',
+        'Set-NetFirewallProfile -Profile Domain -Enabled True',
+      ],
+    },
+    {
+      id: 'win-5', code: '18.9.77', title: 'Ensure Windows Defender Antivirus is enabled', sev: 'High', state: 'pass',
+      rationale: 'Windows Defender provides real-time malware detection. Disabling it — even temporarily — leaves the system exposed to known malware families that would otherwise be blocked on execution.',
+      audit_cmd: ['Get-MpComputerStatus | Select AntivirusEnabled, RealTimeProtectionEnabled', 'sc query WinDefend'],
+      audit_expected: 'AntivirusEnabled: True; RealTimeProtectionEnabled: True; WinDefend: RUNNING',
+      remediation: [
+        'Set-MpPreference -DisableRealtimeMonitoring $false',
+        'Start-Service WinDefend',
+      ],
+    },
+    {
+      id: 'win-6', code: '17.1.1', title: 'Ensure Audit Credential Validation events are logged', sev: 'Medium', state: 'fail',
+      rationale: 'Credential validation events capture authentication attempts against local accounts. Without this, brute-force and pass-the-hash attacks leave no trace in the Windows event log.',
+      audit_cmd: ['auditpol /get /subcategory:"Credential Validation"'],
+      audit_expected: 'Success and Failure',
+      remediation: [
+        'auditpol /set /subcategory:"Credential Validation" /success:enable /failure:enable',
+      ],
+    },
+    {
+      id: 'win-7', code: '2.3.7.2', title: 'Ensure interactive logon does not display last username', sev: 'Low', state: 'pass',
+      rationale: 'Displaying the last logged-in username gives an attacker one half of the credential pair. Suppressing it forces the attacker to enumerate valid usernames separately.',
+      audit_cmd: ['reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v DontDisplayLastUserName'],
+      audit_expected: 'DontDisplayLastUserName    REG_DWORD    0x1',
+      remediation: [
+        'reg add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v DontDisplayLastUserName /t REG_DWORD /d 1 /f',
+      ],
+    },
+  ],
+
+  'lynis': [
+    {
+      id: 'lynis-1', code: 'AUTH-9262', title: 'PAM password strength configuration', sev: 'High', state: 'warn',
+      rationale: 'Lynis checks that pam_pwquality or pam_cracklib is active in the PAM stack and enforcing minimum complexity. Weak PAM configuration renders password policies ineffective.',
+      audit_cmd: ['grep -r "pam_pwquality\\|pam_cracklib" /etc/pam.d/', 'cat /etc/security/pwquality.conf'],
+      audit_expected: 'pam_pwquality.so present in common-password with minlen, dcredit, ucredit, ocredit, lcredit',
+      remediation: [
+        'apt install libpam-pwquality -y',
+        '# In /etc/pam.d/common-password, add/update:',
+        'password requisite pam_pwquality.so retry=3 minlen=14 dcredit=-1 ucredit=-1 lcredit=-1 ocredit=-1',
+      ],
+    },
+    {
+      id: 'lynis-2', code: 'BOOT-5122', title: 'GRUB2 password protection', sev: 'High', state: 'fail',
+      rationale: 'Lynis checks for a GRUB superuser with a hashed password. Without it, anyone with physical access can pass kernel boot parameters (e.g. init=/bin/bash) to gain root without authentication.',
+      audit_cmd: ['grep -E "^set superusers|^password_pbkdf2" /boot/grub/grub.cfg'],
+      audit_expected: 'Both directives present with non-empty values',
+      remediation: [
+        'grub-mkpasswd-pbkdf2',
+        '# Add to /etc/grub.d/40_custom:',
+        'set superusers="admin"',
+        'password_pbkdf2 admin <paste-hash-here>',
+        'update-grub',
+      ],
+    },
+    {
+      id: 'lynis-3', code: 'FILE-6310', title: 'Umask hardening in /etc/profile', sev: 'Medium', state: 'pass',
+      rationale: 'The default umask controls permissions on newly created files. A permissive umask (e.g. 022) may create world-readable files in shared directories, leaking sensitive data.',
+      audit_cmd: ['grep umask /etc/profile /etc/profile.d/*.sh /etc/bash.bashrc 2>/dev/null'],
+      audit_expected: 'umask 027 or stricter in at least one shell init file',
+      remediation: [
+        'echo "umask 027" >> /etc/profile.d/cis-umask.sh',
+        'chmod 644 /etc/profile.d/cis-umask.sh',
+      ],
+    },
+    {
+      id: 'lynis-4', code: 'KRNL-5820', title: 'Sysctl hardening parameters', sev: 'Medium', state: 'fail',
+      rationale: 'Lynis evaluates key kernel parameters against a hardening checklist. Misconfigured sysctl values leave the kernel susceptible to ARP spoofing, ICMP redirect attacks, and SYN flood amplification.',
+      audit_cmd: [
+        'sysctl kernel.randomize_va_space',
+        'sysctl net.ipv4.tcp_syncookies',
+        'sysctl net.ipv4.conf.all.rp_filter',
+      ],
+      audit_expected: 'randomize_va_space=2; tcp_syncookies=1; rp_filter=1',
+      remediation: [
+        '# Write to /etc/sysctl.d/99-hardening.conf:',
+        'kernel.randomize_va_space = 2',
+        'net.ipv4.tcp_syncookies = 1',
+        'net.ipv4.conf.all.rp_filter = 1',
+        'net.ipv4.conf.default.rp_filter = 1',
+        'sysctl --system',
+      ],
+    },
+    {
+      id: 'lynis-5', code: 'SSH-7408', title: 'SSH configuration hardening', sev: 'High', state: 'warn',
+      rationale: 'Lynis runs a comprehensive check of sshd_config against a set of known-good values. Weak algorithms, missing idle timeouts, and enabled root login are the most common deficiencies.',
+      audit_cmd: ['sshd -T | grep -E "^(protocol|permitrootlogin|passwordauth|x11forwarding|clientaliveinterval|maxauthtries)"'],
+      audit_expected: 'PermitRootLogin no, PasswordAuthentication no, X11Forwarding no, ClientAliveInterval ≤ 300',
+      remediation: [
+        '# /etc/ssh/sshd_config:',
+        'PermitRootLogin no',
+        'PasswordAuthentication no',
+        'X11Forwarding no',
+        'ClientAliveInterval 300',
+        'ClientAliveCountMax 3',
+        'MaxAuthTries 3',
+        'systemctl reload sshd',
+      ],
+    },
+    {
+      id: 'lynis-6', code: 'MALW-3280', title: 'Malware scanner installed', sev: 'Medium', state: 'fail',
+      rationale: 'Lynis checks for the presence of a malware scanner (rkhunter, chkrootkit, ClamAV, etc.). On Linux servers, malware scanners catch rootkits, webshells, and known malicious binaries.',
+      audit_cmd: ['which rkhunter chkrootkit clamscan 2>/dev/null', 'dpkg -l | grep -E "rkhunter|clamav|chkrootkit"'],
+      audit_expected: 'At least one scanner binary present and configured',
+      remediation: [
+        'apt install rkhunter -y',
+        'rkhunter --update',
+        'rkhunter --propupd',
+        '# Schedule daily scan via cron:',
+        'echo "0 3 * * * root rkhunter --check --skip-keypress --report-warnings-only" > /etc/cron.d/rkhunter',
+      ],
+    },
+  ],
+}
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -306,9 +614,9 @@ export default function AuditBuilder() {
   const [activeBench, setActiveBench] = useState<string>('cis-l1')
   const [profileMode, setProfileMode] = useState<string>('Server')
   const [checkedTargets, setCheckedTargets] = useState<Set<string>>(new Set(STATIC_TARGETS_DEMO))
-  const [controls, setControls] = useState<CisControl[]>(STATIC_CONTROLS)
+  const [controls, setControls] = useState<CisControl[]>(BENCH_CONTROLS['cis-l1'])
   const [benchmarks, setBenchmarks] = useState<BenchmarkEntry[]>(STATIC_BENCHMARKS)
-  const [selectedControlId, setSelectedControlId] = useState<string>(STATIC_CONTROLS[0].id)
+  const [selectedControlId, setSelectedControlId] = useState<string>(BENCH_CONTROLS['cis-l1'][0].id)
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [categoryConfigs, setCategoryConfigs] = useState<Record<string, Record<string, unknown>>>({})
   const [selectedTarget, setSelectedTarget] = useState<string>('')
@@ -621,7 +929,7 @@ export default function AuditBuilder() {
       <PageHeader
         breadcrumb={sp ? `${sp.name}` : 'Seraph'}
         title="Audit Builder"
-        sub="Generate compliance scan scripts from CIS / NIST / Lynis benchmarks. Run remotely, parse, and pin failed controls as findings."
+        sub="Select a compliance benchmark, review its controls, then generate an audit script to run against your targets. Import results back to mark controls pass/fail and auto-create findings for anything that fails."
         right={(
           <>
             <button className="btn" onClick={handleDownload} disabled={!scanId}>
@@ -654,7 +962,14 @@ export default function AuditBuilder() {
             {benchmarks.map(b => (
               <button
                 key={b.id}
-                onClick={() => setActiveBench(b.id)}
+                onClick={() => {
+                  setActiveBench(b.id)
+                  const next = BENCH_CONTROLS[b.id]
+                  if (next) {
+                    setControls(next)
+                    setSelectedControlId(next[0].id)
+                  }
+                }}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left',
                   background: activeBench === b.id ? 'var(--accent-2)' : 'transparent',
