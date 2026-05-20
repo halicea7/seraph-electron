@@ -446,6 +446,8 @@ export default function Reports() {
   const [narrativeSavedAt, setNarrativeSavedAt] = useState<string>('')
   const [narrativeError, setNarrativeError] = useState<string>('')
   const [localGen, setLocalGen] = useState<GenState>({ running: false, done: false, p: 0, lines: [] })
+  const [aiModels, setAiModels] = useState<string[]>([])
+  const [aiModel, setAiModel] = useState<string>('')
 
   // Data
   const [findings, setFindings] = useState<Finding[]>([])
@@ -476,6 +478,15 @@ export default function Reports() {
   useEffect(() => {
     if (projectId) loadSavedNarrative(projectId, narrativeStyle)
   }, [narrativeStyle])
+
+  useEffect(() => {
+    window.electronAPI.ollamaModels()
+      .then(models => {
+        setAiModels(models)
+        if (models.length && !aiModel) setAiModel(models[0])
+      })
+      .catch(() => {})
+  }, [])
 
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
@@ -870,66 +881,61 @@ export default function Reports() {
           </Section>
 
           <Section title="AI NARRATIVE · LOCAL">
-            <div style={{ padding: 'var(--pad)' }}>
-              {/* Model + status row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span className="mono" style={{ fontSize: 11 }}>llama3:8b · q4_0</span>
-                <span className="mono" style={{ fontSize: 10, color: 'var(--ok)' }}>● ollama 11434</span>
-              </div>
-
-              {/* Stats grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-                <div className="rule" style={{ padding: 8, textAlign: 'center' }}>
-                  <div className="mono" style={{ fontSize: 18, color: 'var(--accent)' }}>4.8s</div>
-                  <div className="smcap" style={{ marginTop: 4, fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>avg ttft</div>
-                </div>
-                <div className="rule" style={{ padding: 8, textAlign: 'center' }}>
-                  <div className="mono" style={{ fontSize: 18, color: 'var(--accent)' }}>62 tps</div>
-                  <div className="smcap" style={{ marginTop: 4, fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>throughput</div>
-                </div>
-              </div>
+            <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
               {/* Narrative style selector */}
-              <div style={{ marginBottom: 10 }}>
-                <SegBtns
-                  options={['executive', 'technical']}
-                  value={narrativeStyle}
-                  onChange={v => setNarrativeStyle(v as NarrativeStyle)}
-                />
-              </div>
+              <SegBtns
+                options={['executive', 'technical']}
+                value={narrativeStyle}
+                onChange={v => setNarrativeStyle(v as NarrativeStyle)}
+              />
 
-              {/* Generate button (idle) */}
-              {!localGen.running && !localGen.done && (
-                <button
-                  onClick={handleLocalGenerate}
-                  className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  <Icon name="bolt" size={11} color="#1a1408" /> Generate narrative
-                </button>
-              )}
+              {/* Generate narrative button — data-driven, no AI */}
+              <button
+                onClick={handleLocalGenerate}
+                disabled={localGen.running || !projectId}
+                className="btn btn-primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <Icon name="bolt" size={11} color="#1a1408" />
+                {localGen.running ? 'Generating…' : 'Generate narrative'}
+              </button>
 
-              {/* Also trigger real AI generate when project loaded */}
-              {!localGen.running && !localGen.done && projectId && (
+              {/* AI Interpretation — calls local Ollama */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                {aiModels.length > 0 ? (
+                  <select
+                    value={aiModel}
+                    onChange={e => setAiModel(e.target.value)}
+                    style={{
+                      flex: 1, background: 'var(--bg-2)', border: ruleStrong, padding: '4px 8px',
+                      fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none',
+                    }}
+                  >
+                    {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                ) : (
+                  <span className="mono" style={{ flex: 1, fontSize: 10, color: 'var(--fg-4)', lineHeight: '26px' }}>no models</span>
+                )}
                 <button
                   onClick={handleGenerateNarrative}
-                  disabled={generatingNarrative || !projectId}
+                  disabled={generatingNarrative || !projectId || !aiModel}
                   title={hasNewFindings ? 'New findings since last narrative — regenerate' : 'Generate AI narrative using local LLM'}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5, width: '100%', marginTop: 6,
-                    padding: '5px 10px', background: 'none', border: ruleStrong,
-                    fontSize: 11, color: '#a855f7', cursor: generatingNarrative || !projectId ? 'not-allowed' : 'pointer',
-                    opacity: generatingNarrative || !projectId ? 0.5 : 1, fontFamily: 'var(--font-mono)',
-                    justifyContent: 'center', position: 'relative',
+                    display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    padding: '4px 10px', background: 'none', border: '1px solid rgba(168,85,247,0.4)',
+                    fontSize: 11, color: aiModel && !generatingNarrative ? '#a855f7' : 'var(--fg-4)',
+                    cursor: generatingNarrative || !projectId || !aiModel ? 'not-allowed' : 'pointer',
+                    fontFamily: 'var(--font-mono)', position: 'relative', whiteSpace: 'nowrap',
                   }}
                 >
-                  <Brain size={11} />
-                  AI Interpretation
+                  <Brain size={10} />
+                  {generatingNarrative ? 'Running…' : 'AI'}
                   {hasNewFindings && !generatingNarrative && (
-                    <span style={{ position: 'absolute', top: 2, right: 6, width: 6, height: 6, borderRadius: '50%', background: 'var(--crit)', boxShadow: '0 0 6px rgba(232,64,64,0.8)' }} />
+                    <span style={{ position: 'absolute', top: 2, right: 4, width: 5, height: 5, borderRadius: '50%', background: 'var(--crit)' }} />
                   )}
                 </button>
-              )}
+              </div>
 
               {/* Progress + streaming log */}
               {(localGen.running || localGen.done) && (
