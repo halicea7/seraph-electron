@@ -890,7 +890,7 @@ export default function Reports() {
                 onChange={v => setNarrativeStyle(v as NarrativeStyle)}
               />
 
-              {/* Generate narrative button — data-driven, no AI */}
+              {/* Generate narrative — data-driven, no AI */}
               <button
                 onClick={handleLocalGenerate}
                 disabled={localGen.running || !projectId}
@@ -901,40 +901,42 @@ export default function Reports() {
                 {localGen.running ? 'Generating…' : 'Generate narrative'}
               </button>
 
-              {/* AI Interpretation — calls local Ollama */}
-              <div style={{ display: 'flex', gap: 6 }}>
-                {aiModels.length > 0 ? (
-                  <select
-                    value={aiModel}
-                    onChange={e => setAiModel(e.target.value)}
-                    style={{
-                      flex: 1, background: 'var(--bg-2)', border: ruleStrong, padding: '4px 8px',
-                      fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none',
-                    }}
-                  >
-                    {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                ) : (
-                  <span className="mono" style={{ flex: 1, fontSize: 10, color: 'var(--fg-4)', lineHeight: '26px' }}>no models</span>
-                )}
-                <button
-                  onClick={handleGenerateNarrative}
-                  disabled={generatingNarrative || !projectId || !aiModel}
-                  title={hasNewFindings ? 'New findings since last narrative — regenerate' : 'Generate AI narrative using local LLM'}
+              {/* Model selector */}
+              {aiModels.length > 0 ? (
+                <select
+                  value={aiModel}
+                  onChange={e => setAiModel(e.target.value)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-                    padding: '4px 10px', background: 'none', border: '1px solid rgba(168,85,247,0.4)',
-                    fontSize: 11, color: aiModel && !generatingNarrative ? '#a855f7' : 'var(--fg-4)',
-                    cursor: generatingNarrative || !projectId || !aiModel ? 'not-allowed' : 'pointer',
-                    fontFamily: 'var(--font-mono)', position: 'relative', whiteSpace: 'nowrap',
+                    width: '100%', background: 'var(--bg-2)', border: ruleStrong, padding: '4px 8px',
+                    fontSize: 11, color: 'var(--fg)', fontFamily: 'var(--font-mono)', outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <Brain size={10} />
-                  {generatingNarrative ? 'Running…' : 'AI'}
-                  {hasNewFindings && !generatingNarrative && (
-                    <span style={{ position: 'absolute', top: 2, right: 4, width: 5, height: 5, borderRadius: '50%', background: 'var(--crit)' }} />
-                  )}
-                </button>
+                  {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              ) : (
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-4)' }}>no models found</span>
+              )}
+
+              {/* AI Interpretation — calls local Ollama */}
+              <button
+                onClick={handleGenerateNarrative}
+                disabled={generatingNarrative || !projectId || !aiModel}
+                title={hasNewFindings ? 'New findings since last narrative — regenerate' : 'Generate AI narrative using local LLM'}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%',
+                  padding: '5px 10px', background: 'none', border: '1px solid rgba(168,85,247,0.4)',
+                  fontSize: 11, color: aiModel && !generatingNarrative ? '#a855f7' : 'var(--fg-4)',
+                  cursor: generatingNarrative || !projectId || !aiModel ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-mono)', position: 'relative',
+                }}
+              >
+                <Brain size={11} />
+                {generatingNarrative ? 'Running…' : 'AI Interpretation'}
+                {hasNewFindings && !generatingNarrative && (
+                  <span style={{ position: 'absolute', top: 3, right: 8, width: 5, height: 5, borderRadius: '50%', background: 'var(--crit)' }} />
+                )}
+              </button>
               </div>
 
               {/* Progress + streaming log */}
