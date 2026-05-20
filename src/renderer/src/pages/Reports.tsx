@@ -968,34 +968,30 @@ export default function Reports() {
                     )}
                   </div>
 
-                  {/* Saved narrative display */}
                   {narrativeError && (
                     <div style={{ marginTop: 10, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>
                       {narrativeError}
                     </div>
                   )}
                   {narrative && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#a855f7' }}>
-                          <Brain size={11} />
-                          <span className="mono" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{narrativeStyle}</span>
-                          {narrativeSavedAt && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--ok)' }}>
-                              <BookmarkCheck size={9} /> {new Date(narrativeSavedAt).toLocaleDateString()}
-                            </span>
-                          )}
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {[
+                        { k: 'model',     v: aiModel || '—' },
+                        { k: 'style',     v: narrativeStyle },
+                        { k: 'words',     v: String(narrative.trim().split(/\s+/).length) },
+                        { k: 'generated', v: narrativeSavedAt ? new Date(narrativeSavedAt).toLocaleString() : 'just now' },
+                      ].map(row => (
+                        <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--rule)', padding: '3px 0' }}>
+                          <span className="mono" style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-3)' }}>{row.k}</span>
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg)', textAlign: 'right', marginLeft: 8, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.v}</span>
                         </div>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(narrative)}
-                          style={{ fontSize: 10, color: 'var(--fg-3)', background: 'none', border: ruleStrong, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <div style={{ borderLeft: '2px solid rgba(168,85,247,0.4)', paddingLeft: 10, fontSize: 11, lineHeight: 1.6, color: 'var(--fg-2)' }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{narrative}</ReactMarkdown>
-                      </div>
+                      ))}
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(narrative); setPreviewTab('ai') }}
+                        style={{ marginTop: 8, fontSize: 10, color: 'var(--fg-3)', background: 'none', border: ruleStrong, padding: '3px 8px', cursor: 'pointer', fontFamily: 'var(--font-mono)', alignSelf: 'flex-end' }}
+                      >
+                        View in AI tab
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1073,8 +1069,29 @@ export default function Reports() {
               )}
               {previewTab === 'ai' && (
                 narrative
-                  ? <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg)', margin: 0 }}>{narrative}</pre>
-                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No AI narrative yet. Use "AI Interpretation" to generate one.</div>
+                  ? <div style={{ fontFamily: 'var(--font-serif)', fontSize: 14.5, lineHeight: 1.75, color: 'var(--fg)' }}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ children }) => <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, fontSize: 30, margin: '0 0 8px' }}>{children}</h1>,
+                          h2: ({ children }) => <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', margin: '28px 0 10px', fontWeight: 500 }}>{children}</h2>,
+                          h3: ({ children }) => <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-2)', margin: '18px 0 6px', fontWeight: 500 }}>{children}</h3>,
+                          p: ({ children }) => <p style={{ margin: '0 0 12px', fontSize: 14.5, lineHeight: 1.75 }}>{children}</p>,
+                          ul: ({ children }) => <ul style={{ paddingLeft: 20, margin: '0 0 12px' }}>{children}</ul>,
+                          ol: ({ children }) => <ol style={{ paddingLeft: 20, margin: '0 0 12px' }}>{children}</ol>,
+                          li: ({ children }) => <li style={{ margin: '4px 0', fontSize: 14.5, lineHeight: 1.65 }}>{children}</li>,
+                          table: ({ children }) => <table style={{ width: '100%', borderCollapse: 'collapse', margin: '12px 0', fontSize: 13 }}>{children}</table>,
+                          th: ({ children }) => <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--rule-strong)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-3)' }}>{children}</th>,
+                          td: ({ children }) => <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--rule)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{children}</td>,
+                          hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--rule)', margin: '24px 0' }} />,
+                          strong: ({ children }) => <strong style={{ fontWeight: 600 }}>{children}</strong>,
+                          code: ({ children }) => <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)', background: 'var(--bg-3)', padding: '1px 4px' }}>{children}</code>,
+                        }}
+                      >
+                        {narrative}
+                      </ReactMarkdown>
+                    </div>
+                  : <div style={{ textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 12, paddingTop: 40 }}>No AI narrative yet — select a model and click "AI Interpretation".</div>
               )}
             </div>
           </div>
