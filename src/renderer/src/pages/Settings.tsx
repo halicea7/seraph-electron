@@ -321,6 +321,10 @@ export default function Settings() {
   const [attackStatus, setAttackStatus] = useState<{ count: number; last_sync: string | null; state: string; error: string | null } | null>(null)
   const [attackSyncing, setAttackSyncing] = useState(false)
 
+  // PTES index
+  const [ptesStatus, setPtesStatus] = useState<{ count: number; last_sync: string | null; syncing: boolean } | null>(null)
+  const [ptesSyncing, setPtesSyncing] = useState(false)
+
   // Local Ollama
   const [localOllamaSettings, setLocalOllamaSettings] = useState({ useLocalOllama: false, localOllamaUrl: 'http://localhost:11434', localOllamaModel: '' })
   const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([])
@@ -344,6 +348,7 @@ export default function Settings() {
     loadProfiles()
     loadAiConfig()
     loadAttackStatus()
+    loadPtesStatus()
     loadProbeConfig()
     loadPasskeys()
     loadApiTokens()
@@ -598,6 +603,11 @@ export default function Settings() {
   async function loadAiConfig() {
     try { const res = await fetch(`${getApiBase()}/ai/config`); if (res.ok) setAiConfig(await res.json()) }
     catch { /* backend offline */ }
+  }
+
+  async function loadPtesStatus() {
+    try { const r = await fetch(`${getApiBase()}/ai/ptes/status`); if (r.ok) setPtesStatus(await r.json()) }
+    catch { /* ignore */ }
   }
 
   async function loadAttackStatus() {
@@ -1024,6 +1034,53 @@ export default function Settings() {
               {attackStatus && attackStatus.count > 0 && !attackSyncing && (
                 <span style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <CheckCircle size={13} /> {attackStatus.count} techniques indexed
+                </span>
+              )}
+            </div>
+          </div>
+        </Section>
+
+        <Section title="PTES KNOWLEDGE BASE">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              Index the Penetration Testing Execution Standard (pentest-standard.org) for use by the AI Operator.
+              Provides methodology guidance on pre-engagement, intelligence gathering, exploitation, and reporting.
+            </p>
+            {ptesStatus && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Sections',   value: ptesStatus.count > 0 ? String(ptesStatus.count) : '—' },
+                  { label: 'Status',     value: ptesStatus.count > 0 ? 'Ready' : 'Not indexed' },
+                  { label: 'Last Sync',  value: ptesStatus.last_sync ? new Date(ptesStatus.last_sync).toLocaleDateString() : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ padding: '8px 14px', border: '1px solid var(--rule-strong)', background: 'var(--bg-2)', minWidth: 100 }}>
+                    <div style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn-primary btn-sm"
+                disabled={ptesSyncing}
+                onClick={async () => {
+                  setPtesSyncing(true)
+                  await fetch(`${getApiBase()}/ai/ptes/sync`, { method: 'POST' })
+                  const poll = setInterval(async () => {
+                    const r = await fetch(`${getApiBase()}/ai/ptes/status`)
+                    const s = await r.json()
+                    setPtesStatus(s)
+                    if (!s.syncing) { setPtesSyncing(false); clearInterval(poll) }
+                  }, 2000)
+                }}
+              >
+                {ptesSyncing ? <><Loader size={12} className="animate-spin" /> Syncing…</> : 'Sync PTES'}
+              </button>
+              <button className="btn" onClick={loadPtesStatus}>Refresh status</button>
+              {ptesStatus && ptesStatus.count > 0 && !ptesSyncing && (
+                <span style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle size={13} /> {ptesStatus.count} sections indexed
                 </span>
               )}
             </div>
