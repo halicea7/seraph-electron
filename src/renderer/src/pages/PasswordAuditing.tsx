@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '../components/Icon'
-import Terminal, { TerminalHandle } from '../components/Terminal'
 import type { Credential } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
@@ -164,7 +163,14 @@ export default function PasswordAuditing() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loadingJobs, setLoadingJobs] = useState(false)
 
-  const terminalRef = useRef<TerminalHandle>(null)
+  const [liveOutput, setLiveOutput] = useState('')
+  const outputRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    }
+  }, [liveOutput])
 
   // KPI state (derived from live jobs)
   const recovered = jobs.reduce((a, j) => a + j.recovered, 0)
@@ -268,6 +274,7 @@ export default function PasswordAuditing() {
 
     setRunning(true)
     setResults(null)
+    setLiveOutput('')
 
     const res = await fetch(`${getApiBase()}/cracking/run`, {
       method: 'POST',
@@ -297,33 +304,29 @@ export default function PasswordAuditing() {
     const ws = new WebSocket(`${getWsBase()}/ws/cracking/${job_id}`)
 
     ws.onopen = () => {
-      terminalRef.current?.writeln(`\x1b[33m[*] Starting ${tool}...\x1b[0m`)
-      terminalRef.current?.writeln(`\x1b[33m[*] ${hashes.length} hash(es) to crack\x1b[0m\r\n`)
+      setLiveOutput(`[*] Starting ${tool}...\n[*] ${hashes.length} hash(es) to crack\n`)
     }
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.type === 'stdout') {
-        terminalRef.current?.write(msg.data)
+        setLiveOutput(prev => prev + msg.data)
       } else if (msg.type === 'stderr') {
-        terminalRef.current?.write('\x1b[33m' + msg.data + '\x1b[0m')
+        setLiveOutput(prev => prev + msg.data)
       } else if (msg.type === 'exit') {
-        const color = msg.code === 0 || msg.code === 1 ? '\x1b[32m' : '\x1b[31m'
-        terminalRef.current?.writeln(`${color}\r\n[*] Tool exited (code ${msg.code})\x1b[0m`)
+        setLiveOutput(prev => prev + `\n[*] Tool exited (code ${msg.code})\n`)
       } else if (msg.type === 'results') {
         setResults({ cracked: msg.cracked, pairs: msg.pairs, vault_updated: msg.vault_updated })
-        terminalRef.current?.writeln(
-          `\x1b[36m\r\n[+] Cracked: ${msg.cracked} | Vault updated: ${msg.vault_updated}\x1b[0m`
-        )
+        setLiveOutput(prev => prev + `\n[+] Cracked: ${msg.cracked} | Vault updated: ${msg.vault_updated}\n`)
         setRunning(false)
       } else if (msg.type === 'error') {
-        terminalRef.current?.writeln(`\x1b[31m[ERROR] ${msg.data}\x1b[0m`)
+        setLiveOutput(prev => prev + `\n[ERROR] ${msg.data}\n`)
         setRunning(false)
       }
     }
 
     ws.onerror = () => {
-      terminalRef.current?.writeln('\x1b[31m[!] WebSocket error\x1b[0m')
+      setLiveOutput(prev => prev + '\n[!] WebSocket error\n')
       setRunning(false)
     }
   }
@@ -360,7 +363,7 @@ export default function PasswordAuditing() {
             <button className="btn" onClick={loadFromVault} disabled={selectedCredIds.length === 0} style={{ opacity: selectedCredIds.length === 0 ? 0.4 : 1 }}>
               <Icon name="upload" size={11} color="currentColor" /> Import hashes
             </button>
-            <button className="btn-primary" onClick={handleRun} disabled={running || !getHashes().length} style={{ opacity: running || !getHashes().length ? 0.5 : 1 }}>
+            <button className="btn-primary" onClick={handleRun} disabled={running || !getHashes().length} style={{ opacity: running || !getHashes().length ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
               {running ? <><Icon name="refresh" size={12} color="currentColor" /> Cracking…</> : <><Icon name="play" size={12} color="currentColor" /> New job</>}
             </button>
           </>
@@ -372,8 +375,8 @@ export default function PasswordAuditing() {
         {[
           { label: 'recovered',       value: String(recovered), color: 'var(--ok)' },
           { label: 'in queue',        value: String(inQueue),   color: 'var(--accent)' },
-          { label: 'gpu hashrate · 1000', value: '12.4 GH/s', color: 'var(--fg)' },
-          { label: 'rule chains',     value: '7',               color: 'var(--fg)' },
+          { label: 'active jobs',     value: String(activeCount),                                    color: 'var(--ok)' },
+          { label: 'total hashes',   value: String(jobs.reduce((a, j) => a + j.hashes, 0)), color: 'var(--fg)' },
         ].map((kpi, i) => (
           <div key={kpi.label} style={{ padding: '18px var(--pad)', borderLeft: i > 0 ? rule : 'none' }}>
             <div className="smcap" style={{ marginBottom: 4 }}>{kpi.label}</div>
@@ -623,11 +626,13 @@ export default function PasswordAuditing() {
             </div>
           </Section>
 
-          {/* Live terminal */}
+          {/* Live output */}
           <Section title="LIVE OUTPUT">
             <div style={{ padding: '0 var(--pad) 16px', height: 240 }}>
-              <div style={{ height: '100%', border: ruleStrong, overflow: 'hidden' }}>
-                <Terminal ref={terminalRef} />
+              <div ref={outputRef} style={{ height: '100%', border: ruleStrong, overflowY: 'auto', background: 'var(--bg)' }}>
+                <pre className="term" style={{ margin: 0, padding: '10px 12px', fontSize: 11, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all', minHeight: '100%' }}>
+                  {liveOutput || <span className="muted">No output yet. Run a job to see live output here.</span>}
+                </pre>
               </div>
             </div>
           </Section>
