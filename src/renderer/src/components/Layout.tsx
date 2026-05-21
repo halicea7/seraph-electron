@@ -52,12 +52,14 @@ const NAV_GROUPS = [
       { to: '/cve-watch', label: 'CVE Watch',     icon: 'eye' },
       { to: '/timeline',  label: 'Timeline',      icon: 'clock' },
       { to: '/logs',      label: 'Log Analysis',  icon: 'history' },
+      { to: '/scan-diff', label: 'Scan Diff',     icon: 'layers' },
     ],
   },
 ]
 
 const NAV_BOTTOM = [
-  { to: '/reports',  label: 'Reports',  icon: 'file' },
+  { to: '/scratchpad', label: 'Scratchpad', icon: 'edit' },
+  { to: '/reports',    label: 'Reports',    icon: 'file' },
   { to: '/settings', label: 'Settings', icon: 'cog' },
   { to: '/guide',    label: 'Guide',    icon: 'help' },
 ]

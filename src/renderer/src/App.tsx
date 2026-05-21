@@ -30,6 +30,8 @@ import AIOperator from '@/pages/AIOperator'
 import CveWatch from '@/pages/CveWatch'
 import Timeline from '@/pages/Timeline'
 import CommandLibrary from '@/pages/CommandLibrary'
+import ScanDiff from '@/pages/ScanDiff'
+import Scratchpad from '@/pages/Scratchpad'
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -87,6 +89,8 @@ function ProtectedRoutes() {
           <Route path="cve-watch" element={<CveWatch />} />
           <Route path="timeline" element={<Timeline />} />
           <Route path="command-library" element={<CommandLibrary />} />
+          <Route path="scan-diff"      element={<ScanDiff />} />
+          <Route path="scratchpad"     element={<Scratchpad />} />
           <Route path="c2" element={<C2Console />} />
           <Route path="vault" element={<CredentialVault />} />
           <Route path="reports" element={<Reports />} />
