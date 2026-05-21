@@ -203,6 +203,31 @@ function TemplateCard({
         </pre>
       </div>
 
+      {/* ATT&CK technique chips */}
+      {tpl.mitre_techniques && tpl.mitre_techniques.length > 0 && (
+        <div style={{ padding: '0 14px 10px', display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>ATT&CK</span>
+          {tpl.mitre_techniques.map(tid => (
+            <a
+              key={tid}
+              href={`https://attack.mitre.org/techniques/${tid.replace('.', '/')}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono"
+              style={{
+                fontSize: 9, padding: '2px 6px',
+                background: 'rgba(240,168,58,0.07)', border: '1px solid rgba(240,168,58,0.25)',
+                color: 'var(--accent)', textDecoration: 'none',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(240,168,58,0.15)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(240,168,58,0.07)')}
+            >
+              {tid}
+            </a>
+          ))}
+        </div>
+      )}
+
       {/* Details toggle */}
       <div style={{ padding: '0 14px 14px' }}>
         <button
@@ -293,7 +318,8 @@ export default function CommandLibrary() {
         t.command.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
         t.when_to_use.toLowerCase().includes(q) ||
-        (t.tags ?? []).some(tag => tag.toLowerCase().includes(q))
+        (t.tags ?? []).some(tag => tag.toLowerCase().includes(q)) ||
+        (t.mitre_techniques ?? []).some(tid => tid.toLowerCase().includes(q))
       )
     })
   }, [query, activeCats, activePhases])
