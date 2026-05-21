@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Play, CheckCircle, XCircle, SkipForward,
   Loader, Clock, StepForward,
   Zap, Brain,
-  Plus, Trash2, ArrowUp, ArrowDown, Layers, PenLine, Save,
+  Plus, Trash2, ArrowUp, ArrowDown, Layers, PenLine, Save, X, Search,
 } from 'lucide-react'
 import Icon from '@/components/Icon'
 import { getApiBase, getWsBase } from '@/lib/config'
@@ -29,7 +29,14 @@ interface Playbook {
   is_builtin: boolean
   step_count: number
   steps: PlaybookStep[]
+  mitre_techniques: string[]
   created_at: string
+}
+
+interface AttackTechniqueResult {
+  technique_id: string
+  name: string
+  tactic: string
 }
 
 interface PlaybookRun {
@@ -218,6 +225,13 @@ export default function Playbooks() {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
 
+  // Technique picker state
+  const [builderTechniques, setBuilderTechniques] = useState<string[]>([])
+  const [techQuery, setTechQuery] = useState('')
+  const [techResults, setTechResults] = useState<AttackTechniqueResult[]>([])
+  const [techSearching, setTechSearching] = useState(false)
+  const techDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const runGroups = useMemo(() => buildGroups(steps), [steps])
   const builderGroups = useMemo(() => buildGroups(builderSteps), [builderSteps])
 
@@ -345,10 +359,43 @@ export default function Playbooks() {
     }
   }
 
+  const searchTechniques = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setTechResults([]); return }
+    setTechSearching(true)
+    try {
+      const res = await fetch(`${getApiBase()}/ai/attack/search?q=${encodeURIComponent(q.trim())}&limit=6`)
+      if (res.ok) {
+        const data = await res.json()
+        setTechResults(data.results ?? [])
+      }
+    } catch { /* ignore */ } finally {
+      setTechSearching(false)
+    }
+  }, [])
+
+  function handleTechQueryChange(q: string) {
+    setTechQuery(q)
+    if (techDebounceRef.current) clearTimeout(techDebounceRef.current)
+    techDebounceRef.current = setTimeout(() => searchTechniques(q), 280)
+  }
+
+  function addTechnique(tid: string) {
+    setBuilderTechniques(prev => prev.includes(tid) ? prev : [...prev, tid])
+    setTechQuery('')
+    setTechResults([])
+  }
+
+  function removeTechnique(tid: string) {
+    setBuilderTechniques(prev => prev.filter(t => t !== tid))
+  }
+
   function resetBuilder() {
     setBuilderName('')
     setBuilderDesc('')
     setBuilderSteps([])
+    setBuilderTechniques([])
+    setTechQuery('')
+    setTechResults([])
     setEditingIdx(null)
     setEditingPlaybookId(null)
     setBuilderError('')
@@ -363,6 +410,9 @@ export default function Playbooks() {
       description: s.description, conditional: s.conditional,
       trigger_ports_raw: s.trigger_ports.join(','), timeout: s.timeout, parallel: s.parallel ?? false,
     })))
+    setBuilderTechniques(pb.mitre_techniques ?? [])
+    setTechQuery('')
+    setTechResults([])
     setEditingIdx(null)
     setEditingPlaybookId(pb.id)
     setBuilderError('')
@@ -430,7 +480,7 @@ export default function Playbooks() {
     }
     setSaving(true)
     try {
-      const body = { name: builderName.trim(), description: builderDesc.trim(), steps: builderSteps.map(toApiStep) }
+      const body = { name: builderName.trim(), description: builderDesc.trim(), steps: builderSteps.map(toApiStep), mitre_techniques: builderTechniques }
       const url = editingPlaybookId ? `${getApiBase()}/playbooks/${editingPlaybookId}` : `${getApiBase()}/playbooks`
       const res = await fetch(url, { method: editingPlaybookId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(await res.text())
@@ -569,6 +619,31 @@ export default function Playbooks() {
                 )}
               </div>
 
+              {/* ATT&CK technique chips */}
+              {displayPb.mitre_techniques?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 2 }}>ATT&CK</span>
+                  {displayPb.mitre_techniques.map(tid => (
+                    <a
+                      key={tid}
+                      href={`https://attack.mitre.org/techniques/${tid.replace('.', '/')}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mono"
+                      style={{
+                        fontSize: 10, padding: '2px 7px',
+                        background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)',
+                        color: 'var(--accent)', textDecoration: 'none',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(240,168,58,0.16)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(240,168,58,0.08)')}
+                    >
+                      {tid}
+                    </a>
+                  ))}
+                </div>
+              )}
+
               {/* Step list */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {/* Header row */}
@@ -682,6 +757,67 @@ export default function Playbooks() {
                   <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>Description</label>
                   <input value={builderDesc} onChange={e => setBuilderDesc(e.target.value)} placeholder="What does this playbook do?" style={{ ...INPUT_STYLE, marginTop: 5 }} />
                 </div>
+              </div>
+
+              {/* ATT&CK Technique Picker */}
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
+                  MITRE ATT&amp;CK Techniques
+                </label>
+                <div style={{ marginTop: 5, position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...INPUT_STYLE, padding: '5px 10px' }}>
+                    {techSearching
+                      ? <Loader size={12} color="var(--fg-3)" style={{ flexShrink: 0, animation: 'spin 1s linear infinite' }} />
+                      : <Search size={12} color="var(--fg-3)" style={{ flexShrink: 0 }} />}
+                    <input
+                      value={techQuery}
+                      onChange={e => handleTechQueryChange(e.target.value)}
+                      placeholder="Search techniques (e.g. credential dumping, T1059)…"
+                      style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}
+                    />
+                  </div>
+                  {techResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                      background: 'var(--bg-2)', border: ruleStrong, marginTop: 2,
+                      maxHeight: 220, overflowY: 'auto',
+                    }}>
+                      {techResults.map(t => (
+                        <button
+                          key={t.technique_id}
+                          onClick={() => addTechnique(t.technique_id)}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px',
+                            background: 'transparent', border: 'none', borderBottom: rule, cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-2)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <span className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginRight: 8 }}>{t.technique_id}</span>
+                          <span style={{ fontSize: 11, color: 'var(--fg-2)' }}>{t.name}</span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-3)', marginLeft: 8 }}>{t.tactic}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {builderTechniques.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+                    {builderTechniques.map(tid => (
+                      <span key={tid} className="mono" style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 10, padding: '2px 7px',
+                        background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)',
+                        color: 'var(--accent)',
+                      }}>
+                        {tid}
+                        <button onClick={() => removeTechnique(tid)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--fg-3)', display: 'flex', alignItems: 'center' }}>
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
