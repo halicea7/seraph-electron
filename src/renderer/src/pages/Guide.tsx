@@ -3,7 +3,7 @@ import {
   BookOpen, Search, LayoutDashboard, ShieldCheck, Swords, Globe,
   Network, Lock, Terminal, KeyRound, FileText, Settings, Zap,
   BookOpen as Playbooks, ChevronRight, Info, AlertTriangle, Lightbulb,
-  Bell, Command, GitCompare,
+  Bell, Command, GitCompare, Bot, Library, StickyNote,
 } from 'lucide-react'
 
 const rule = '1px solid var(--rule)'
@@ -580,6 +580,224 @@ Every hour   →  0 * * * *`}</Block>
           </>
         ),
       },
+      {
+        id: 'playbooks-builder',
+        title: 'Custom Playbook Builder',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Build your own multi-step playbooks from scratch using the <strong style={{ color: 'var(--fg)' }}>Builder</strong> tab. Custom playbooks are stored in the database and behave exactly like built-ins.
+            </p>
+            <Steps items={[
+              'Open Playbooks → Builder tab',
+              'Enter a name and description for your playbook',
+              'Add steps: each step has a name, scan type, and command. Use {target} as a placeholder for the target hostname/IP',
+              'Optionally search for MITRE ATT&CK techniques to tag against the playbook (see below)',
+              'Click "Save Playbook" — it appears in the Library tab immediately',
+              'Custom playbooks can be edited or deleted at any time from the Library detail view',
+            ]} />
+            <Note>The <Cmd>{'{target}'}</Cmd> placeholder is replaced with the target's hostname or IP when a run starts. Other available placeholders: <Cmd>{'{domain}'}</Cmd>, <Cmd>{'{ports}'}</Cmd>.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'playbooks-mitre',
+        title: 'MITRE ATT&CK Technique Tagging',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Tag playbooks with MITRE ATT&CK technique IDs to document which techniques each playbook exercises. Tags are displayed as amber <Badge color="amber">T1046</Badge> chips and link to the official ATT&CK technique page.
+            </p>
+            <Steps items={[
+              'In the Builder tab, type a technique name or T-ID into the "Search techniques…" field',
+              'Results appear in a dropdown with T-ID, name, and tactic — click any result to add it',
+              'Added techniques show as amber chips below the search field — click × to remove',
+              'Tags are saved with the playbook and appear on the detail view in the Library tab',
+              'Clicking a T-ID chip opens the official attack.mitre.org technique page in a new tab',
+            ]} />
+            <Tip>Tag playbooks with the techniques they're designed to detect or test. For example, tag a Kerberoasting playbook with T1558.003 to make the intent explicit in your report.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'ai-operator',
+    title: 'AI Operator',
+    icon: <Bot size={15} />,
+    subsections: [
+      {
+        id: 'ai-operator-overview',
+        title: 'What it does',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>AI Operator</strong> is a supervised AI agent that drives a penetration test step-by-step. It plans the next action, proposes a command, waits for your approval, runs it, reads the output, and iterates — you stay in control of every tool execution.
+            </p>
+            <Bullets items={[
+              'Three modes: Attack (red team), Recon (enumeration only), Audit (compliance-oriented)',
+              'Supports tool calling — models that expose a tools API get structured JSON responses; others fall back to JSON text parsing',
+              'Every proposed command shows the tool, the exact command string, and the AI\'s rationale before you approve',
+              'Confirmed attack steps are automatically added to the Attack Path graph',
+              'Sessions persist across navigation — leave and return without losing state',
+              'The MITRE ATT&CK index is available as a built-in tool the AI can call to look up technique IDs and detection hints',
+            ]} />
+            <Warning>The AI Operator requires a model that supports tool/function calling. Check the model picker — only compatible models are shown. For local Ollama, models like llama3, mistral, and qwen2.5 support tools.</Warning>
+          </>
+        ),
+      },
+      {
+        id: 'ai-operator-modes',
+        title: 'Modes',
+        content: (
+          <>
+            <Bullets items={[
+              <><Badge color="red">Attack</Badge> — Full red team mode. The AI aims to compromise the target, escalate privileges, and map attack paths. Exploitation and lateral movement tools are enabled.</>,
+              <><Badge color="cyan">Recon</Badge> — Enumeration only. The AI maps the attack surface (ports, services, subdomains) without attempting exploitation or credential brute-force.</>,
+              <><Badge color="amber">Audit</Badge> — Compliance-oriented. The AI identifies and documents vulnerabilities and misconfigurations by severity — without exploiting them. Outputs remediation recommendations.</>,
+            ]} />
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 12 }}>
+              Each mode ships with a default set of enabled tools and a pre-written system prompt. You can toggle tools on/off in the left panel and edit the system prompt before starting a session.
+            </p>
+            <Tip>Prior reconnaissance already in the database (from Auto-Probe or Pentest Workbench scans) is injected into the system prompt as ground truth — the AI won't re-run tools that have already run.</Tip>
+          </>
+        ),
+      },
+      {
+        id: 'ai-operator-session',
+        title: 'Running a session',
+        content: (
+          <>
+            <Steps items={[
+              'Select a project and target from the left panel dropdowns',
+              'Choose an operator mode (Attack / Recon / Audit)',
+              'Select a model — only tool-capable models appear in the list',
+              'Toggle which tools the AI is allowed to use (each tool has a description and category)',
+              'Optionally review and edit the system prompt that defines the AI\'s persona and rules',
+              'Click "Start Session" — the AI sends its first analysis and proposes an action',
+              'Review the proposed command and rationale. Click "Approve" to run it, or "Skip" to pass',
+              'Tool output streams in and the AI reads it, then plans the next step automatically',
+              'The session ends when the AI returns next_action: null, or you stop it manually',
+            ]} />
+            <Note>Each session step appears as a card showing: the tool used, the command, the AI's rationale, and the run result. T-IDs in AI output are rendered as amber links to attack.mitre.org.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'ai-operator-attack-tool',
+        title: 'ATT&CK lookup tool',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The AI Operator has access to a built-in <strong style={{ color: 'var(--fg)' }}>search_attack_techniques</strong> tool that queries the local MITRE ATT&CK knowledge base. The AI calls this automatically when it needs technique context — for example, to look up detection methods before proposing a command.
+            </p>
+            <Bullets items={[
+              'No internet required — searches the local SQLite FTS5 index synced from the ATT&CK STIX bundle',
+              'Returns technique ID, name, tactic, description excerpt, and detection hints',
+              'T-IDs referenced by the AI in chat messages are rendered as clickable amber chips',
+              'The MITRE ATT&CK index is synced on startup (auto-downloads if empty) and can be manually refreshed in Settings → AI',
+            ]} />
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'command-library',
+    title: 'Command Library',
+    icon: <Library size={15} />,
+    subsections: [
+      {
+        id: 'command-library-overview',
+        title: 'Commands tab',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The Command Library is a searchable reference of pre-built command templates for common penetration testing tasks. It has two tabs: <strong style={{ color: 'var(--fg)' }}>Commands</strong> and <strong style={{ color: 'var(--fg)' }}>ATT&CK Techniques</strong>.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 8 }}>
+              The Commands tab contains {67} templates organized by category, each with a name, description, the command, and optional variables. Every template is tagged with one or more MITRE ATT&CK T-IDs displayed as amber chips.
+            </p>
+            <Bullets items={[
+              'Search by name, description, category, or T-ID — all fields are searched simultaneously',
+              'Filter by category using the pill buttons at the top',
+              'Expand any card to see the full command, variables, and usage notes',
+              'Copy the command to clipboard with one click',
+              'T-ID chips on each card link directly to the ATT&CK technique page',
+            ]} />
+            <Tip>Search by T-ID directly — type "T1046" to find all templates tagged with Network Service Discovery, or "T1110" to find all brute-force templates.</Tip>
+          </>
+        ),
+      },
+      {
+        id: 'command-library-techniques',
+        title: 'ATT&CK Techniques tab',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>ATT&CK Techniques</strong> tab lets you browse all 697 techniques from the MITRE ATT&CK Enterprise matrix, paginated in a card grid.
+            </p>
+            <Bullets items={[
+              'Filter by tactic using the pill buttons (Reconnaissance, Initial Access, Execution, Persistence, etc.)',
+              'Each card shows the T-ID, technique name, tactic, and a description excerpt',
+              'Click "Generate Command(s)" on any card to use AI to create command templates for that technique',
+              'Generated commands can be saved to the Commands tab for future use',
+            ]} />
+            <Note>The ATT&CK Techniques tab requires the local ATT&CK index to be populated. It syncs automatically on startup. If empty, go to Settings → AI → ATT&CK Knowledge Base and click Sync.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'command-library-generate',
+        title: 'Generate Command(s) with AI',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>Generate Command(s)</strong> button on ATT&CK technique cards sends a structured prompt to an LLM asking it to produce 1–3 practical, copy-pasteable command templates for that technique.
+            </p>
+            <Steps items={[
+              'Select a model from the model picker at the top of the ATT&CK Techniques tab',
+              'Browse or search for a technique, then click "Generate Command(s)" on its card',
+              'The AI produces 1–3 commands — each appears as a card with name, command, and description',
+              'Click "Save to Library" on any generated command to add it to the Commands tab',
+            ]} />
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 8 }}>
+              The model picker offers two routing options:
+            </p>
+            <Bullets items={[
+              <><Badge color="cyan">[Local] model-name</Badge> — calls your laptop's Ollama directly (uses Electron's ollamaGetSettings to find the endpoint). Fastest for fully offline use.</>,
+              <><Badge color="purple">[Server] model-name</Badge> — routes through the Seraph backend's /ai/chat endpoint, using the server's configured Ollama or LMStudio instance.</>,
+            ]} />
+            <Tip>Use a Local model for quick generation when offline, and a Server model when running Seraph on a remote machine with a GPU.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'scratchpad',
+    title: 'Scratchpad',
+    icon: <StickyNote size={15} />,
+    subsections: [
+      {
+        id: 'scratchpad-overview',
+        title: 'Per-project notes',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The Scratchpad is a per-project Markdown note-taking space. Use it to record observations, draft findings, paste raw tool output for later review, or keep a running log of your engagement.
+            </p>
+            <Bullets items={[
+              'Notes are saved per-project — switching projects loads that project\'s scratchpad',
+              'Supports full Markdown: headings, bold, italic, code blocks, tables, bullet lists',
+              'Toggle between Edit and Preview modes using the buttons in the toolbar',
+              'Auto-saves 1 second after you stop typing — no manual save needed',
+              'Save status is shown in the toolbar: Saved / Saving… / Unsaved',
+            ]} />
+            <Note>Scratchpad content is stored in the database alongside your project data. It is included when you export project data and cleared when you delete the project.</Note>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -776,14 +994,20 @@ Every hour   →  0 * * * *`}</Block>
         content: (
           <>
             <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
-              Compare two scans to see what changed between them — useful after a remediation cycle to verify fixes and spot regressions.
+              The <strong style={{ color: 'var(--fg)' }}>Scan Diff</strong> page compares two scans on the same target to identify new, resolved, and unchanged findings. Use it after a remediation cycle to verify fixes and catch regressions.
             </p>
             <Steps items={[
-              'Open All Scans',
-              'Click any row to select it (shows a numbered checkbox — 1)',
-              'Click a second row to select it (shows 2)',
-              'Click "Diff Scans" in the header — a panel opens below',
-              'Three columns show: New findings, Resolved findings, and Unchanged findings',
+              'Navigate to Scan Diff from the sidebar',
+              'Select a project (uses the global project selector)',
+              'Pick a target from the target dropdown — only targets with at least two completed scans can be diffed',
+              'Select Scan A (the baseline) and Scan B (the comparison) from the scan dropdowns',
+              'Click "Run Diff" — three columns appear: New, Resolved, and Unchanged findings',
+              'Expand any finding row to see its full description and remediation note',
+            ]} />
+            <Bullets items={[
+              <><Badge color="red">New</Badge> — findings present in Scan B but not in Scan A (regressions or newly discovered issues)</>,
+              <><Badge color="green">Resolved</Badge> — findings present in Scan A that are gone in Scan B (successfully fixed)</>,
+              <><Badge>Unchanged</Badge> — findings that persist across both scans</>,
             ]} />
             <Tip>Diff works best when comparing two runs of the same scan type against the same target. Matching is done by finding title + severity.</Tip>
           </>
@@ -894,14 +1118,64 @@ Every hour   →  0 * * * *`}</Block>
         title: 'AI Configuration',
         content: (
           <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Configure your local LLM endpoint for AI-powered features: AI Operator, AI Narrative reports, vulnerability remediation suggestions, and log triage.
+            </p>
             <Bullets items={[
               <>Supports any OpenAI-compatible endpoint — works with <strong style={{ color: 'var(--fg)' }}>Ollama</strong> and <strong style={{ color: 'var(--fg)' }}>LMStudio</strong></>,
-              'Presets auto-fill the endpoint URL for each provider',
-              '"Test Connection" fetches available models and auto-selects the first one',
+              'Provider presets auto-fill the endpoint URL',
+              '"Test Connection" fetches available models and populates the model dropdown',
               'Settings are stored server-side — persist across restarts',
             ]} />
             <Block>{`Ollama default:   http://localhost:11434
 LMStudio default: http://localhost:1234`}</Block>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7, marginTop: 8 }}>
+              <strong style={{ color: 'var(--fg)' }}>Advanced LLM parameters</strong> (optional — leave blank to use model defaults):
+            </p>
+            <Bullets items={[
+              <><Cmd>Temperature</Cmd> — controls response randomness (0.0 = deterministic, 1.0+ = creative). Lower values (0.2–0.4) give more consistent pentest output.</>,
+              <><Cmd>Top-P / Top-K</Cmd> — nucleus and top-k sampling. Leave blank unless you have a specific reason to override.</>,
+              <><Cmd>Min-P</Cmd> — minimum probability filter, useful with Ollama models that support it.</>,
+              <><Cmd>Repetition Penalty</Cmd> — penalizes repeated tokens. Useful if the model tends to loop.</>,
+              <><Cmd>Timeout</Cmd> — seconds to wait for an LLM response before failing. Increase for slow hardware or large models.</>,
+            ]} />
+          </>
+        ),
+      },
+      {
+        id: 'settings-attack',
+        title: 'ATT&CK Knowledge Base',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Seraph maintains a local FTS5 full-text search index of the entire MITRE ATT&CK Enterprise matrix. This index powers the AI Operator's technique lookup tool, T-ID chips in the Command Library, and RAG context injection in the AI chat.
+            </p>
+            <Bullets items={[
+              'Downloaded from the official MITRE CTI STIX bundle on first startup — no account or API key needed',
+              'Stat cards show total techniques indexed and the last sync timestamp',
+              '"Sync" re-downloads and rebuilds the index from the latest STIX bundle',
+              '"Refresh" re-fetches the status without syncing',
+              'Index contains: T-ID, technique name, tactic(s), description, detection hints, data sources',
+            ]} />
+            <Note>The ATT&CK sync downloads the full STIX bundle (~15 MB) and processes ~700 techniques. It runs in the background — the app remains usable during sync.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'settings-ptes',
+        title: 'PTES Knowledge Base',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>Penetration Testing Execution Standard (PTES)</strong> knowledge base fetches methodology content from pentest-standard.org and indexes it in a local FTS5 table. This content is injected into AI Operator and chat sessions to ground AI responses in structured pentest methodology.
+            </p>
+            <Bullets items={[
+              'Covers all 8 PTES phases: Pre-Engagement, Intelligence Gathering, Threat Modeling, Vulnerability Analysis, Exploitation, Post-Exploitation, Reporting, and Technical Guidelines',
+              'Each phase is split into sections and stored as searchable plain text',
+              '"Sync" re-downloads all phases from the MediaWiki API and rebuilds the index',
+              'Stat card shows total sections indexed and last sync time',
+            ]} />
+            <Tip>PTES context is automatically appended to the AI Operator's system prompt (up to 2 relevant sections per query). This helps the AI follow standard pentest methodology steps rather than free-forming its approach.</Tip>
           </>
         ),
       },
@@ -922,9 +1196,12 @@ LMStudio default: http://localhost:1234`}</Block>
               'Let Auto-Probe populate initial recon data (enable in Settings → Auto-Probe)',
               'Run an OSINT Deep Dive playbook to discover subdomains and emails',
               'Check the Network Map to visualize the attack surface',
-              'Run the appropriate playbook (Web App Sweep, Vuln Assessment, etc.) against key targets',
+              'Run the appropriate playbook (Web App Sweep, Vuln Assessment, etc.) against key targets — tag them with MITRE T-IDs in the builder for traceability',
+              'Use the AI Operator (Recon mode) to let the AI enumerate the target autonomously — approve each step before it runs',
+              'Check the Command Library for manual commands — browse by category or search by T-ID for technique-specific tools',
+              'Use the Scratchpad to record observations, paste raw output, and draft preliminary findings',
               'Review findings in Reports — enrich CVEs for any identified vulnerabilities',
-              'Use the Pentest Workbench for manual, targeted tool runs',
+              'Use the Pentest Workbench for targeted manual tool runs not covered by the AI',
               'Save captured credentials to the Credential Vault; run Password Auditing on captured hashes',
               'Generate an AI Narrative and export a PDF report',
             ]} />
@@ -967,6 +1244,12 @@ LMStudio default: http://localhost:1234`}</Block>
               'Export findings to CSV before generating a report — useful for sharing raw data with developers',
               'WeasyPrint for PDF export must be installed: pip install weasyprint',
               <>Set <Cmd>SERAPH_SECRET_KEY</Cmd> environment variable to a strong random value in production</>,
+              'AI Operator sessions are persistent — navigate away and return without losing your session state',
+              'Search the Command Library by T-ID (e.g. "T1558") to instantly find all templates for a given ATT&CK technique',
+              'Use the Scratchpad to draft findings in Markdown during an engagement — copy directly into your report',
+              <>The AI Operator injects both MITRE ATT&CK and PTES context automatically — keep those indexes synced in Settings → AI for best results</>,
+              'In the ATT&CK Techniques tab, use a Local model for offline generation and a Server model when your server has a GPU',
+              'Run Scan Diff after each remediation pass to verify fixes — look for findings moving from Unchanged to Resolved',
             ]} />
           </>
         ),
