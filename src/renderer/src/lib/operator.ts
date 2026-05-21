@@ -360,6 +360,23 @@ export function buildTools(enabledTools: string[], enabledMsf: string[]): object
     {
       type: 'function',
       function: {
+        name: 'search_attack_techniques',
+        description: 'Search the local MITRE ATT&CK knowledge base for techniques, tactics, or procedure references. Use this to look up T-IDs, detection guidance, or understand an attack technique before running it. This is instant — no target access required.',
+        parameters: {
+          type: 'object',
+          required: ['query'],
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Technique name, tactic, behavior description, or T-ID (e.g. T1003, credential dumping, lateral movement).',
+            },
+          },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'finish_engagement',
         description: 'Call this when no more productive actions remain.',
         parameters: {

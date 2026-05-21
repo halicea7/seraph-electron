@@ -323,6 +323,59 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     return { content: data.content, toolCalls: null }
   }
 
+  // ── ATT&CK search helper (auto-executed, no user approval needed) ────────────
+
+  async function executeAttackSearch(query: string): Promise<string> {
+    try {
+      const r = await fetch(`${getApiBase()}/ai/attack/search?q=${encodeURIComponent(query)}&limit=5`)
+      if (!r.ok) return `ATT&CK search failed (${r.status}).`
+      const data = await r.json()
+      if (!data.results?.length) return `No ATT&CK techniques found for: "${query}"`
+      const lines = [`[ATT&CK search: "${query}" — ${data.count} result(s)]`]
+      for (const t of data.results as Array<{ technique_id: string; name: string; tactic: string; description: string; detection: string; url: string }>) {
+        lines.push(`\n${t.technique_id}: ${t.name}  |  tactic: ${t.tactic}`)
+        if (t.description) lines.push(`  ${t.description.slice(0, 300)}`)
+        if (t.detection)   lines.push(`  Detection: ${t.detection.slice(0, 200)}`)
+        if (t.url)         lines.push(`  ${t.url}`)
+      }
+      return lines.join('\n')
+    } catch {
+      return 'ATT&CK knowledge base unavailable.'
+    }
+  }
+
+  // Resolve any search_attack_techniques tool calls automatically before continuing.
+  // Returns the final LLM result after all lookups are resolved (max 3 iterations).
+  async function resolveAttackSearches(
+    initialResult: { content: string; toolCalls: Array<{ function: { name: string; arguments: Record<string, any> } }> | null },
+    currentMsgs: ChatMessage[],
+    tools: object[],
+    onToken: (t: string) => void,
+  ): Promise<{ result: { content: string; toolCalls: typeof initialResult.toolCalls }; msgs: ChatMessage[] }> {
+    let result = initialResult
+    let msgs = currentMsgs
+
+    for (let i = 0; i < 3; i++) {
+      if (!result.toolCalls?.length) break
+      const call = result.toolCalls[0]
+      if (call.function?.name !== 'search_attack_techniques') break
+
+      const query = call.function.arguments?.query ?? ''
+      const searchResult = await executeAttackSearch(query)
+
+      msgs = [
+        ...msgs,
+        { role: 'assistant' as const, content: result.content || '', tool_calls: result.toolCalls },
+        { role: 'tool' as const,      content: searchResult, name: 'search_attack_techniques' },
+      ]
+      messages.current = msgs
+      setLlmStream('')
+      result = await callLLM(msgs, onToken, tools)
+    }
+
+    return { result, msgs }
+  }
+
   // ── Command sanitizer ─────────────────────────────────────────────────────────
 
   const SUDO_ALLOWED = new Set(['nmap', 'masscan', 'tcpdump'])
@@ -442,11 +495,13 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     const tools = buildTools([...enabledTools], [...enabledMsf])
 
     try {
-      const result = await callLLM(newMsgs, t => setLlmStream(prev => prev + t), tools)
+      const rawResult = await callLLM(newMsgs, t => setLlmStream(prev => prev + t), tools)
+      if (stopped.current) { setPhase('done'); return }
+      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, newMsgs, tools, t => setLlmStream(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       messages.current = [
-        ...newMsgs,
+        ...resolvedMsgs,
         { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
       ]
 
@@ -514,11 +569,13 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       messages.current = initMsgs
 
       const tools = buildTools([...enabledTools], [...enabledMsf])
-      const result = await callLLM(initMsgs, t => setLlmStream(prev => prev + t), tools)
+      const rawResult = await callLLM(initMsgs, t => setLlmStream(prev => prev + t), tools)
+      if (stopped.current) { setPhase('done'); return }
+      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, initMsgs, tools, t => setLlmStream(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       messages.current = [
-        ...initMsgs,
+        ...resolvedMsgs,
         { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
       ]
 

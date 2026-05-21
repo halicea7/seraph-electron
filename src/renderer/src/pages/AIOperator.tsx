@@ -6,6 +6,41 @@ import { useAIOperator, type OperatorStep, type OperatorPhase } from '@/contexts
 const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
 
+// ─── T-ID chip renderer ───────────────────────────────────────────────────────
+function TechniqueText({ text }: { text: string }) {
+  const parts = text.split(/\b(T\d{4}(?:\.\d{3})?)\b/)
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^T\d{4}(?:\.\d{3})?$/.test(part) ? (
+          <a
+            key={i}
+            href={`https://attack.mitre.org/techniques/${part.replace('.', '/')}/`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{
+              color: 'var(--accent)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.88em',
+              background: 'rgba(240,168,58,0.08)',
+              border: '1px solid rgba(240,168,58,0.3)',
+              padding: '1px 5px',
+              borderRadius: 2,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 // ─── Mode icon map ─────────────────────────────────────────────────────────────
 const modeIconName: Record<OperatorMode, string> = {
   attack: 'swords',
@@ -261,7 +296,9 @@ function StepCard({
 
       <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {step.analysis && (
-          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>{step.analysis}</p>
+          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg)' }}>
+            <TechniqueText text={step.analysis} />
+          </p>
         )}
 
         {step.attackPathNote && (
