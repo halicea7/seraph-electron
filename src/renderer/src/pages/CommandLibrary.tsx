@@ -290,9 +290,17 @@ interface GeneratedCommand {
   description: string
 }
 
+interface ModelOption { key: string; label: string }
+
 // ── TechniqueCard ─────────────────────────────────────────────────────────────
 
-function TechniqueCard({ tech, onSave }: { tech: AttackTechnique; onSave: (cmd: GeneratedCommand, tid: string) => void }) {
+function TechniqueCard({
+  tech, onSave, selectedModelKey,
+}: {
+  tech: AttackTechnique
+  onSave: (cmd: GeneratedCommand, tid: string) => void
+  selectedModelKey: string
+}) {
   const [expanded, setExpanded] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState<GeneratedCommand[]>([])
@@ -302,7 +310,36 @@ function TechniqueCard({ tech, onSave }: { tech: AttackTechnique; onSave: (cmd: 
   const rule = '1px solid var(--rule)'
   const ruleStrong = '1px solid var(--rule-strong)'
 
+  async function callLLM(prompt: string): Promise<string> {
+    const messages = [{ role: 'user', content: prompt }]
+    const [source, ...parts] = selectedModelKey.split(':')
+    const model = parts.join(':')
+
+    if (source === 'local') {
+      const settings = await (window as any).electronAPI.ollamaGetSettings()
+      const endpoint = (settings?.endpoint || 'http://localhost:11434').replace(/\/$/, '')
+      const res = await fetch(`${endpoint}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: false }),
+      })
+      if (!res.ok) throw new Error(`Local Ollama error: ${res.status}`)
+      const data = await res.json()
+      return data.message?.content ?? ''
+    } else {
+      const res = await fetch(`${getApiBase()}/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, model: model || undefined }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      return data.content ?? ''
+    }
+  }
+
   async function handleGenerate() {
+    if (!selectedModelKey) { setGenError('Select a model first.'); return }
     setGenerating(true)
     setGenError('')
     setGenerated([])
@@ -323,15 +360,7 @@ Rules:
 - "vars" must list every placeholder name used in "command" (without the braces)
 - Keep commands concise and realistic`
 
-      const res = await fetch(`${getApiBase()}/ai/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      const raw = (data.content ?? '').trim()
-      // strip markdown fences if model wraps anyway
+      const raw = (await callLLM(prompt)).trim()
       const json = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
       const parsed: GeneratedCommand[] = JSON.parse(json)
       setGenerated(Array.isArray(parsed) ? parsed : [])
@@ -473,6 +502,10 @@ function TechniquesTab() {
   const LIMIT = 24
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [selectedModelKey, setSelectedModelKey] = useState('')
+  const [loadingModels, setLoadingModels] = useState(false)
+
   const rule = '1px solid var(--rule)'
   const ruleStrong = '1px solid var(--rule-strong)'
 
@@ -481,7 +514,27 @@ function TechniquesTab() {
       .then(r => r.json())
       .then(d => setTactics(d.tactics ?? []))
       .catch(() => {})
+    loadModels()
   }, [])
+
+  async function loadModels() {
+    setLoadingModels(true)
+    const opts: ModelOption[] = []
+    try {
+      const localModels: string[] = await (window as any).electronAPI.ollamaModels()
+      localModels.forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
+    } catch { /* not in Electron or no local Ollama */ }
+    try {
+      const res = await fetch(`${getApiBase()}/ai/models`)
+      if (res.ok) {
+        const data = await res.json()
+        ;(data.models as string[]).forEach(m => opts.push({ key: `server:${m}`, label: `[Server] ${m}` }))
+      }
+    } catch { /* ignore */ }
+    setModelOptions(opts)
+    if (opts.length) setSelectedModelKey(opts[0].key)
+    setLoadingModels(false)
+  }
 
   useEffect(() => {
     setOffset(0)
@@ -560,6 +613,28 @@ function TechniquesTab() {
               <Icon name="x" size={10} /> Clear
             </button>
           )}
+          {/* Model selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <Sparkles size={12} color="var(--fg-3)" />
+            {loadingModels ? (
+              <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Loading models…</span>
+            ) : modelOptions.length === 0 ? (
+              <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>No models</span>
+            ) : (
+              <select
+                value={selectedModelKey}
+                onChange={e => setSelectedModelKey(e.target.value)}
+                style={{
+                  background: 'var(--bg)', border: ruleStrong, color: 'var(--fg)',
+                  fontSize: 11, padding: '4px 8px', fontFamily: 'var(--font-mono)', maxWidth: 220,
+                }}
+              >
+                {modelOptions.map(o => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span className="smcap smcap-2" style={{ marginRight: 4 }}>Tactic</span>
@@ -598,7 +673,7 @@ function TechniquesTab() {
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: 14 }}>
               {techniques.map(t => (
-                <TechniqueCard key={t.technique_id} tech={t} onSave={handleSave} />
+                <TechniqueCard key={t.technique_id} tech={t} onSave={handleSave} selectedModelKey={selectedModelKey} />
               ))}
             </div>
             {!techQuery && total > offset + LIMIT && (
