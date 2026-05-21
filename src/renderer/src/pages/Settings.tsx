@@ -317,6 +317,10 @@ export default function Settings() {
   const [aiSaving, setAiSaving] = useState(false)
   const [aiTesting, setAiTesting] = useState(false)
 
+  // ATT&CK index
+  const [attackStatus, setAttackStatus] = useState<{ count: number; last_sync: string | null; state: string; error: string | null } | null>(null)
+  const [attackSyncing, setAttackSyncing] = useState(false)
+
   // Local Ollama
   const [localOllamaSettings, setLocalOllamaSettings] = useState({ useLocalOllama: false, localOllamaUrl: 'http://localhost:11434', localOllamaModel: '' })
   const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([])
@@ -339,6 +343,7 @@ export default function Settings() {
     if (cached) { try { setToolStatus(JSON.parse(cached)) } catch {} }
     loadProfiles()
     loadAiConfig()
+    loadAttackStatus()
     loadProbeConfig()
     loadPasskeys()
     loadApiTokens()
@@ -592,6 +597,11 @@ export default function Settings() {
 
   async function loadAiConfig() {
     try { const res = await fetch(`${getApiBase()}/ai/config`); if (res.ok) setAiConfig(await res.json()) }
+    catch { /* backend offline */ }
+  }
+
+  async function loadAttackStatus() {
+    try { const r = await fetch(`${getApiBase()}/ai/attack/status`); if (r.ok) setAttackStatus(await r.json()) }
     catch { /* backend offline */ }
   }
 
@@ -951,6 +961,72 @@ export default function Settings() {
                 )}
               </div>
             )}
+          </div>
+        </Section>
+
+        <Section title="MITRE ATT&CK KNOWLEDGE BASE">
+          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0, lineHeight: 1.6 }}>
+              Index the MITRE Enterprise ATT&CK dataset locally for use by the AI Operator, Playbooks, and Command Library.
+              Downloaded once from MITRE's public GitHub — no account required.
+            </p>
+
+            {/* Status */}
+            {attackStatus && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {[
+                  { label: 'Techniques', value: attackStatus.count > 0 ? String(attackStatus.count) : '—' },
+                  { label: 'Status',     value: attackStatus.state === 'idle' && attackStatus.count > 0 ? 'Ready' : attackStatus.state === 'idle' ? 'Not indexed' : attackStatus.state.charAt(0).toUpperCase() + attackStatus.state.slice(1) },
+                  { label: 'Last Sync',  value: attackStatus.last_sync ? new Date(attackStatus.last_sync).toLocaleDateString() : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background: 'var(--bg)', border: '1px solid var(--rule)', padding: '10px 12px', borderRadius: 3 }}>
+                    <div className="smcap" style={{ fontSize: 9, color: 'var(--fg-3)', marginBottom: 4 }}>{label}</div>
+                    <div className="mono" style={{ fontSize: 13, color: 'var(--fg)' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {attackStatus?.error && (
+              <div style={{ fontSize: 12, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>Error: {attackStatus.error}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                className="btn btn-primary"
+                disabled={attackSyncing}
+                onClick={async () => {
+                  setAttackSyncing(true)
+                  await fetch(`${getApiBase()}/ai/attack/sync`, { method: 'POST' })
+                  // Poll status until sync completes
+                  const poll = setInterval(async () => {
+                    const r = await fetch(`${getApiBase()}/ai/attack/status`)
+                    const s = await r.json()
+                    setAttackStatus(s)
+                    if (s.state === 'idle' || s.state === 'error') {
+                      clearInterval(poll)
+                      setAttackSyncing(false)
+                    }
+                  }, 2000)
+                }}
+              >
+                {attackSyncing ? <><Loader size={12} className="animate-spin" /> Syncing…</> : 'Sync ATT&CK'}
+              </button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  const r = await fetch(`${getApiBase()}/ai/attack/status`)
+                  setAttackStatus(await r.json())
+                }}
+              >
+                Refresh status
+              </button>
+              {attackStatus && attackStatus.count > 0 && !attackSyncing && (
+                <span style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle size={13} /> {attackStatus.count} techniques indexed
+                </span>
+              )}
+            </div>
           </div>
         </Section>
       </div>
