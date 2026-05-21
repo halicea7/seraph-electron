@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Loader, Sparkles, Save, ChevronDown, ChevronUp } from 'lucide-react'
 import Icon from '@/components/Icon'
+import { getApiBase } from '@/lib/config'
 import {
   TEMPLATES,
   ALL_CATEGORIES,
@@ -268,9 +270,359 @@ function TemplateCard({
   )
 }
 
+// ── ATT&CK Technique types ────────────────────────────────────────────────────
+
+interface AttackTechnique {
+  technique_id: string
+  name: string
+  tactic: string
+  platforms: string
+  description: string
+  detection: string
+  url: string
+}
+
+interface GeneratedCommand {
+  tool: string
+  label: string
+  command: string
+  vars: string[]
+  description: string
+}
+
+// ── TechniqueCard ─────────────────────────────────────────────────────────────
+
+function TechniqueCard({ tech, onSave }: { tech: AttackTechnique; onSave: (cmd: GeneratedCommand, tid: string) => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generated, setGenerated] = useState<GeneratedCommand[]>([])
+  const [genError, setGenError] = useState('')
+  const [saved, setSaved] = useState<Set<number>>(new Set())
+
+  const rule = '1px solid var(--rule)'
+  const ruleStrong = '1px solid var(--rule-strong)'
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setGenError('')
+    setGenerated([])
+    try {
+      const prompt = `You are a penetration tester. Generate 1-3 practical, copy-pasteable command templates for testing or demonstrating the following MITRE ATT&CK technique.
+
+Technique: ${tech.technique_id} — ${tech.name}
+Tactic: ${tech.tactic}
+Platforms: ${tech.platforms}
+Description: ${tech.description.slice(0, 400)}
+${tech.detection ? `Detection hint: ${tech.detection.slice(0, 200)}` : ''}
+
+Rules:
+- Use real, commonly available tools (nmap, hydra, impacket, netexec, curl, etc.)
+- Use {{ variable_name }} placeholders for values the user must fill in (e.g. {{ target }}, {{ username }})
+- Return ONLY a JSON array. No markdown fences, no explanation outside the JSON.
+- Each element: { "tool": string, "label": string, "command": string, "vars": string[], "description": string }
+- "vars" must list every placeholder name used in "command" (without the braces)
+- Keep commands concise and realistic`
+
+      const res = await fetch(`${getApiBase()}/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      const raw = (data.content ?? '').trim()
+      // strip markdown fences if model wraps anyway
+      const json = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
+      const parsed: GeneratedCommand[] = JSON.parse(json)
+      setGenerated(Array.isArray(parsed) ? parsed : [])
+    } catch (e: any) {
+      setGenError(e.message ?? 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function handleSave(cmd: GeneratedCommand, idx: number) {
+    onSave(cmd, tech.technique_id)
+    setSaved(prev => new Set(prev).add(idx))
+  }
+
+  const tacticColor = '#f0a83a'
+
+  return (
+    <div style={{ border: rule, background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 14px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          <a
+            href={tech.url || `https://attack.mitre.org/techniques/${tech.technique_id.replace('.', '/')}/`}
+            target="_blank" rel="noopener noreferrer"
+            className="mono"
+            style={{ fontSize: 10, padding: '2px 7px', background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.3)', color: 'var(--accent)', textDecoration: 'none' }}
+          >
+            {tech.technique_id}
+          </a>
+          {tech.tactic.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+            <span key={t} className="badge" style={{ color: tacticColor, borderColor: 'rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.06)', fontSize: 9 }}>
+              {t}
+            </span>
+          ))}
+          {tech.platforms && (
+            <span style={{ fontSize: 10, color: 'var(--fg-3)', marginLeft: 'auto' }}>
+              {tech.platforms.split(',').slice(0, 3).join(' · ')}
+            </span>
+          )}
+        </div>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>
+          {tech.name}
+        </h3>
+      </div>
+
+      {/* Description (collapsed) */}
+      <div style={{ margin: '0 14px 10px', padding: '7px 10px', borderLeft: '2px solid rgba(240,168,58,0.25)', background: 'var(--bg-2)' }}>
+        <div style={{ fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+          {expanded ? tech.description : tech.description.slice(0, 180) + (tech.description.length > 180 ? '…' : '')}
+        </div>
+        {tech.description.length > 180 && (
+          <button onClick={() => setExpanded(e => !e)} style={{ marginTop: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-3)', padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+            {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+
+      {/* Detection hint */}
+      {tech.detection && (
+        <div style={{ margin: '0 14px 10px', fontSize: 10.5, color: 'var(--fg-3)', lineHeight: 1.4 }}>
+          <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-4)', marginRight: 6 }}>Detection</span>
+          {tech.detection.slice(0, 160)}{tech.detection.length > 160 ? '…' : ''}
+        </div>
+      )}
+
+      {/* Generate button */}
+      <div style={{ padding: '0 14px 12px' }}>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
+            border: '1px solid rgba(240,168,58,0.3)', background: 'rgba(240,168,58,0.06)',
+            color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: generating ? 'not-allowed' : 'pointer',
+            opacity: generating ? 0.6 : 1,
+          }}
+        >
+          {generating
+            ? <Loader size={11} style={{ animation: 'spin 1s linear infinite' }} />
+            : <Sparkles size={11} />}
+          {generating ? 'Generating…' : 'Generate Command(s)'}
+        </button>
+
+        {genError && (
+          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--crit)' }}>{genError}</div>
+        )}
+
+        {generated.length > 0 && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {generated.map((cmd, i) => (
+              <div key={i} style={{ border: ruleStrong, background: 'var(--bg-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: rule }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="badge mono" style={{ fontFamily: 'var(--font-mono)', fontSize: 9 }}>{cmd.tool}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--fg-2)' }}>{cmd.label}</span>
+                  </div>
+                  <button
+                    onClick={() => handleSave(cmd, i)}
+                    disabled={saved.has(i)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                      border: saved.has(i) ? '1px solid rgba(84,175,97,0.4)' : '1px solid rgba(240,168,58,0.3)',
+                      background: saved.has(i) ? 'rgba(84,175,97,0.08)' : 'transparent',
+                      color: saved.has(i) ? 'var(--ok)' : 'var(--accent)',
+                      fontSize: 10, fontWeight: 600, cursor: saved.has(i) ? 'default' : 'pointer',
+                    }}
+                  >
+                    <Save size={10} />
+                    {saved.has(i) ? 'Saved' : 'Save to Library'}
+                  </button>
+                </div>
+                <pre style={{ margin: 0, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5 }}>
+                  {cmd.command}
+                </pre>
+                {cmd.description && (
+                  <div style={{ padding: '0 10px 8px', fontSize: 10.5, color: 'var(--fg-3)' }}>{cmd.description}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── TechniquesTab ─────────────────────────────────────────────────────────────
+
+function TechniquesTab() {
+  const [tactics, setTactics] = useState<string[]>([])
+  const [activeTactic, setActiveTactic] = useState('')
+  const [techQuery, setTechQuery] = useState('')
+  const [techniques, setTechniques] = useState<AttackTechnique[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const LIMIT = 24
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const rule = '1px solid var(--rule)'
+  const ruleStrong = '1px solid var(--rule-strong)'
+
+  useEffect(() => {
+    fetch(`${getApiBase()}/ai/attack/tactics`)
+      .then(r => r.json())
+      .then(d => setTactics(d.tactics ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setOffset(0)
+    load(0)
+  }, [activeTactic, techQuery])
+
+  async function load(off: number) {
+    setLoading(true)
+    try {
+      let url: string
+      if (techQuery.trim().length >= 2) {
+        url = `${getApiBase()}/ai/attack/search?q=${encodeURIComponent(techQuery.trim())}&limit=${LIMIT}`
+      } else {
+        url = `${getApiBase()}/ai/attack/browse?limit=${LIMIT}&offset=${off}${activeTactic ? `&tactic=${encodeURIComponent(activeTactic)}` : ''}`
+      }
+      const res = await fetch(url)
+      const data = await res.json()
+      if (techQuery.trim().length >= 2) {
+        setTechniques(data.results ?? [])
+        setTotal(data.count ?? 0)
+      } else {
+        setTechniques(data.results ?? [])
+        setTotal(data.total ?? 0)
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleQueryChange(q: string) {
+    setTechQuery(q)
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => load(0), 300)
+  }
+
+  function handleTacticClick(t: string) {
+    setActiveTactic(prev => prev === t ? '' : t)
+    setTechQuery('')
+  }
+
+  async function handleSave(cmd: GeneratedCommand, tid: string) {
+    const step = {
+      name: cmd.tool, scan_type: cmd.tool,
+      cmd_template: cmd.command,
+      description: cmd.description,
+      conditional: false, trigger_ports: [], timeout: 300, parallel: false,
+    }
+    await fetch(`${getApiBase()}/playbooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: cmd.label,
+        description: cmd.description,
+        steps: [step],
+        mitre_techniques: [tid],
+      }),
+    })
+  }
+
+  const tacticLabel = (t: string) => t.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {/* Tactic filter strip */}
+      <div style={{ padding: '12px var(--pad)', borderBottom: rule, background: 'var(--bg-2)', display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="search" size={13} color="var(--fg-3)" />
+          <input
+            value={techQuery}
+            onChange={e => handleQueryChange(e.target.value)}
+            placeholder="search by name, T-ID, keyword…"
+            style={{ flex: 1, height: 32, fontSize: 12 }}
+          />
+          {(techQuery || activeTactic) && (
+            <button onClick={() => { setTechQuery(''); setActiveTactic('') }} className="btn btn-ghost">
+              <Icon name="x" size={10} /> Clear
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span className="smcap smcap-2" style={{ marginRight: 4 }}>Tactic</span>
+          {tactics.map(t => (
+            <button
+              key={t}
+              onClick={() => handleTacticClick(t)}
+              style={{
+                padding: '4px 10px', border: `1px solid ${activeTactic === t ? 'rgba(240,168,58,0.5)' : ruleStrong}`,
+                background: activeTactic === t ? 'rgba(240,168,58,0.08)' : 'transparent',
+                color: activeTactic === t ? 'var(--accent)' : 'var(--fg-3)',
+                fontFamily: 'var(--font-mono)', fontSize: 10, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}
+            >
+              {tacticLabel(t)}
+            </button>
+          ))}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+            {loading ? '…' : `${total} techniques`}
+          </span>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px var(--pad) 40px' }}>
+        {loading && techniques.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 8, color: 'var(--fg-3)' }}>
+            <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+            <span style={{ fontSize: 12 }}>Loading techniques…</span>
+          </div>
+        ) : techniques.length === 0 ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 12 }}>
+            No techniques found.
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: 14 }}>
+              {techniques.map(t => (
+                <TechniqueCard key={t.technique_id} tech={t} onSave={handleSave} />
+              ))}
+            </div>
+            {!techQuery && total > offset + LIMIT && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+                <button
+                  onClick={() => { const next = offset + LIMIT; setOffset(next); load(next) }}
+                  className="btn"
+                  style={{ padding: '8px 24px' }}
+                >
+                  Load more ({total - offset - LIMIT} remaining)
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommandLibrary() {
+  const [activeTab, setActiveTab] = useState<'commands' | 'techniques'>('commands')
   const [query, setQuery] = useState('')
   const [activeCats, setActiveCats] = useState<Set<Category>>(new Set())
   const [activePhases, setActivePhases] = useState<Set<Phase>>(new Set())
@@ -344,7 +696,9 @@ export default function CommandLibrary() {
       <PageHeader
         breadcrumb="Knowledge Base"
         title="Command Library"
-        sub={`${TEMPLATES.length} read-only command templates · click a category or phase to filter. All commands are reference-only — run them through the Pentest Workbench or AI Operator.`}
+        sub={activeTab === 'commands'
+          ? `${TEMPLATES.length} command templates · filter by category or phase`
+          : '697 MITRE ATT&CK techniques · browse by tactic or search · generate commands with AI'}
         right={
           <>
             <button className="btn">
@@ -356,6 +710,27 @@ export default function CommandLibrary() {
           </>
         }
       />
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: rule, flexShrink: 0 }}>
+        {(['commands', 'techniques'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '10px 20px', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+              background: 'transparent', color: activeTab === tab ? 'var(--accent)' : 'var(--fg-3)',
+              fontSize: 12, fontWeight: activeTab === tab ? 600 : 400, cursor: 'pointer',
+              fontFamily: 'var(--font-sans)', textTransform: 'capitalize',
+            }}
+          >
+            {tab === 'commands' ? `Commands (${TEMPLATES.length})` : 'ATT&CK Techniques'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'techniques' ? <TechniquesTab /> : null}
+      {activeTab !== 'techniques' && <>
 
       {/* Filter strip */}
       <div style={{
@@ -480,6 +855,7 @@ export default function CommandLibrary() {
           </div>
         )}
       </div>
+      </>}
     </div>
   )
 }
