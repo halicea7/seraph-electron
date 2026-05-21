@@ -50,6 +50,8 @@ export interface AIOperatorContextValue {
   enabledTools: Set<string>
   enabledMsf: Set<string>
   lhostIp: string
+  useToolCalling: boolean
+  thinkingEnabled: boolean
 
   // Prompt editor
   promptDraft: string
@@ -60,6 +62,7 @@ export interface AIOperatorContextValue {
   steps: OperatorStep[]
   liveOutput: string
   llmStream: string
+  llmThinking: string
   errorMsg: string
   showStream: boolean
   runStartTime: number | null
@@ -74,6 +77,8 @@ export interface AIOperatorContextValue {
   setPromptDraft: (v: string) => void
   setPromptIsAuto: (v: boolean) => void
   setLhostIp: (ip: string) => void
+  setUseToolCalling: (v: boolean) => void
+  setThinkingEnabled: (v: boolean) => void
 
   // Actions
   loadModelOptions: () => Promise<void>
@@ -133,10 +138,13 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   const [steps, setSteps] = useState<OperatorStep[]>([])
   const [liveOutput, setLiveOutput] = useState('')
   const [llmStream, setLlmStream] = useState('')
+  const [llmThinking, setLlmThinking] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [showStream, setShowStream] = useState(false)
   const [runStartTime, setRunStartTime] = useState<number | null>(null)
   const [lhostIp, setLhostIp] = useState('')
+  const [useToolCalling, setUseToolCalling] = useState(true)
+  const [thinkingEnabled, setThinkingEnabled] = useState(false)
 
   // ── Refs (survive re-renders, not tied to any mounted component) ─────────────
   const messages = useRef<ChatMessage[]>([])
@@ -260,6 +268,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     msgs: ChatMessage[],
     onToken: (t: string) => void,
     tools: object[] = [],
+    onThinking?: (t: string) => void,
   ): Promise<LLMResult> {
     abortRef.current = new AbortController()
     const { signal } = abortRef.current
@@ -270,13 +279,13 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       const settings = await window.electronAPI.ollamaGetSettings()
       const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
 
-      // Use Ollama's native /api/chat with tool definitions.
-      // Chunks are newline-delimited JSON objects (not SSE).
-      // Content tokens stream in intermediate chunks; tool_calls appear in the done=true chunk.
+      const body: Record<string, unknown> = { model, messages: msgs, tools, stream: true }
+      if (thinkingEnabled) body.think = true
+
       const resp = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages: msgs, tools, stream: true }),
+        body: JSON.stringify(body),
         signal,
       })
       if (!resp.ok || !resp.body) throw new Error(`Ollama error: ${resp.status}`)
@@ -298,6 +307,8 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
             if (!trimmed) continue
             try {
               const chunk = JSON.parse(trimmed)
+              const thinkToken: string = chunk.message?.thinking ?? ''
+              if (thinkToken && onThinking) onThinking(thinkToken)
               const token: string = chunk.message?.content ?? ''
               if (token) { content += token; onToken(token) }
               if (chunk.done && chunk.message?.tool_calls?.length) {
@@ -353,6 +364,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     currentMsgs: ChatMessage[],
     tools: object[],
     onToken: (t: string) => void,
+    onThinking?: (t: string) => void,
   ): Promise<{ result: { content: string; toolCalls: typeof initialResult.toolCalls }; msgs: ChatMessage[] }> {
     let result = initialResult
     let msgs = currentMsgs
@@ -372,7 +384,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       ]
       messages.current = msgs
       setLlmStream('')
-      result = await callLLM(msgs, onToken, tools)
+      result = await callLLM(msgs, onToken, tools, onThinking)
     }
 
     return { result, msgs }
@@ -511,13 +523,14 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setPhase('thinking')
     setErrorMsg('')
     setLlmStream('')
+    setLlmThinking('')
 
-    const tools = buildTools([...enabledTools], [...enabledMsf])
+    const tools = useToolCalling ? buildTools([...enabledTools], [...enabledMsf]) : []
 
     try {
-      const rawResult = await callLLM(newMsgs, t => setLlmStream(prev => prev + t), tools)
+      const rawResult = await callLLM(newMsgs, t => setLlmStream(prev => prev + t), tools, t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
-      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, newMsgs, tools, t => setLlmStream(prev => prev + t))
+      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, newMsgs, tools, t => setLlmStream(prev => prev + t), t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       messages.current = [
@@ -554,6 +567,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setLiveOutput('')
     setErrorMsg('')
     setLlmStream('')
+    setLlmThinking('')
     setPhase('thinking')
 
     try {
@@ -588,10 +602,10 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       ]
       messages.current = initMsgs
 
-      const tools = buildTools([...enabledTools], [...enabledMsf])
-      const rawResult = await callLLM(initMsgs, t => setLlmStream(prev => prev + t), tools)
+      const tools = useToolCalling ? buildTools([...enabledTools], [...enabledMsf]) : []
+      const rawResult = await callLLM(initMsgs, t => setLlmStream(prev => prev + t), tools, t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
-      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, initMsgs, tools, t => setLlmStream(prev => prev + t))
+      const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, initMsgs, tools, t => setLlmStream(prev => prev + t), t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
       messages.current = [
@@ -719,6 +733,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     setPhase('idle')
     setSteps([])
     setLlmStream('')
+    setLlmThinking('')
     messages.current = []
   }
 
@@ -732,13 +747,15 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     mode, projects, targets, selectedProject, selectedTarget,
     modelOptions, selectedModelKey, loadingModels,
     enabledTools, enabledMsf, lhostIp,
+    useToolCalling, thinkingEnabled,
     promptDraft, promptIsAuto,
-    phase, steps, liveOutput, llmStream, errorMsg, showStream, runStartTime,
+    phase, steps, liveOutput, llmStream, llmThinking, errorMsg, showStream, runStartTime,
 
     setSelectedProject, setSelectedTarget, setSelectedModelKey,
     toggleTool, toggleMsf,
     setShowStream: (fn) => setShowStream(fn as any),
     setPromptDraft, setPromptIsAuto, setLhostIp,
+    setUseToolCalling, setThinkingEnabled,
 
     loadModelOptions, applyModeSwitch, regeneratePrompt,
     startSession, handleApprove, handleSkip, handleStop,

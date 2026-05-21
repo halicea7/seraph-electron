@@ -130,10 +130,14 @@ function OperatorThinking({
   mode,
   showStream,
   llmStream,
+  llmThinking,
+  thinkingEnabled,
 }: {
   mode: typeof MODE_CONFIGS[OperatorMode]
   showStream: boolean
   llmStream: string
+  llmThinking: string
+  thinkingEnabled: boolean
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -146,6 +150,17 @@ function OperatorThinking({
           Analyzing and planning next action<span className="cursor" />
         </span>
       </div>
+      {thinkingEnabled && llmThinking && (
+        <div style={{ border: '1px solid rgba(167,139,250,0.25)', background: 'rgba(167,139,250,0.04)' }}>
+          <div style={{ padding: '4px 10px', borderBottom: '1px solid rgba(167,139,250,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', flexShrink: 0 }} />
+            <span className="mono" style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa' }}>Thinking</span>
+          </div>
+          <pre style={{ margin: 0, padding: '8px 10px', fontSize: 10.5, color: 'rgba(167,139,250,0.7)', fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflowY: 'auto', lineHeight: 1.5 }}>
+            {llmThinking}
+          </pre>
+        </div>
+      )}
       {showStream && (
         <div style={{ border: `1px solid ${mode.border}`, background: 'var(--bg-term)' }}>
           <div style={{
@@ -675,21 +690,29 @@ export default function AIOperator() {
             />
           </div>
 
-          <button
-            onClick={() => op.setShowStream(s => !s)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '7px 10px', border: `1px solid ${op.showStream ? modeConfig.border : 'var(--rule)'}`,
-              background: op.showStream ? modeConfig.bg : 'transparent',
-              color: op.showStream ? modeConfig.color : 'var(--fg-3)',
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-            }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name={op.showStream ? 'eye' : 'eye_off'} size={11} color="currentColor" /> Live model stream
-            </span>
-            <span style={{ fontSize: 9, fontWeight: 600 }}>{op.showStream ? 'ON' : 'OFF'}</span>
-          </button>
+          {/* Three option toggles */}
+          {(
+            [
+              { label: 'Use tools',     active: op.useToolCalling,   set: () => op.setUseToolCalling(!op.useToolCalling) },
+              { label: 'Thinking',      active: op.thinkingEnabled,  set: () => op.setThinkingEnabled(!op.thinkingEnabled) },
+              { label: 'Live stream',   active: op.showStream,       set: () => op.setShowStream(s => !s) },
+            ] as const
+          ).map(({ label, active, set }) => (
+            <button
+              key={label}
+              onClick={set}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '7px 10px', border: `1px solid ${active ? modeConfig.border : 'var(--rule)'}`,
+                background: active ? modeConfig.bg : 'transparent',
+                color: active ? modeConfig.color : 'var(--fg-3)',
+                fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+              }}
+            >
+              <span>{label}</span>
+              <span style={{ fontSize: 9, fontWeight: 600 }}>{active ? 'ON' : 'OFF'}</span>
+            </button>
+          ))}
 
           {op.phase === 'idle' ? (
             <button
@@ -789,7 +812,7 @@ export default function AIOperator() {
               ))}
 
               {op.phase === 'thinking' && (
-                <OperatorThinking mode={modeConfig} showStream={op.showStream} llmStream={op.llmStream} />
+                <OperatorThinking mode={modeConfig} showStream={op.showStream} llmStream={op.llmStream} llmThinking={op.llmThinking} thinkingEnabled={op.thinkingEnabled} />
               )}
 
               {op.errorMsg && (
