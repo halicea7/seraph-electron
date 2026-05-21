@@ -1018,6 +1018,11 @@ export function getTemplatesForTools(toolIds: string[], maxPerTool = 3): Command
   return out
 }
 
+/** Return all templates for a single tool ID. */
+export function getTemplatesForTool(toolId: string): CommandTemplate[] {
+  return TEMPLATES.filter(t => t.tool === toolId)
+}
+
 /** Format templates for inclusion in an LLM system prompt. */
 export function formatTemplatesForPrompt(templates: CommandTemplate[]): string {
   if (!templates.length) return '  (none)'
@@ -1032,6 +1037,29 @@ export function formatTemplatesForPrompt(templates: CommandTemplate[]): string {
     for (const t of ts) {
       lines.push(`    • ${t.label}: ${t.command}`)
       if (t.vars.length) lines.push(`      vars: ${t.vars.join(', ')} (substitute {{ var }} with actual values)`)
+    }
+    return lines.join('\n')
+  }).join('\n\n')
+}
+
+/**
+ * Format templates for the AI Operator system prompt.
+ * Shows template IDs and variable slots — used when the model must reference a template_id.
+ */
+export function formatTemplatesForOperator(templates: CommandTemplate[]): string {
+  if (!templates.length) return '  (none)'
+  const byTool = new Map<string, CommandTemplate[]>()
+  for (const t of templates) {
+    const arr = byTool.get(t.tool) ?? []
+    arr.push(t)
+    byTool.set(t.tool, arr)
+  }
+  return [...byTool.entries()].map(([tool, ts]) => {
+    const lines = [`  [${tool}]`]
+    for (const t of ts) {
+      lines.push(`    • template_id="${t.id}" — ${t.label}`)
+      lines.push(`      base: ${t.command}`)
+      if (t.vars.length) lines.push(`      vars: ${t.vars.join(', ')}`)
     }
     return lines.join('\n')
   }).join('\n\n')

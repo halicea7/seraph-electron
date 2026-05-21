@@ -6,8 +6,10 @@ import {
   PENTEST_TOOLS, MSF_MODULES,
   buildSystemPrompt, buildPreviewPrompt,
   buildInitialUserMessage, buildOutputUserMessage, buildSkipUserMessage,
-  buildTools, parseOperatorResponse, type PentestScanRecord,
+  buildTools, parseOperatorResponse, assembleCliCommand, assembleMsfCommand,
+  type PentestScanRecord,
 } from '@/lib/operator'
+import { TEMPLATES } from '@/lib/templates'
 import type { Project, TargetSummary, Finding } from '@/types'
 
 // ── Types (exported so the page can use them) ─────────────────────────────────
@@ -447,11 +449,29 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       if (fname === 'finish_engagement') return 'done'
 
       if (fname === 'run_tool') {
+        const toolId: string = args.tool_id ?? ''
+        let command: string
+
+        if (isMsfTool(toolId)) {
+          // MSF: assemble from structured options — never trust a free-form msfconsole string
+          command = assembleMsfCommand(toolId, args.msf_options ?? {})
+        } else {
+          // CLI: fill template slots, append extra_flags
+          const available = TEMPLATES.filter(t => t.tool === toolId)
+          const template = available.find(t => t.id === args.template_id) ?? available[0]
+          if (template) {
+            command = assembleCliCommand(template, args.vars ?? {}, args.extra_flags ?? '')
+          } else {
+            // No template for this tool — fall back to raw command if model provided one
+            command = typeof args.command === 'string' ? args.command : `${toolId} {{ target }}`
+          }
+        }
+
         return {
           id: Date.now(),
           analysis: args.analysis || result.content || '',
           attackPathNote: args.attack_path_note || null,
-          action: { tool: args.tool_id, command: args.command, rationale: args.rationale },
+          action: { tool: toolId, command, rationale: args.rationale || '' },
           result: 'pending',
           output: '',
           outputOpen: false,

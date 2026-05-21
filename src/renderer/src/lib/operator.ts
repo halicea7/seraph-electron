@@ -1,5 +1,5 @@
 import type { Finding, TargetSummary } from '@/types'
-import { getTemplatesForTools, formatTemplatesForPrompt } from '@/lib/templates'
+import { TEMPLATES, CommandTemplate, getTemplatesForTools, formatTemplatesForOperator } from '@/lib/templates'
 
 // ── Mode definitions ──────────────────────────────────────────────────────────
 
@@ -121,6 +121,38 @@ export interface PentestScanRecord {
   raw_output: string | null
 }
 
+// ── Command assembly ──────────────────────────────────────────────────────────
+
+/**
+ * Fill a CLI template's variable slots and optionally append extra flags.
+ * Slots use {{ varname }} syntax. Unfilled slots are left as-is so the
+ * unfilled-placeholder check in the context can catch them.
+ */
+export function assembleCliCommand(
+  template: CommandTemplate,
+  vars: Record<string, string>,
+  extraFlags: string,
+): string {
+  let cmd = template.command.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => vars[name] ?? `{{ ${name} }}`)
+  if (extraFlags?.trim()) cmd += ' ' + extraFlags.trim()
+  return cmd
+}
+
+/**
+ * Assemble a msfconsole one-liner from a module ID and key-value options.
+ * Handles quoting of option values that contain spaces.
+ */
+export function assembleMsfCommand(moduleId: string, options: Record<string, string>): string {
+  const setLines = Object.entries(options)
+    .filter(([, v]) => v?.trim())
+    .map(([k, v]) => `set ${k} ${v}`)
+    .join('; ')
+  const body = setLines
+    ? `use ${moduleId}; ${setLines}; run; exit -y`
+    : `use ${moduleId}; run; exit -y`
+  return `msfconsole -q -x "${body}"`
+}
+
 /** Extract only the signal lines from scan output so we don't flood the prompt. */
 function extractKeyOutput(tool: string, output: string | null): string | null {
   if (!output) return null
@@ -176,41 +208,43 @@ function buildPersona(mode: OperatorMode, hostname: string): string {
 
 function buildRules(mode: OperatorMode, hostname: string): string {
   const scopeRule = `1. ONLY target ${hostname}. Never expand scope.`
-  const reconRule = `2. PREVIOUS RECONNAISSANCE is authoritative — treat it as ground truth. If a tool already appears there (e.g. nmap, masscan, gobuster), its data is sufficient. Do NOT re-run it with different flags, scripts, or options. Use the existing output and move to the next logical step.`
+  const reconRule = `2. PREVIOUS RECONNAISSANCE is authoritative — treat it as ground truth. If a tool already appears there, its data is sufficient. Do NOT re-run it. Move to the next logical step.`
   const sudoRule = `3. Use sudo ONLY for tools that require raw socket access: nmap, masscan, tcpdump. Every other tool must be run WITHOUT sudo.`
-  const scriptRule = `4. When using nmap NSE scripts, only use scripts that are known to exist: pgsql-brute, ftp-anon, ftp-brute, ssh-brute, http-title, http-headers, smb-vuln-ms17-010, smb-enum-shares, smtp-enum-users, ssl-cert. Do NOT invent script names.`
+  const templateRule = `4. CLI TOOLS — always use the template_id + vars approach:
+   • Pick the template_id from the list above that best fits your goal.
+   • Fill in vars with the actual values (target IP/hostname, ports, wordlists, etc.).
+   • Use extra_flags ONLY for flags that are not already in the template base command. Keep extra_flags minimal and only use flags you are certain exist for this tool.
+   • Do NOT invent flags. Do NOT duplicate flags already present in the base template.`
+  const msfRule = `5. MSF MODULES — use msf_options with key-value pairs (e.g. RHOSTS, PAYLOAD, LPORT). The system assembles the msfconsole one-liner. Do NOT write msfconsole commands yourself.`
   switch (mode) {
     case 'attack':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-${scriptRule}
-5. Use ONLY tools and modules from the enabled lists above.
-6. Use example command templates as a starting point — adapt variables to the actual target.
-7. For Metasploit modules, generate a complete msfconsole -q -x "..." one-liner.
-8. After each result, identify any new attack path steps worth recording.
-9. When you have no more productive actions, return next_action: null.
-10. Keep commands targeted — avoid wide spray attacks.`
+${templateRule}
+${msfRule}
+6. Use ONLY tools and modules from the enabled lists above.
+7. After each result, identify any new attack path steps worth recording.
+8. When you have no more productive actions, call finish_engagement.
+9. Keep commands targeted — avoid wide spray attacks.`
     case 'recon':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-${scriptRule}
-5. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
-6. DO NOT run password sprays, exploit modules, or any command that modifies the target.
-7. Use example command templates as a starting point — adapt variables to the actual target.
+${templateRule}
+6. Use ONLY recon/enumeration tools from the enabled lists — no exploitation.
+7. DO NOT run password sprays, exploit modules, or any command that modifies the target.
 8. After each result, note what new attack surface or information you've uncovered.
-9. When the target surface is fully mapped, return next_action: null.`
+9. When the target surface is fully mapped, call finish_engagement.`
     case 'audit':
       return `${scopeRule}
 ${reconRule}
 ${sudoRule}
-${scriptRule}
-5. Use ONLY non-destructive scanning tools from the enabled lists above.
-6. DO NOT exploit vulnerabilities — identify and document them only.
-7. Use example command templates as a starting point — adapt variables to the actual target.
+${templateRule}
+6. Use ONLY non-destructive scanning tools from the enabled lists above.
+7. DO NOT exploit vulnerabilities — identify and document them only.
 8. For each finding, state the risk level: Critical, High, Medium, or Low.
-9. When audit coverage is complete, return next_action: null.`
+9. When audit coverage is complete, call finish_engagement.`
   }
 }
 
@@ -224,9 +258,9 @@ export function buildSystemPrompt(
   enabledMsf: string[],
   priorScans: PentestScanRecord[] = []
 ): string {
-  const pentestTemplates = getTemplatesForTools(enabledTools, 3)
+  const pentestTemplates = getTemplatesForTools(enabledTools, 999)
   const pentestSection = enabledTools.length
-    ? formatTemplatesForPrompt(pentestTemplates)
+    ? formatTemplatesForOperator(pentestTemplates)
     : '  (none enabled)'
 
   const msfList = enabledMsf.length
@@ -322,24 +356,49 @@ export function buildSkipUserMessage(): string {
 
 export function buildTools(enabledTools: string[], enabledMsf: string[]): object[] {
   const allIds = [...enabledTools, ...enabledMsf]
+
+  // Build compact template menu for the tool description
+  const templateLines: string[] = []
+  for (const toolId of enabledTools) {
+    for (const t of TEMPLATES.filter(tmpl => tmpl.tool === toolId)) {
+      const varHint = t.vars.length ? ` [vars: ${t.vars.join(', ')}]` : ''
+      templateLines.push(`${t.id}${varHint}`)
+    }
+  }
+  const templateMenu = templateLines.join(', ')
+
   return [
     {
       type: 'function',
       function: {
         name: 'run_tool',
-        description: 'Execute a pentest command using one of the enabled tools against the target. Call this for every action you want to take.',
+        description: 'Execute a pentest action. CLI tools: pick a template_id and fill vars. MSF modules: provide msf_options.',
         parameters: {
           type: 'object',
-          required: ['tool_id', 'command', 'rationale', 'analysis'],
+          required: ['tool_id', 'rationale', 'analysis'],
           properties: {
             tool_id: {
               type: 'string',
               enum: allIds,
-              description: 'Exact tool ID from the enabled list — must match one of the values exactly.',
+              description: 'Exact tool or MSF module ID from the enabled list.',
             },
-            command: {
+            template_id: {
               type: 'string',
-              description: 'Complete shell command to run. No unfilled placeholders. No invented flags.',
+              description: `CLI tools only — ID of the command template to use as the base. Available: ${templateMenu}. Pick the one that fits your goal.`,
+            },
+            vars: {
+              type: 'object',
+              description: 'CLI tools only — variable values for the template slots (e.g. {"target": "10.0.0.1", "ports": "80,443"}). Match exactly the var names listed for the chosen template.',
+              additionalProperties: { type: 'string' },
+            },
+            extra_flags: {
+              type: 'string',
+              description: 'CLI tools only — additional flags to append after the assembled template. Use only for flags you know are valid for this tool and are NOT already in the template. Leave empty if the template covers your need.',
+            },
+            msf_options: {
+              type: 'object',
+              description: 'MSF modules only — set options as key-value pairs (e.g. {"RHOSTS": "10.0.0.1", "PAYLOAD": "windows/meterpreter/reverse_tcp", "LPORT": "4444"}). The system assembles the msfconsole one-liner.',
+              additionalProperties: { type: 'string' },
             },
             rationale: {
               type: 'string',
