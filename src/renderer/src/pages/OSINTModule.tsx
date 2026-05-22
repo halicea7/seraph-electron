@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Icon from '@/components/Icon'
 import type { Target } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
@@ -31,6 +31,11 @@ interface OSINTResult {
   in_scope: boolean
 }
 
+interface SherlockProfile {
+  site: string
+  url: string
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TOOL_KEYS = ['theHarvester', 'amass', 'subfinder']
@@ -41,6 +46,7 @@ const TOOLS_STATIC = [
   { key: 'theHarvester', desc: 'email · host osint',         count: 31 },
   { key: 'searchsploit', desc: 'exploitdb offline lookup',   count: 12 },
   { key: 'shodan',       desc: 'internet asset search · api', count: 0  },
+  { key: 'sherlock',     desc: 'username · social footprint', count: 0  },
 ]
 
 const rule = '1px solid var(--rule)'
@@ -105,6 +111,16 @@ export default function OSINTModule() {
   const [queryDomain, setQueryDomain] = useState('')
   const [results, setResults] = useState<OSINTResult[]>([])
 
+  const [username, setUsername] = useState('')
+  const [sherlockAvailable, setSherlockAvailable] = useState<boolean | null>(null)
+  const [sherlockState, setSherlockState] = useState<{
+    status: 'idle' | 'running' | 'completed' | 'failed'
+    output: string
+    profiles: SherlockProfile[]
+    jobId: string | null
+  }>({ status: 'idle', output: '', profiles: [], jobId: null })
+  const sherlockOutputRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     fetch(`${getApiBase()}/osint/tools`).then(r => r.json()).then(data => {
       setTools(data)
@@ -137,6 +153,19 @@ export default function OSINTModule() {
       return next
     })
   }, [domain, tools])
+
+  useEffect(() => {
+    fetch(`${getApiBase()}/osint/sherlock/status`)
+      .then(r => r.json())
+      .then(d => setSherlockAvailable(d.available))
+      .catch(() => setSherlockAvailable(false))
+  }, [])
+
+  useEffect(() => {
+    if (sherlockOutputRef.current) {
+      sherlockOutputRef.current.scrollTop = sherlockOutputRef.current.scrollHeight
+    }
+  }, [sherlockState.output])
 
   function updateTool(toolName: string, updates: Partial<ToolState>) {
     setToolStates(prev => ({ ...prev, [toolName]: { ...prev[toolName], ...updates } }))
@@ -197,11 +226,52 @@ export default function OSINTModule() {
     setResults(rows)
   }
 
+  async function handleSherlockRun() {
+    if (!username.trim() || sherlockState.status === 'running') return
+    setSherlockState({ status: 'running', output: '', profiles: [], jobId: null })
+
+    const res = await fetch(`${getApiBase()}/osint/sherlock/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: projectId, username: username.trim() }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      setSherlockState(prev => ({ ...prev, status: 'failed', output: err.detail || 'Failed to start job' }))
+      return
+    }
+
+    const { job_id } = await res.json()
+    setSherlockState(prev => ({ ...prev, jobId: job_id }))
+
+    const ws = new WebSocket(`${getWsBase()}/ws/sherlock/${job_id}`)
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'stdout') {
+        setSherlockState(prev => ({ ...prev, output: prev.output + msg.data }))
+      } else if (msg.type === 'stderr') {
+        setSherlockState(prev => ({ ...prev, output: prev.output + msg.data }))
+      } else if (msg.type === 'exit') {
+        setSherlockState(prev => ({ ...prev, status: msg.code === 0 ? 'completed' : 'failed' }))
+      } else if (msg.type === 'results') {
+        setSherlockState(prev => ({ ...prev, profiles: msg.profiles }))
+      } else if (msg.type === 'error') {
+        setSherlockState(prev => ({ ...prev, status: 'failed', output: prev.output + `\n[ERROR] ${msg.data}` }))
+      }
+    }
+    ws.onerror = () => setSherlockState(prev => ({ ...prev, status: 'failed' }))
+  }
+
   const activeToolMeta = TOOLS_STATIC.find(t => t.key === activeTool)
-  const displayCount = toolStates[activeTool]?.results
-    ? (toolStates[activeTool].results!.emails + toolStates[activeTool].results!.subdomains + toolStates[activeTool].results!.ips)
-    : (activeToolMeta?.count ?? 0)
-  const sectionTitle = `${activeTool.toUpperCase()} · ${displayCount} RESULTS${queryDomain ? ` · ${queryDomain}` : ''}`
+  const displayCount = activeTool === 'sherlock'
+    ? sherlockState.profiles.length
+    : toolStates[activeTool]?.results
+      ? (toolStates[activeTool].results!.emails + toolStates[activeTool].results!.subdomains + toolStates[activeTool].results!.ips)
+      : (activeToolMeta?.count ?? 0)
+  const sectionTitle = activeTool === 'sherlock'
+    ? `SHERLOCK · ${sherlockState.profiles.length} PROFILES${username ? ` · @${username}` : ''}`
+    : `${activeTool.toUpperCase()} · ${displayCount} RESULTS${queryDomain ? ` · ${queryDomain}` : ''}`
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -238,10 +308,15 @@ export default function OSINTModule() {
           {TOOLS_STATIC.map(({ key, desc, count }) => {
             const isActive = activeTool === key
             const state = toolStates[key]
-            const liveCount = state?.results
-              ? (state.results.emails + state.results.subdomains + state.results.ips)
-              : count
-            const displayCount = state?.results ? liveCount : count
+            let itemCount: number
+            if (key === 'sherlock') {
+              itemCount = sherlockState.profiles.length
+            } else {
+              itemCount = state?.results
+                ? (state.results.emails + state.results.subdomains + state.results.ips)
+                : count
+            }
+            const isSherlock = key === 'sherlock'
             return (
               <button
                 key={key}
@@ -251,13 +326,15 @@ export default function OSINTModule() {
                   padding: '10px 16px',
                   background: isActive ? 'var(--accent-2)' : 'transparent',
                   borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-                  borderTop: 'none', borderRight: 'none',
+                  borderTop: isSherlock ? rule : 'none', borderRight: 'none',
                   borderBottom: rule, cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                   <span className="mono" style={{ fontSize: 12, color: isActive ? 'var(--accent)' : 'var(--fg-2)' }}>{key}</span>
-                  <span className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{displayCount}</span>
+                  <span className="mono tnum" style={{ fontSize: 11, color: isSherlock && sherlockAvailable === false ? 'var(--crit)' : 'var(--fg-3)' }}>
+                    {isSherlock && sherlockAvailable === false ? 'n/a' : itemCount}
+                  </span>
                 </div>
                 <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   {desc}
@@ -267,63 +344,145 @@ export default function OSINTModule() {
           })}
         </div>
 
-        {/* ── Right pane: Results ── */}
-        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* ── Right pane ── */}
+        {activeTool === 'sherlock' ? (
 
-          {/* Query row */}
-          <div style={{ padding: '12px var(--pad)', borderBottom: rule, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            <input
-              value={queryDomain}
-              onChange={e => setQueryDomain(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleQuery()}
-              placeholder="domain · email · cidr"
-              className="mono"
-              style={{
-                flex: 1, background: 'var(--bg)', border: rule, padding: '6px 10px',
-                fontSize: 12, color: 'var(--fg)', outline: 'none',
-              }}
-            />
-            <button
-              className="btn-primary btn-sm"
-              onClick={handleQuery}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <Icon name="search" size={11} /> Query
-            </button>
+          /* Sherlock: username search */
+          <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px var(--pad)', borderBottom: rule, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSherlockRun()}
+                placeholder="username to search across social networks"
+                className="mono"
+                style={{ flex: 1, background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', outline: 'none' }}
+              />
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleSherlockRun}
+                disabled={!username.trim() || sherlockState.status === 'running' || sherlockAvailable === false}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: !username.trim() || sherlockState.status === 'running' || sherlockAvailable === false ? 0.5 : 1 }}
+              >
+                <Icon name={sherlockState.status === 'running' ? 'refresh' : 'search'} size={11} />
+                {sherlockState.status === 'running' ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+
+            {sherlockAvailable === false && (
+              <div style={{ padding: '10px var(--pad)', background: 'rgba(232,64,64,0.06)', borderBottom: rule, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>
+                sherlock not found — run: pip install sherlock-project
+              </div>
+            )}
+
+            {sherlockState.output && (
+              <Section title="LIVE OUTPUT">
+                <div
+                  ref={sherlockOutputRef}
+                  style={{ padding: '0 var(--pad) 12px', maxHeight: 200, overflowY: 'auto' }}
+                >
+                  <pre className="term" style={{ margin: 0, fontSize: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                    {sherlockState.output}
+                  </pre>
+                </div>
+              </Section>
+            )}
+
+            <Section title={sectionTitle}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 180 }}>Site</th>
+                    <th>Profile URL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sherlockState.profiles.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--fg-3)', padding: '32px 0', fontSize: 12 }}>
+                        {sherlockState.status === 'idle' && 'Enter a username and click Search'}
+                        {sherlockState.status === 'running' && 'Searching across social networks…'}
+                        {sherlockState.status === 'completed' && 'No profiles found'}
+                        {sherlockState.status === 'failed' && 'Search failed — check live output above'}
+                      </td>
+                    </tr>
+                  ) : sherlockState.profiles.map((p, i) => (
+                    <tr key={i}>
+                      <td className="mono" style={{ fontSize: 12 }}>{p.site}</td>
+                      <td>
+                        <a
+                          href={p.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mono"
+                          style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}
+                          onClick={e => { e.preventDefault(); window.open(p.url, '_blank') }}
+                        >
+                          {p.url}
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Section>
           </div>
 
-          {/* Results section */}
-          <Section title={sectionTitle}>
-            <table className="data" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>Host</th>
-                  <th>IP</th>
-                  <th>Resolved</th>
-                  <th>Source</th>
-                  <th>In scope</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.length === 0 ? (
+        ) : (
+
+          /* Domain OSINT tools */
+          <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px var(--pad)', borderBottom: rule, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <input
+                value={queryDomain}
+                onChange={e => setQueryDomain(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleQuery()}
+                placeholder="domain · email · cidr"
+                className="mono"
+                style={{ flex: 1, background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', outline: 'none' }}
+              />
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleQuery}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Icon name="search" size={11} /> Query
+              </button>
+            </div>
+
+            <Section title={sectionTitle}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--fg-3)', padding: '32px 0', fontSize: 12 }}>
-                      Enter a domain and click Query to run passive recon
-                    </td>
+                    <th>Host</th>
+                    <th>IP</th>
+                    <th>Resolved</th>
+                    <th>Source</th>
+                    <th>In scope</th>
                   </tr>
-                ) : results.map((row, i) => (
-                  <tr key={i}>
-                    <td className="mono" style={{ fontSize: 11.5 }}>{row.host}</td>
-                    <td className="mono tnum" style={{ fontSize: 11 }}>{row.ip}</td>
-                    <td><Pill tone="info">{row.resolved ? 'yes' : 'no'}</Pill></td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.source}</td>
-                    <td><Pill tone={row.in_scope ? 'pass' : 'warn'}>{row.in_scope ? 'in scope' : 'out'}</Pill></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-        </div>
+                </thead>
+                <tbody>
+                  {results.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--fg-3)', padding: '32px 0', fontSize: 12 }}>
+                        Enter a domain and click Query to run passive recon
+                      </td>
+                    </tr>
+                  ) : results.map((row, i) => (
+                    <tr key={i}>
+                      <td className="mono" style={{ fontSize: 11.5 }}>{row.host}</td>
+                      <td className="mono tnum" style={{ fontSize: 11 }}>{row.ip}</td>
+                      <td><Pill tone="info">{row.resolved ? 'yes' : 'no'}</Pill></td>
+                      <td className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.source}</td>
+                      <td><Pill tone={row.in_scope ? 'pass' : 'warn'}>{row.in_scope ? 'in scope' : 'out'}</Pill></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Section>
+          </div>
+
+        )}
       </div>
     </div>
   )
