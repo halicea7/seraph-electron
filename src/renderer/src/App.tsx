@@ -103,7 +103,7 @@ function ProtectedRoutes() {
 }
 
 function AuthGate() {
-  const { user, loading } = useAuth()
+  const { user, loading, unreachable } = useAuth()
 
   if (loading) {
     return (
@@ -112,6 +112,8 @@ function AuthGate() {
       </div>
     )
   }
+
+  if (unreachable) return <ConnectScreen />
 
   return (
     <Routes>

@@ -15,6 +15,7 @@ interface AuthContextType {
   logout: () => void
   refreshUser: () => Promise<void>
   loading: boolean
+  unreachable: boolean
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -25,12 +26,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [unreachable, setUnreachable] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY)
     if (stored) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 5000)
       fetch(`${getApiBase()}/auth/me`, {
         headers: { Authorization: `Bearer ${stored}` },
+        signal: controller.signal,
       })
         .then(r => (r.ok ? r.json() : null))
         .then(data => {
@@ -41,8 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.removeItem(TOKEN_KEY)
           }
         })
-        .catch(() => localStorage.removeItem(TOKEN_KEY))
-        .finally(() => setLoading(false))
+        .catch(err => {
+          localStorage.removeItem(TOKEN_KEY)
+          if (err.name === 'AbortError') setUnreachable(true)
+        })
+        .finally(() => { clearTimeout(timeout); setLoading(false) })
     } else {
       setLoading(false)
     }
@@ -68,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, refreshUser, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, refreshUser, loading, unreachable }}>
       {children}
     </AuthContext.Provider>
   )
