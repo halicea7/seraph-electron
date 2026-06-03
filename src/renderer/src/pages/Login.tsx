@@ -5,7 +5,23 @@ import { useAuth } from '../contexts/AuthContext'
 import LoginBackground from '../components/LoginBackground'
 import { getApiBase, getServerUrl, setServerUrl } from '@/lib/config'
 
+const TAGLINES = [
+  'One console for compliance, offensive ops, and the long tail of fixing things.',
+  'From recon to report — every phase of the engagement, in one place.',
+  'Automate the scans. Focus on what the scanner can\'t find.',
+  'Built for operators who ship findings, not just run tools.',
+  'Self-hosted. Air-gappable. Every byte stays on metal you control.',
+]
+
+// Feature module count — one per route in App.tsx (excluding Guide/Settings)
+const MODULE_COUNT = 20
+
 type Mode = 'checking' | 'setup' | 'login'
+
+interface LoginStats {
+  tools: string
+  findings: string
+}
 
 export default function Login() {
   const { login } = useAuth()
@@ -21,9 +37,24 @@ export default function Login() {
   const [error, setError] = useState('')
   const [pulse, setPulse] = useState(0)
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
+  const [stats, setStats] = useState<LoginStats | null>(null)
+  const [taglineIdx, setTaglineIdx] = useState(0)
+  const [taglineFading, setTaglineFading] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setPulse(p => (p + 1) % 360), 500)
+    return () => clearInterval(t)
+  }, [])
+
+  // Cycle taglines with a fade
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTaglineFading(true)
+      setTimeout(() => {
+        setTaglineIdx(i => (i + 1) % TAGLINES.length)
+        setTaglineFading(false)
+      }, 350)
+    }, 5000)
     return () => clearInterval(t)
   }, [])
 
@@ -36,6 +67,22 @@ export default function Login() {
       .catch(() => { setBackendOnline(false); setMode('login') })
       .finally(() => clearTimeout(timeout))
   }, [])
+
+  // Fetch live stats once backend is confirmed reachable
+  useEffect(() => {
+    if (!backendOnline) return
+    Promise.all([
+      fetch(`${getApiBase()}/settings/tools`).then(r => r.json()).catch(() => null),
+      fetch(`${getApiBase()}/stats`).then(r => r.json()).catch(() => null),
+    ]).then(([toolsData, statsData]) => {
+      const toolCount = toolsData ? Object.keys(toolsData).length : null
+      const findingCount = statsData?.findings ?? null
+      setStats({
+        tools: toolCount !== null ? String(toolCount) : '--',
+        findings: findingCount !== null ? String(findingCount) : '--',
+      })
+    })
+  }, [backendOnline])
 
   async function handleChangeServer() {
     await window.electronAPI.setServerUrl(null)
@@ -230,17 +277,16 @@ export default function Login() {
             fontFamily: 'var(--font-serif)',
             fontSize: 56, lineHeight: 1.02, fontWeight: 400, letterSpacing: '-0.02em',
             maxWidth: 620, color: 'var(--fg)',
+            opacity: taglineFading ? 0 : 1,
+            transition: 'opacity 0.35s ease',
           }}>
-            One console for compliance, offensive ops, and the long tail of fixing things.
+            {TAGLINES[taglineIdx]}
           </h1>
-          <p style={{ marginTop: 22, color: 'var(--fg-2)', fontSize: 14, maxWidth: 540, lineHeight: 1.55 }}>
-            Self-hosted. JWT + passkeys. Local LLM narrative. Every byte stays on metal you control.
-          </p>
           <div style={{ marginTop: 32, display: 'flex', gap: 28, flexWrap: 'wrap' }}>
             {[
-              { k: 'modules', v: '14' },
-              { k: 'integrated tools', v: '27' },
-              { k: 'avg crit detection', v: '< 6m' },
+              { k: 'modules',          v: String(MODULE_COUNT) },
+              { k: 'integrated tools', v: stats?.tools    ?? '--' },
+              { k: 'total findings',   v: stats?.findings ?? '--' },
             ].map(s => (
               <div key={s.k}>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--fg)' }}>{s.v}</div>
