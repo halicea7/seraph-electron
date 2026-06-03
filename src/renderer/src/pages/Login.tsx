@@ -3,7 +3,7 @@ import { useState, useEffect, FormEvent } from 'react'
 import { Shield, Eye, EyeOff, Loader, Fingerprint } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import LoginBackground from '../components/LoginBackground'
-import { getApiBase } from '@/lib/config'
+import { getApiBase, getServerUrl, setServerUrl } from '@/lib/config'
 
 type Mode = 'checking' | 'setup' | 'login'
 
@@ -20,6 +20,7 @@ export default function Login() {
   const [passkeyLoading, setPasskeyLoading] = useState(false)
   const [error, setError] = useState('')
   const [pulse, setPulse] = useState(0)
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setPulse(p => (p + 1) % 360), 500)
@@ -27,11 +28,18 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
-    fetch(`${getApiBase()}/auth/setup-required`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    fetch(`${getApiBase()}/auth/setup-required`, { signal: controller.signal })
       .then(r => r.json())
-      .then(data => setMode(data.required ? 'setup' : 'login'))
-      .catch(() => setMode('login'))
+      .then(data => { setBackendOnline(true); setMode(data.required ? 'setup' : 'login') })
+      .catch(() => { setBackendOnline(false); setMode('login') })
+      .finally(() => clearTimeout(timeout))
   }, [])
+
+  async function handleChangeServer() {
+    await window.electronAPI.setServerUrl(null)
+  }
 
   async function handlePasskeyLogin() {
     if (!window.isSecureContext) {
@@ -247,12 +255,22 @@ export default function Login() {
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Status</div>
             <div style={{ fontFamily: 'var(--font-mono)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg)' }}>
-              <span className="dot dot-live" />
-              <span>backend · online</span>
+              {backendOnline === null && <Loader size={10} className="animate-spin" style={{ color: 'var(--fg-3)' }} />}
+              {backendOnline === true  && <span className="dot dot-live" />}
+              {backendOnline === false && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block', flexShrink: 0 }} />}
+              <span style={{ color: backendOnline === false ? 'var(--crit)' : 'var(--fg)' }}>
+                backend · {backendOnline === null ? 'checking…' : backendOnline ? 'online' : 'unreachable'}
+              </span>
               <span style={{ color: 'var(--fg-4)' }}>·</span>
-              <span style={{ color: 'var(--fg-3)' }}>msfrpcd up</span>
-              <span style={{ color: 'var(--fg-4)' }}>·</span>
-              <span style={{ color: 'var(--fg-3)' }}>tls valid</span>
+              <span style={{ color: 'var(--fg-3)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>
+                {getServerUrl() ?? 'localhost'}
+              </span>
+              <button
+                onClick={handleChangeServer}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.12em', padding: 0 }}
+              >
+                change →
+              </button>
             </div>
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.16em' }}>
