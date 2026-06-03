@@ -127,7 +127,7 @@ function AuthGate() {
 }
 
 export default function App() {
-  if (!getServerUrl()) return <ConnectScreen />
+  if (!getServerUrl()) return <ThemeProvider><ConnectScreen /></ThemeProvider>
   return (
     <BrowserRouter>
       <ThemeProvider>
