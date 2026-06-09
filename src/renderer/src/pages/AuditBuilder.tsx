@@ -635,6 +635,14 @@ export default function AuditBuilder() {
   const [showSchedule, setShowSchedule] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  // ── CIS-CAT import ─────────────────────────────────────────────────────────
+  const [showCiscatImport, setShowCiscatImport] = useState(false)
+  const [ciscatFile, setCiscatFile] = useState<File | null>(null)
+  const [ciscatTargetId, setCiscatTargetId] = useState('')
+  const [ciscatImporting, setCiscatImporting] = useState(false)
+  const [ciscatResult, setCiscatResult] = useState<{ imported: number; pass: number; fail: number; notapplicable: number } | null>(null)
+  const [ciscatError, setCiscatError] = useState('')
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const REMOTE_CATEGORIES = new Set(['host_hardening', 'openscap', 'log_monitoring'])
   const needsSSH = [...selectedCategories].some(c => REMOTE_CATEGORIES.has(c))
@@ -899,6 +907,30 @@ export default function AuditBuilder() {
     await loadProfiles()
   }
 
+  async function handleCiscatImport() {
+    if (!ciscatFile || !projectId || !ciscatTargetId) return
+    setCiscatImporting(true)
+    setCiscatError('')
+    setCiscatResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', ciscatFile)
+      form.append('project_id', projectId)
+      form.append('target_id', ciscatTargetId)
+      const res = await fetch(`${getApiBase()}/audit/import/ciscat`, { method: 'POST', body: form })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(err.detail || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setCiscatResult(data)
+    } catch (e: unknown) {
+      setCiscatError(e instanceof Error ? e.message : 'Import failed')
+    } finally {
+      setCiscatImporting(false)
+    }
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function toggleCheckedTarget(t: string) {
     setCheckedTargets(prev => {
@@ -922,6 +954,7 @@ export default function AuditBuilder() {
   void showProfileSave; void profileName; void setProfileName; void handleSaveProfile
   void selectedProfileId; void profiles; void scheduleCron; void setScheduleCron
   void applyProfile; void handleSaveSchedule; void handleClearSchedule
+  void setCiscatFile; void setCiscatTargetId; void ciscatImporting
 
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
@@ -938,6 +971,9 @@ export default function AuditBuilder() {
             <button className="btn" onClick={handleImportResults}>
               <Icon name="upload" size={11} /> Import results
             </button>
+            <button className="btn" onClick={() => { setShowCiscatImport(v => !v); setCiscatResult(null); setCiscatError('') }}>
+              <Icon name="upload" size={11} /> Import CIS-CAT
+            </button>
             <button
               className="btn btn-primary"
               onClick={handleRunAudit}
@@ -949,6 +985,46 @@ export default function AuditBuilder() {
           </>
         )}
       />
+
+      {/* ── CIS-CAT Import Panel ────────────────────────────────────────── */}
+      {showCiscatImport && (
+        <div style={{ borderBottom: '1px solid var(--rule)', background: 'var(--bg-2)', padding: '14px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 4 }}>REPORT FILE (.xml / .json / .csv)</div>
+            <input
+              type="file"
+              accept=".xml,.json,.csv"
+              onChange={e => setCiscatFile(e.target.files?.[0] ?? null)}
+              style={{ fontSize: 12, color: 'var(--fg)', background: 'var(--bg)', border: '1px solid var(--rule-strong)', padding: '4px 8px', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 4 }}>TARGET</div>
+            <select
+              value={ciscatTargetId}
+              onChange={e => setCiscatTargetId(e.target.value)}
+              style={{ fontSize: 12, color: 'var(--fg)', background: 'var(--bg)', border: '1px solid var(--rule-strong)', padding: '5px 8px', fontFamily: 'var(--font-mono)' }}
+            >
+              <option value="">— select target —</option>
+              {targets.map(t => <option key={t.id} value={t.id}>{t.hostname_or_ip}</option>)}
+            </select>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleCiscatImport}
+            disabled={!ciscatFile || !ciscatTargetId || ciscatImporting || !projectId}
+          >
+            {ciscatImporting ? 'Importing…' : 'Import'}
+          </button>
+          {ciscatResult && (
+            <span style={{ fontSize: 12, color: 'var(--ok)' }}>
+              ✓ {ciscatResult.imported} rules — {ciscatResult.fail} fail · {ciscatResult.pass} pass · {ciscatResult.notapplicable} N/A
+            </span>
+          )}
+          {ciscatError && <span style={{ fontSize: 12, color: 'var(--err)' }}>{ciscatError}</span>}
+          {!projectId && <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Select a project first</span>}
+        </div>
+      )}
 
       {/* ── 3-pane grid ─────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 460px', flex: 1, minHeight: 0 }}>

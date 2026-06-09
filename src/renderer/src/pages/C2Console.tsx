@@ -337,7 +337,7 @@ function SliverPanel() {
 // ── Main component ─────────────────────────────────────────────────
 
 export default function C2Console() {
-  const [activeTab, setActiveTab] = useState<'sessions' | 'payloads' | 'listeners' | 'attack' | 'loot' | 'postex' | 'lotl'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'payloads' | 'listeners' | 'attack' | 'loot' | 'postex' | 'lotl' | 'infra'>('sessions')
   const { projectId: sp } = useAppStore()
   const projectId = sp?.id ?? ''
   const [msfStatus, setMsfStatus] = useState<MsfStatus>({ connected: false })
@@ -444,6 +444,42 @@ export default function C2Console() {
   const [attackPlanError, setAttackPlanError] = useState('')
   const [generatingAttack, setGeneratingAttack] = useState(false)
 
+  // Infrastructure tab state
+  interface C2Node { id: string; name: string; c2_type: string; host: string; port: number; ssl: boolean; status: string; source: string; last_checked: string | null; notes: string }
+  interface CloudC2Instance { id: string; name: string; provider: string; instance_id: string; region: string; public_ip: string | null; status: string; c2_type: string; instance_type: string; node_id: string | null; error_msg: string | null; created_at: string }
+  const [c2Nodes, setC2Nodes] = useState<C2Node[]>([])
+  const [loadingNodes, setLoadingNodes] = useState(false)
+  const [addNodeOpen, setAddNodeOpen] = useState(false)
+  const [nodeFormName, setNodeFormName] = useState('')
+  const [nodeFormType, setNodeFormType] = useState<'msf' | 'sliver'>('msf')
+  const [nodeFormHost, setNodeFormHost] = useState('')
+  const [nodeFormPort, setNodeFormPort] = useState('55553')
+  const [nodeFormPass, setNodeFormPass] = useState('')
+  const [nodeFormSsl, setNodeFormSsl] = useState(false)
+  const [nodeFormNotes, setNodeFormNotes] = useState('')
+  const [savingNode, setSavingNode] = useState(false)
+  const [nodeError, setNodeError] = useState('')
+  const [connectingNodeId, setConnectingNodeId] = useState<string | null>(null)
+  const [checkingNodeId, setCheckingNodeId] = useState<string | null>(null)
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
+  const [cloudInstances, setCloudInstances] = useState<CloudC2Instance[]>([])
+  const [cloudSettingsOpen, setCloudSettingsOpen] = useState(false)
+  const [awsAccessKey, setAwsAccessKey] = useState('')
+  const [awsSecretKey, setAwsSecretKey] = useState('')
+  const [awsRegion, setAwsRegion] = useState('us-east-1')
+  const [savingCloudCreds, setSavingCloudCreds] = useState(false)
+  const [cloudStatus, setCloudStatus] = useState<{ configured: boolean; valid?: boolean; account_id?: string; error?: string } | null>(null)
+  const [launchFormOpen, setLaunchFormOpen] = useState(false)
+  const [launchName, setLaunchName] = useState('')
+  const [launchRegion, setLaunchRegion] = useState('us-east-1')
+  const [launchC2Type, setLaunchC2Type] = useState<'msf' | 'sliver'>('msf')
+  const [launchInstanceType, setLaunchInstanceType] = useState('t3.medium')
+  const [launchingInstance, setLaunchingInstance] = useState(false)
+  const [provisionInstanceId, setProvisionInstanceId] = useState<string | null>(null)
+  const [provisionLog, setProvisionLog] = useState<string[]>([])
+  const provisionWsRef = useRef<WebSocket | null>(null)
+  const provisionLogRef = useRef<HTMLDivElement>(null)
+
   // Terminal input
   const [termInput, setTermInput] = useState('')
 
@@ -486,6 +522,7 @@ export default function C2Console() {
   useEffect(() => {
     if (activeTab === 'listeners') loadListeners()
     if (activeTab === 'lotl') loadLotl()
+    if (activeTab === 'infra') { loadC2Nodes(); loadCloudInstances() }
   }, [activeTab])
 
   async function checkStatus() {
@@ -505,6 +542,107 @@ export default function C2Console() {
       const data = await res.json()
       setLotlLib(data.categories || [])
     }
+  }
+
+  async function loadC2Nodes() {
+    setLoadingNodes(true)
+    try {
+      const [nodesRes, activeRes] = await Promise.all([
+        fetch(`${getApiBase()}/c2/nodes`),
+        fetch(`${getApiBase()}/c2/nodes/active`),
+      ])
+      if (nodesRes.ok) setC2Nodes(await nodesRes.json())
+      if (activeRes.ok) { const d = await activeRes.json(); setActiveNodeId(d.node_id ?? null) }
+    } finally { setLoadingNodes(false) }
+  }
+
+  async function loadCloudInstances() {
+    const res = await fetch(`${getApiBase()}/cloud/instances`)
+    if (res.ok) setCloudInstances(await res.json())
+  }
+
+  async function handleAddNode() {
+    if (!nodeFormName || !nodeFormHost) { setNodeError('Name and host are required.'); return }
+    setSavingNode(true); setNodeError('')
+    try {
+      const res = await fetch(`${getApiBase()}/c2/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nodeFormName, c2_type: nodeFormType, host: nodeFormHost, port: parseInt(nodeFormPort) || 55553, password: nodeFormPass, ssl: nodeFormSsl, notes: nodeFormNotes }),
+      })
+      if (!res.ok) { const d = await res.json(); setNodeError(d.detail ?? 'Failed to save node'); return }
+      await loadC2Nodes()
+      setAddNodeOpen(false)
+      setNodeFormName(''); setNodeFormHost(''); setNodeFormPass(''); setNodeFormNotes('')
+    } finally { setSavingNode(false) }
+  }
+
+  async function handleDeleteNode(id: string) {
+    await fetch(`${getApiBase()}/c2/nodes/${id}`, { method: 'DELETE' })
+    await loadC2Nodes()
+  }
+
+  async function handleConnectNode(id: string) {
+    setConnectingNodeId(id)
+    try {
+      const res = await fetch(`${getApiBase()}/c2/nodes/${id}/connect`, { method: 'POST' })
+      if (res.ok) { setActiveNodeId(id); await checkStatus() }
+    } finally { setConnectingNodeId(null) }
+  }
+
+  async function handleCheckNode(id: string) {
+    setCheckingNodeId(id)
+    try {
+      await fetch(`${getApiBase()}/c2/nodes/${id}/check`, { method: 'POST' })
+      await loadC2Nodes()
+    } finally { setCheckingNodeId(null) }
+  }
+
+  async function handleSaveCloudCreds() {
+    setSavingCloudCreds(true)
+    try {
+      const res = await fetch(`${getApiBase()}/cloud/aws/credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_key: awsAccessKey, secret_key: awsSecretKey, region: awsRegion }),
+      })
+      if (res.ok) {
+        const statusRes = await fetch(`${getApiBase()}/cloud/aws/status`)
+        if (statusRes.ok) setCloudStatus(await statusRes.json())
+      }
+    } finally { setSavingCloudCreds(false) }
+  }
+
+  async function handleLaunchEC2() {
+    if (!launchName) return
+    setLaunchingInstance(true); setProvisionLog([])
+    try {
+      const res = await fetch(`${getApiBase()}/cloud/instances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: launchName, c2_type: launchC2Type, region: launchRegion, instance_type: launchInstanceType }),
+      })
+      if (!res.ok) { const d = await res.json(); setProvisionLog([`Error: ${d.detail ?? 'Launch failed'}`]); return }
+      const { instance_db_id } = await res.json()
+      setProvisionInstanceId(instance_db_id)
+      setLaunchFormOpen(false)
+      const ws = new WebSocket(`${getWsBase()}/ws/cloud/provision/${instance_db_id}`)
+      provisionWsRef.current = ws
+      ws.onmessage = e => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.type === 'stdout' || msg.type === 'log') {
+            setProvisionLog(p => [...p, msg.data])
+            setTimeout(() => { provisionLogRef.current?.scrollTo(0, provisionLogRef.current.scrollHeight) }, 50)
+          }
+          if (msg.type === 'done' || msg.type === 'exit') {
+            loadCloudInstances(); loadC2Nodes()
+          }
+        } catch { setProvisionLog(p => [...p, e.data]) }
+      }
+      ws.onerror = () => setProvisionLog(p => [...p, '[WebSocket error]'])
+      ws.onclose = () => { provisionWsRef.current = null; loadCloudInstances(); loadC2Nodes() }
+    } finally { setLaunchingInstance(false) }
   }
 
   async function loadSessions() {
@@ -1116,6 +1254,7 @@ export default function C2Console() {
               { id: 'loot', icon: <Icon name="layers" size={13} />, label: `Loot (${loot.length})` },
               { id: 'postex', icon: <Icon name="check" size={13} />, label: 'Post-Ex' },
               { id: 'lotl', icon: <Icon name="book" size={13} />, label: 'LOTL' },
+              { id: 'infra', icon: <Icon name="layers" size={13} />, label: 'Infrastructure' },
             ] as const).map(tab => (
               <button
                 key={tab.id}
@@ -2239,6 +2378,282 @@ export default function C2Console() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Infrastructure tab */}
+        {activeTab === 'infra' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 24px 0' }}>
+
+            {/* C2 Node Registry */}
+            <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, margin: '16px 0', overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Icon name="radio" size={14} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>C2 Node Registry</span>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => { c2Nodes.forEach(n => handleCheckNode(n.id)) }}
+                    className="btn btn-sm btn-ghost"
+                    disabled={c2Nodes.length === 0}
+                  >Check All</button>
+                  <button
+                    onClick={() => setAddNodeOpen(o => !o)}
+                    className="btn btn-sm"
+                  ><Icon name="plus" size={11} /> Add Node</button>
+                </div>
+              </div>
+
+              {addNodeOpen && (
+                <div style={{ padding: 16, borderBottom: rule, background: 'rgba(240,168,58,0.03)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {nodeError && <div style={{ fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>{nodeError}</div>}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>NAME</label>
+                      <input value={nodeFormName} onChange={e => setNodeFormName(e.target.value)} placeholder="My MSF Server" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>TYPE</label>
+                      <select value={nodeFormType} onChange={e => setNodeFormType(e.target.value as 'msf' | 'sliver')} style={{ width: '100%', padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: rule, color: 'var(--fg)' }}>
+                        <option value="msf">Metasploit (msfrpcd)</option>
+                        <option value="sliver">Sliver</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>HOST</label>
+                      <input value={nodeFormHost} onChange={e => setNodeFormHost(e.target.value)} placeholder="192.168.1.100" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>PORT</label>
+                      <input value={nodeFormPort} onChange={e => setNodeFormPort(e.target.value)} placeholder="55553" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>PASSWORD</label>
+                      <input type="password" value={nodeFormPass} onChange={e => setNodeFormPass(e.target.value)} placeholder="RPC password" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-2)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={nodeFormSsl} onChange={e => setNodeFormSsl(e.target.checked)} />
+                        SSL / TLS
+                      </label>
+                    </div>
+                  </div>
+                  <input value={nodeFormNotes} onChange={e => setNodeFormNotes(e.target.value)} placeholder="Notes (optional)" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={handleAddNode} disabled={savingNode} className="btn btn-sm btn-primary">{savingNode ? 'Saving…' : 'Save Node'}</button>
+                    <button onClick={() => { setAddNodeOpen(false); setNodeError('') }} className="btn btn-sm btn-ghost">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {loadingNodes ? (
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading…</div>
+              ) : c2Nodes.length === 0 ? (
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No C2 nodes registered. Add one above or launch an EC2 instance below.</div>
+              ) : (
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th style={{ width: 80 }}>Type</th>
+                      <th style={{ width: 180 }}>Host : Port</th>
+                      <th style={{ width: 90 }}>Status</th>
+                      <th style={{ width: 70 }}>Source</th>
+                      <th style={{ width: 140 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c2Nodes.map(n => {
+                      const isActive = n.id === activeNodeId
+                      const statusColor = n.status === 'connected' ? 'var(--ok)' : n.status === 'unreachable' ? 'var(--crit)' : n.status === 'pending' ? 'var(--accent)' : 'var(--fg-3)'
+                      return (
+                        <tr key={n.id} style={{ background: isActive ? 'rgba(84,175,97,0.04)' : undefined }}>
+                          <td style={{ fontWeight: 500 }}>
+                            {n.name}
+                            {isActive && <span style={{ fontSize: 9, marginLeft: 8, color: 'var(--ok)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>active</span>}
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: n.c2_type === 'msf' ? 'var(--accent)' : '#a78bfa', background: n.c2_type === 'msf' ? 'rgba(240,168,58,0.1)' : 'rgba(167,139,250,0.1)', border: `1px solid ${n.c2_type === 'msf' ? 'rgba(240,168,58,0.3)' : 'rgba(167,139,250,0.3)'}` }}>{n.c2_type}</span>
+                          </td>
+                          <td className="mono" style={{ fontSize: 11 }}>{n.host}:{n.port}</td>
+                          <td>
+                            <span style={{ fontSize: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: statusColor }}>{n.status}</span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{n.source}</span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button
+                                onClick={() => handleCheckNode(n.id)}
+                                disabled={checkingNodeId === n.id}
+                                className="btn btn-sm btn-ghost"
+                                style={{ fontSize: 10 }}
+                              >{checkingNodeId === n.id ? '…' : 'Check'}</button>
+                              <button
+                                onClick={() => handleConnectNode(n.id)}
+                                disabled={connectingNodeId === n.id || isActive}
+                                className="btn btn-sm"
+                                style={{ fontSize: 10, color: 'var(--ok)', borderColor: 'rgba(84,175,97,0.4)' }}
+                              >{connectingNodeId === n.id ? 'Connecting…' : isActive ? 'Connected' : 'Connect'}</button>
+                              <button
+                                onClick={() => handleDeleteNode(n.id)}
+                                className="btn btn-sm btn-ghost"
+                                style={{ fontSize: 10, color: 'var(--crit)' }}
+                              >Del</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* AWS EC2 Provisioning */}
+            <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: rule, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Icon name="layers" size={14} style={{ color: '#a78bfa' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>AWS EC2 C2 Nodes</span>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  <button onClick={() => setCloudSettingsOpen(o => !o)} className="btn btn-sm btn-ghost" style={{ fontSize: 10 }}>AWS Settings</button>
+                  <button onClick={() => setLaunchFormOpen(o => !o)} className="btn btn-sm" style={{ fontSize: 10, color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' }}>
+                    <Icon name="plus" size={11} /> Launch EC2 Node
+                  </button>
+                </div>
+              </div>
+
+              {cloudSettingsOpen && (
+                <div style={{ padding: 16, borderBottom: rule, background: 'rgba(167,139,250,0.03)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 180px', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>ACCESS KEY ID</label>
+                      <input type="password" value={awsAccessKey} onChange={e => setAwsAccessKey(e.target.value)} placeholder="AKIAIOSFODNN7EXAMPLE" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>SECRET ACCESS KEY</label>
+                      <input type="password" value={awsSecretKey} onChange={e => setAwsSecretKey(e.target.value)} placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>REGION</label>
+                      <select value={awsRegion} onChange={e => setAwsRegion(e.target.value)} style={{ width: '100%', padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: rule, color: 'var(--fg)' }}>
+                        {['us-east-1','us-east-2','us-west-1','us-west-2','eu-west-1','eu-west-2','eu-central-1','ap-southeast-1','ap-southeast-2','ap-northeast-1','sa-east-1','ca-central-1'].map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={handleSaveCloudCreds} disabled={savingCloudCreds || !awsAccessKey || !awsSecretKey} className="btn btn-sm">{savingCloudCreds ? 'Saving…' : 'Save & Verify'}</button>
+                    {cloudStatus && (
+                      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: cloudStatus.valid ? 'var(--ok)' : 'var(--crit)' }}>
+                        {cloudStatus.valid ? `Account: ${cloudStatus.account_id}` : cloudStatus.error ?? 'Invalid credentials'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {launchFormOpen && (
+                <div style={{ padding: 16, borderBottom: rule, background: 'rgba(167,139,250,0.03)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>NODE NAME</label>
+                      <input value={launchName} onChange={e => setLaunchName(e.target.value)} placeholder="c2-node-1" style={{ width: '100%', padding: '6px 10px', fontSize: 12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>C2 TYPE</label>
+                      <select value={launchC2Type} onChange={e => setLaunchC2Type(e.target.value as 'msf' | 'sliver')} style={{ width: '100%', padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: rule, color: 'var(--fg)' }}>
+                        <option value="msf">Metasploit</option>
+                        <option value="sliver">Sliver</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>REGION</label>
+                      <select value={launchRegion} onChange={e => setLaunchRegion(e.target.value)} style={{ width: '100%', padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: rule, color: 'var(--fg)' }}>
+                        {['us-east-1','us-east-2','us-west-1','us-west-2','eu-west-1','eu-west-2','eu-central-1','ap-southeast-1','ap-southeast-2','ap-northeast-1'].map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>INSTANCE TYPE</label>
+                      <select value={launchInstanceType} onChange={e => setLaunchInstanceType(e.target.value)} style={{ width: '100%', padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: rule, color: 'var(--fg)' }}>
+                        <option value="t3.micro">t3.micro (free tier)</option>
+                        <option value="t3.small">t3.small</option>
+                        <option value="t3.medium">t3.medium (Recommended)</option>
+                        <option value="t3.large">t3.large</option>
+                        <option value="c5.xlarge">c5.xlarge</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={handleLaunchEC2} disabled={launchingInstance || !launchName} className="btn btn-sm" style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' }}>
+                      {launchingInstance ? 'Launching…' : 'Launch EC2 Instance'}
+                    </button>
+                    <button onClick={() => setLaunchFormOpen(false)} className="btn btn-sm btn-ghost">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {provisionLog.length > 0 && (
+                <div style={{ borderBottom: rule }}>
+                  <div style={{ padding: '8px 16px', borderBottom: rule, background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                      {provisionInstanceId ? `Provisioning ${provisionInstanceId}` : 'Provision Log'}
+                    </span>
+                    <button onClick={() => setProvisionLog([])} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', marginLeft: 'auto', padding: 0 }}>
+                      <Icon name="x" size={12} />
+                    </button>
+                  </div>
+                  <div ref={provisionLogRef} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', padding: 12, maxHeight: 200, overflowY: 'auto', background: 'var(--bg)', lineHeight: 1.6 }}>
+                    {provisionLog.map((line, i) => <div key={i}>{line}</div>)}
+                  </div>
+                </div>
+              )}
+
+              {cloudInstances.length === 0 ? (
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No cloud instances. Configure AWS credentials and launch an EC2 node above.</div>
+              ) : (
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th style={{ width: 80 }}>C2 Type</th>
+                      <th style={{ width: 130 }}>Instance ID</th>
+                      <th style={{ width: 120 }}>Public IP</th>
+                      <th style={{ width: 80 }}>Region</th>
+                      <th style={{ width: 100 }}>Status</th>
+                      <th style={{ width: 60 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cloudInstances.map(inst => {
+                      const statusColor = inst.status === 'ready' ? 'var(--ok)' : inst.status === 'error' ? 'var(--crit)' : inst.status === 'running' || inst.status === 'configuring' ? 'var(--accent)' : 'var(--fg-3)'
+                      return (
+                        <tr key={inst.id}>
+                          <td style={{ fontWeight: 500, fontSize: 12 }}>{inst.name}</td>
+                          <td>
+                            <span style={{ fontSize: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: inst.c2_type === 'msf' ? 'var(--accent)' : '#a78bfa' }}>{inst.c2_type}</span>
+                          </td>
+                          <td className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{inst.instance_id || '—'}</td>
+                          <td className="mono" style={{ fontSize: 11 }}>{inst.public_ip ?? '—'}</td>
+                          <td className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{inst.region}</td>
+                          <td>
+                            <span style={{ fontSize: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: statusColor }}>{inst.status}</span>
+                          </td>
+                          <td>
+                            <button
+                              onClick={() => fetch(`${getApiBase()}/cloud/instances/${inst.id}`, { method: 'DELETE' }).then(() => loadCloudInstances())}
+                              className="btn btn-sm btn-ghost"
+                              style={{ fontSize: 10, color: 'var(--crit)' }}
+                              title="Terminate instance"
+                            >Term</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
           </div>
         )}
 

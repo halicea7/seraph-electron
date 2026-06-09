@@ -219,12 +219,13 @@ const NAV_ITEMS: { id: string; label: string }[] = [
   { id: 'tools',      label: 'Tools' },
   { id: 'ai',         label: 'AI' },
   { id: 'msf',        label: 'Metasploit RPC' },
+  { id: 'nessus',     label: 'Nessus' },
   { id: 'env',        label: 'Environment' },
   { id: 'passkeys',   label: 'Passkeys' },
   { id: 'demo',       label: 'Demo Data' },
 ]
 
-type NavId = 'users' | 'appearance' | 'tools' | 'ai' | 'msf' | 'env' | 'passkeys' | 'demo'
+type NavId = 'users' | 'appearance' | 'tools' | 'ai' | 'msf' | 'nessus' | 'env' | 'passkeys' | 'demo'
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,18 @@ export default function Settings() {
   const [webhookSaving, setWebhookSaving] = useState(false)
   const [webhookError, setWebhookError] = useState('')
   const [webhookTestId, setWebhookTestId] = useState<string | null>(null)
+
+  // Nessus integration
+  const [nessusHost, setNessusHost] = useState('')
+  const [nessusPort, setNessusPort] = useState('8834')
+  const [nessusUsername, setNessusUsername] = useState('')
+  const [nessusPassword, setNessusPassword] = useState('')
+  const [nessusVerifySsl, setNessusVerifySsl] = useState(false)
+  const [nessusApiAccessKey, setNessusApiAccessKey] = useState('')
+  const [nessusApiSecretKey, setNessusApiSecretKey] = useState('')
+  const [nessusSaving, setNessusSaving] = useState(false)
+  const [nessusTesting, setNessusTesting] = useState(false)
+  const [nessusStatus, setNessusStatus] = useState<{ configured: boolean; connected: boolean; error: string | null } | null>(null)
 
   // Demo
   const [demoActive, setDemoActive] = useState(false)
@@ -1125,6 +1138,121 @@ export default function Settings() {
     )
   }
 
+  function renderNessus() {
+    async function saveNessusConfig() {
+      setNessusSaving(true)
+      try {
+        const isTenable = nessusHost.trim() === 'api.tenable.com'
+        await fetch(`${getApiBase()}/nessus/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            host: nessusHost.trim(),
+            port: parseInt(nessusPort) || 8834,
+            username: nessusUsername,
+            password: nessusPassword,
+            verify_ssl: nessusVerifySsl,
+            api_access_key: isTenable ? nessusApiAccessKey : '',
+            api_secret_key: isTenable ? nessusApiSecretKey : '',
+          }),
+        })
+      } finally {
+        setNessusSaving(false)
+      }
+    }
+
+    async function testNessusConnection() {
+      setNessusTesting(true)
+      try {
+        const res = await fetch(`${getApiBase()}/nessus/status`)
+        const data = await res.json()
+        setNessusStatus(data)
+      } finally {
+        setNessusTesting(false)
+      }
+    }
+
+    const isTenable = nessusHost.trim() === 'api.tenable.com'
+
+    return (
+      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Section title="NESSUS / TENABLE INTEGRATION">
+          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+              Connect to a self-hosted Nessus instance or Tenable.io. Import scan results as Seraph findings from the All Findings page.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field label="Host">
+                <input
+                  type="text"
+                  value={nessusHost}
+                  onChange={e => setNessusHost(e.target.value)}
+                  placeholder="192.168.1.50 or api.tenable.com"
+                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                />
+              </Field>
+              <Field label="Port">
+                <input
+                  type="text"
+                  value={nessusPort}
+                  onChange={e => setNessusPort(e.target.value)}
+                  placeholder="8834"
+                  style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+                  disabled={isTenable}
+                />
+              </Field>
+              {!isTenable && (
+                <>
+                  <Field label="Username">
+                    <input type="text" value={nessusUsername} onChange={e => setNessusUsername(e.target.value)} placeholder="admin" style={inputStyle} />
+                  </Field>
+                  <Field label="Password">
+                    <input type="password" value={nessusPassword} onChange={e => setNessusPassword(e.target.value)} placeholder="••••••••" style={inputStyle} />
+                  </Field>
+                  <Field label="Verify SSL">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+                      <button onClick={() => setNessusVerifySsl(v => !v)} style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: nessusVerifySsl ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer' }}>
+                        <span style={{ position: 'absolute', top: 2, left: nessusVerifySsl ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{nessusVerifySsl ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                  </Field>
+                </>
+              )}
+              {isTenable && (
+                <>
+                  <Field label="API Access Key">
+                    <input type="password" value={nessusApiAccessKey} onChange={e => setNessusApiAccessKey(e.target.value)} placeholder="Tenable.io access key" style={inputStyle} />
+                  </Field>
+                  <Field label="API Secret Key">
+                    <input type="password" value={nessusApiSecretKey} onChange={e => setNessusApiSecretKey(e.target.value)} placeholder="Tenable.io secret key" style={inputStyle} />
+                  </Field>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={saveNessusConfig} disabled={nessusSaving} className="btn btn-primary">
+                {nessusSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
+              </button>
+              <button onClick={testNessusConnection} disabled={nessusTesting} className="btn">
+                {nessusTesting ? <Loader size={13} className="animate-spin" /> : <Icon name="wifi" size={13} />} Test Connection
+              </button>
+              {nessusStatus && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                  {nessusStatus.connected
+                    ? <><CheckCircle size={13} color="var(--ok)" /> <span style={{ color: 'var(--ok)' }}>Connected</span></>
+                    : <><XCircle size={13} color="var(--err)" /> <span style={{ color: 'var(--err)' }}>{nessusStatus.error || 'Unreachable'}</span></>
+                  }
+                </span>
+              )}
+            </div>
+            {isTenable && <div style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>Tenable.io detected — API key auth mode</div>}
+          </div>
+        </Section>
+      </div>
+    )
+  }
+
   function renderEnv() {
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1431,6 +1559,7 @@ export default function Settings() {
       case 'tools':      return renderTools()
       case 'ai':         return renderAi()
       case 'msf':        return renderMsf()
+      case 'nessus':     return renderNessus()
       case 'env':        return renderEnv()
       case 'passkeys':   return renderPasskeys()
       case 'demo':       return renderDemo()
@@ -1479,6 +1608,7 @@ export default function Settings() {
                 {item.id === 'tools'      && <Icon name="terminal"    size={13} color="currentColor" />}
                 {item.id === 'ai'         && <Brain size={13} />}
                 {item.id === 'msf'        && <Icon name="zap"         size={13} color="currentColor" />}
+                {item.id === 'nessus'     && <Icon name="scan"        size={13} color="currentColor" />}
                 {item.id === 'env'        && <Monitor size={13} />}
                 {item.id === 'passkeys'   && <Icon name="fingerprint" size={13} color="currentColor" />}
                 {item.id === 'demo'       && <FlaskConical size={13} />}

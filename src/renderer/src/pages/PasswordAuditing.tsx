@@ -166,6 +166,19 @@ export default function PasswordAuditing() {
   const [liveOutput, setLiveOutput] = useState('')
   const outputRef = useRef<HTMLDivElement>(null)
 
+  interface CrackingServer { id: string; name: string; host: string; port: number; ssh_user: string; remote_workdir: string }
+  const [crackingServers, setCrackingServers] = useState<CrackingServer[]>([])
+  const [selectedServerId, setSelectedServerId] = useState('')
+  const [remoteWordlist, setRemoteWordlist] = useState('')
+  const [serversOpen, setServersOpen] = useState(false)
+  const [srvFormName, setSrvFormName] = useState('')
+  const [srvFormHost, setSrvFormHost] = useState('')
+  const [srvFormPort, setSrvFormPort] = useState('22')
+  const [srvFormUser, setSrvFormUser] = useState('root')
+  const [srvFormWorkdir, setSrvFormWorkdir] = useState('/tmp/seraph_crack')
+  const [savingSrv, setSavingSrv] = useState(false)
+  const [srvError, setSrvError] = useState('')
+
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
@@ -197,6 +210,33 @@ export default function PasswordAuditing() {
     fetch(`${getApiBase()}/cracking/wordlists/available`).then(r => r.json()).then(setBundles)
   }
 
+  function loadCrackingServers() {
+    fetch(`${getApiBase()}/cracking/servers`).then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setCrackingServers(data)
+    }).catch(() => {})
+  }
+
+  async function handleAddServer() {
+    if (!srvFormName || !srvFormHost) { setSrvError('Name and host are required.'); return }
+    setSavingSrv(true); setSrvError('')
+    try {
+      const res = await fetch(`${getApiBase()}/cracking/servers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: srvFormName, host: srvFormHost, port: parseInt(srvFormPort) || 22, ssh_user: srvFormUser, remote_workdir: srvFormWorkdir }),
+      })
+      if (!res.ok) { const d = await res.json(); setSrvError(d.detail ?? 'Failed to save'); return }
+      loadCrackingServers()
+      setSrvFormName(''); setSrvFormHost('')
+    } finally { setSavingSrv(false) }
+  }
+
+  async function handleDeleteServer(id: string) {
+    await fetch(`${getApiBase()}/cracking/servers/${id}`, { method: 'DELETE' })
+    if (selectedServerId === id) setSelectedServerId('')
+    loadCrackingServers()
+  }
+
   function loadTools() {
     fetch(`${getApiBase()}/cracking/tools`).then(r => r.json()).then(data => {
       setTools(data)
@@ -207,6 +247,7 @@ export default function PasswordAuditing() {
   useEffect(() => {
     loadTools()
     loadBundles()
+    loadCrackingServers()
   }, [])
 
   useEffect(() => {
@@ -288,6 +329,8 @@ export default function PasswordAuditing() {
         wordlist: wl,
         mask,
         credential_ids: selectedCredIds,
+        server_id: selectedServerId || '',
+        remote_wordlist: remoteWordlist || '',
       }),
     })
 
@@ -527,8 +570,28 @@ export default function PasswordAuditing() {
                 </Field>
               )}
 
+              {/* Run on */}
+              <Field label="Run On">
+                <select
+                  value={selectedServerId}
+                  onChange={e => setSelectedServerId(e.target.value)}
+                  style={selStyle}
+                >
+                  <option value="">Local (this machine)</option>
+                  {crackingServers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.host})</option>)}
+                </select>
+                {selectedServerId && (
+                  <input
+                    value={remoteWordlist}
+                    onChange={e => setRemoteWordlist(e.target.value)}
+                    style={{ ...selStyle, marginTop: 6 }}
+                    placeholder="Wordlist path on remote server (e.g. /opt/wordlists/rockyou.txt)"
+                  />
+                )}
+              </Field>
+
               {/* Wordlist */}
-              {attackMode !== '3' && (
+              {attackMode !== '3' && !selectedServerId && (
                 <Field label="Wordlist">
                   {tools && tools.wordlists.length > 0 && (
                     <select value={wordlist} onChange={e => setWordlist(e.target.value)} style={{ ...selStyle, marginBottom: 6 }}>
@@ -624,6 +687,61 @@ export default function PasswordAuditing() {
                 </Field>
               )}
             </div>
+          </Section>
+
+          {/* Remote Cracking Servers */}
+          <Section
+            title="REMOTE SERVERS"
+            right={
+              <button onClick={() => setServersOpen(o => !o)} className="btn btn-sm btn-ghost" style={{ fontSize: 10 }}>
+                {serversOpen ? 'Hide' : 'Manage'}
+              </button>
+            }
+          >
+            {serversOpen && (
+              <div style={{ padding: '0 var(--pad) 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {srvError && <div style={{ fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-mono)' }}>{srvError}</div>}
+                {crackingServers.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {crackingServers.map(s => (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg)', border: ruleStrong, borderRadius: 3 }}>
+                        <span className="mono" style={{ fontSize: 11, flex: 1 }}>{s.name}</span>
+                        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{s.ssh_user}@{s.host}:{s.port}</span>
+                        <button onClick={() => handleDeleteServer(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--crit)', padding: 0 }}>
+                          <Icon name="x" size={12} color="currentColor" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>No remote servers configured.</p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: 6 }}>
+                    <input value={srvFormName} onChange={e => setSrvFormName(e.target.value)} placeholder="Server name" style={selStyle} />
+                    <input value={srvFormPort} onChange={e => setSrvFormPort(e.target.value)} placeholder="Port" style={selStyle} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 6 }}>
+                    <input value={srvFormHost} onChange={e => setSrvFormHost(e.target.value)} placeholder="Host / IP" style={selStyle} />
+                    <input value={srvFormUser} onChange={e => setSrvFormUser(e.target.value)} placeholder="SSH user" style={selStyle} />
+                  </div>
+                  <input value={srvFormWorkdir} onChange={e => setSrvFormWorkdir(e.target.value)} placeholder="Remote workdir" style={selStyle} />
+                  <button onClick={handleAddServer} disabled={savingSrv} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                    <Icon name="plus" size={11} color="currentColor" /> {savingSrv ? 'Saving…' : 'Add Server'}
+                  </button>
+                </div>
+              </div>
+            )}
+            {!serversOpen && crackingServers.length > 0 && (
+              <div style={{ padding: '0 var(--pad) 10px' }}>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{crackingServers.length} server{crackingServers.length !== 1 ? 's' : ''} configured</span>
+              </div>
+            )}
+            {!serversOpen && crackingServers.length === 0 && (
+              <div style={{ padding: '0 var(--pad) 10px' }}>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-4)' }}>None — jobs run locally</span>
+              </div>
+            )}
           </Section>
 
           {/* Live output */}

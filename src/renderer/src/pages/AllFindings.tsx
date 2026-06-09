@@ -1151,6 +1151,15 @@ export default function AllFindings() {
   const [ruleTitleContains, setRuleTitleContains] = useState('')
   const [ruleSaving, setRuleSaving] = useState(false)
 
+  interface NessusScan { id: number; name: string; status: string; last_modification_date: number; host_count: number }
+  const [showNessusModal, setShowNessusModal] = useState(false)
+  const [nessusScans, setNessusScans] = useState<NessusScan[]>([])
+  const [nessusLoadingScans, setNessusLoadingScans] = useState(false)
+  const [nessusImportingId, setNessusImportingId] = useState<number | null>(null)
+  const [nessusImportResult, setNessusImportResult] = useState<{ scan_ids: string[]; findings_created: number; hosts_processed: number } | null>(null)
+  const [nessusImportError, setNessusImportError] = useState('')
+  const [nessusImportProjectId, setNessusImportProjectId] = useState(projectId)
+
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false)
@@ -1305,6 +1314,46 @@ export default function AllFindings() {
     setFpRules(prev => prev.filter(r => r.id !== ruleId))
   }
 
+  async function openNessusModal() {
+    setShowNessusModal(true)
+    setNessusImportResult(null)
+    setNessusImportError('')
+    setNessusImportProjectId(projectId)
+    setNessusLoadingScans(true)
+    if (ruleProjects.length === 0) {
+      fetch(`${getApiBase()}/projects`).then(r => r.json()).then((data: ProjectOpt[]) => {
+        setRuleProjects(data)
+        if (!projectId && data.length > 0) setNessusImportProjectId(data[0].id)
+      }).catch(() => {})
+    }
+    try {
+      const res = await fetch(`${getApiBase()}/nessus/scans`)
+      if (!res.ok) { const d = await res.json(); setNessusImportError(d.detail ?? 'Failed to fetch scans'); setNessusScans([]); return }
+      setNessusScans(await res.json())
+    } catch { setNessusImportError('Could not connect to Nessus. Check Settings → Nessus.') }
+    finally { setNessusLoadingScans(false) }
+  }
+
+  async function handleNessusImport(nessusScanId: number) {
+    if (!nessusImportProjectId) { setNessusImportError('Select a project first.'); return }
+    setNessusImportingId(nessusScanId)
+    setNessusImportResult(null)
+    setNessusImportError('')
+    try {
+      const res = await fetch(`${getApiBase()}/nessus/scans/${nessusScanId}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: nessusImportProjectId }),
+      })
+      if (!res.ok) { const d = await res.json(); setNessusImportError(d.detail ?? 'Import failed'); return }
+      const data = await res.json()
+      setNessusImportResult(data)
+      const url = projectId ? `${getApiBase()}/findings?project_id=${projectId}` : `${getApiBase()}/findings`
+      fetch(url).then(r => r.json()).then(setFindings).catch(() => {})
+    } catch { setNessusImportError('Import request failed.') }
+    finally { setNessusImportingId(null) }
+  }
+
   const filtered = findings.filter(f => {
     if (!showFp && f.status === 'false_positive') return false
     if (sevFilter !== 'all' && f.severity !== sevFilter) return false
@@ -1349,6 +1398,9 @@ export default function AllFindings() {
               style={showFp ? { color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' } : {}}
             >
               <EyeOff size={11} /> {showFp ? 'Hide FPs' : 'Show FPs'}
+            </button>
+            <button onClick={openNessusModal} className="btn btn-ghost">
+              <Icon name="scan" size={11} color="currentColor" /> Nessus
             </button>
             <div style={{ position: 'relative' }} ref={exportRef}>
               <button onClick={() => setExportOpen(o => !o)} className="btn">
@@ -1564,6 +1616,90 @@ export default function AllFindings() {
       )}
 
       {/* FP Modal */}
+      {showNessusModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
+          <div style={{ width: '100%', maxWidth: 640, background: 'var(--bg-2)', border: rule, padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', margin: 0, fontFamily: 'var(--font-mono)' }}>Import from Nessus</h2>
+              <button onClick={() => setShowNessusModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)' }}><X size={14} /></button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ fontSize: 11, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>Import to project:</label>
+              <select
+                value={nessusImportProjectId}
+                onChange={e => setNessusImportProjectId(e.target.value)}
+                style={{ background: 'var(--bg)', border: rule, padding: '4px 8px', fontSize: 11, color: 'var(--fg)', outline: 'none', flex: 1 }}
+              >
+                {ruleProjects.length > 0
+                  ? ruleProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                  : projectId
+                    ? <option value={projectId}>{sp?.name ?? 'Current project'}</option>
+                    : <option value="">— select project —</option>
+                }
+              </select>
+            </div>
+            {nessusImportError && (
+              <div style={{ fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-mono)', background: 'rgba(232,64,64,0.08)', border: '1px solid rgba(232,64,64,0.2)', padding: '8px 12px' }}>
+                {nessusImportError}
+              </div>
+            )}
+            {nessusImportResult && (
+              <div style={{ fontSize: 11, color: 'var(--ok)', fontFamily: 'var(--font-mono)', background: 'rgba(84,175,97,0.08)', border: '1px solid rgba(84,175,97,0.2)', padding: '8px 12px' }}>
+                Imported {nessusImportResult.findings_created} findings from {nessusImportResult.hosts_processed} host(s).
+              </div>
+            )}
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {nessusLoadingScans ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading scans…</div>
+              ) : nessusScans.length === 0 && !nessusImportError ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No scans found on the configured Nessus server.</div>
+              ) : (
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Scan Name</th>
+                      <th style={{ width: 80 }}>Hosts</th>
+                      <th style={{ width: 90 }}>Status</th>
+                      <th style={{ width: 90 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nessusScans.map(s => (
+                      <tr key={s.id}>
+                        <td style={{ fontSize: 12 }}>{s.name}</td>
+                        <td className="mono tnum" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{s.host_count}</td>
+                        <td>
+                          <span style={{
+                            fontSize: 9, fontWeight: 600, padding: '2px 7px', letterSpacing: '0.06em',
+                            fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+                            color: s.status === 'completed' ? 'var(--ok)' : 'var(--fg-3)',
+                            background: s.status === 'completed' ? 'rgba(84,175,97,0.08)' : 'rgba(100,116,139,0.08)',
+                            border: `1px solid ${s.status === 'completed' ? 'rgba(84,175,97,0.25)' : 'rgba(100,116,139,0.2)'}`,
+                          }}>{s.status}</span>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => handleNessusImport(s.id)}
+                            disabled={nessusImportingId !== null || !nessusImportProjectId}
+                            className="btn btn-sm"
+                            style={{ fontSize: 10 }}
+                          >
+                            {nessusImportingId === s.id ? 'Importing…' : 'Import'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowNessusModal(false)} className="btn btn-ghost">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {fpModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
           <div style={{ width: '100%', maxWidth: 480, background: 'var(--bg-2)', border: rule, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
