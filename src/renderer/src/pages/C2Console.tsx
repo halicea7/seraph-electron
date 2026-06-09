@@ -522,7 +522,10 @@ export default function C2Console() {
   useEffect(() => {
     if (activeTab === 'listeners') loadListeners()
     if (activeTab === 'lotl') loadLotl()
-    if (activeTab === 'infra') { loadC2Nodes(); loadCloudInstances() }
+    if (activeTab === 'infra') {
+      loadC2Nodes(); loadCloudInstances()
+      fetch(`${getApiBase()}/cloud/aws/status`).then(r => r.ok ? r.json() : null).then(d => { if (d) setCloudStatus(d) }).catch(() => {})
+    }
   }, [activeTab])
 
   async function checkStatus() {
@@ -552,7 +555,7 @@ export default function C2Console() {
         fetch(`${getApiBase()}/c2/nodes/active`),
       ])
       if (nodesRes.ok) setC2Nodes(await nodesRes.json())
-      if (activeRes.ok) { const d = await activeRes.json(); setActiveNodeId(d.node_id ?? null) }
+      if (activeRes.ok) { const d = await activeRes.json(); setActiveNodeId(d.active_node_id ?? null) }
     } finally { setLoadingNodes(false) }
   }
 

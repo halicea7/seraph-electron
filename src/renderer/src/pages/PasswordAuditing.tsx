@@ -167,6 +167,7 @@ export default function PasswordAuditing() {
   const outputRef = useRef<HTMLDivElement>(null)
 
   interface CrackingServer { id: string; name: string; host: string; port: number; ssh_user: string; remote_workdir: string }
+  interface SshKeyCredential { id: string; username: string; notes: string }
   const [crackingServers, setCrackingServers] = useState<CrackingServer[]>([])
   const [selectedServerId, setSelectedServerId] = useState('')
   const [remoteWordlist, setRemoteWordlist] = useState('')
@@ -176,6 +177,8 @@ export default function PasswordAuditing() {
   const [srvFormPort, setSrvFormPort] = useState('22')
   const [srvFormUser, setSrvFormUser] = useState('root')
   const [srvFormWorkdir, setSrvFormWorkdir] = useState('/tmp/seraph_crack')
+  const [srvFormKeyCredId, setSrvFormKeyCredId] = useState('')
+  const [sshKeyCredentials, setSshKeyCredentials] = useState<SshKeyCredential[]>([])
   const [savingSrv, setSavingSrv] = useState(false)
   const [srvError, setSrvError] = useState('')
 
@@ -216,6 +219,12 @@ export default function PasswordAuditing() {
     }).catch(() => {})
   }
 
+  function loadSshCredentials() {
+    fetch(`${getApiBase()}/credentials`).then(r => r.json()).then((data: any[]) => {
+      if (Array.isArray(data)) setSshKeyCredentials(data.filter(c => c.cred_type === 'key').map(c => ({ id: c.id, username: c.username, notes: c.notes || '' })))
+    }).catch(() => {})
+  }
+
   async function handleAddServer() {
     if (!srvFormName || !srvFormHost) { setSrvError('Name and host are required.'); return }
     setSavingSrv(true); setSrvError('')
@@ -223,7 +232,7 @@ export default function PasswordAuditing() {
       const res = await fetch(`${getApiBase()}/cracking/servers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: srvFormName, host: srvFormHost, port: parseInt(srvFormPort) || 22, ssh_user: srvFormUser, remote_workdir: srvFormWorkdir }),
+        body: JSON.stringify({ name: srvFormName, host: srvFormHost, port: parseInt(srvFormPort) || 22, ssh_user: srvFormUser, remote_workdir: srvFormWorkdir, key_credential_id: srvFormKeyCredId || null }),
       })
       if (!res.ok) { const d = await res.json(); setSrvError(d.detail ?? 'Failed to save'); return }
       loadCrackingServers()
@@ -693,7 +702,7 @@ export default function PasswordAuditing() {
           <Section
             title="REMOTE SERVERS"
             right={
-              <button onClick={() => setServersOpen(o => !o)} className="btn btn-sm btn-ghost" style={{ fontSize: 10 }}>
+              <button onClick={() => { setServersOpen(o => { if (!o) loadSshCredentials(); return !o }) }} className="btn btn-sm btn-ghost" style={{ fontSize: 10 }}>
                 {serversOpen ? 'Hide' : 'Manage'}
               </button>
             }
@@ -726,6 +735,10 @@ export default function PasswordAuditing() {
                     <input value={srvFormUser} onChange={e => setSrvFormUser(e.target.value)} placeholder="SSH user" style={selStyle} />
                   </div>
                   <input value={srvFormWorkdir} onChange={e => setSrvFormWorkdir(e.target.value)} placeholder="Remote workdir" style={selStyle} />
+                  <select value={srvFormKeyCredId} onChange={e => setSrvFormKeyCredId(e.target.value)} style={selStyle}>
+                    <option value="">SSH key — select from vault (optional)</option>
+                    {sshKeyCredentials.map(c => <option key={c.id} value={c.id}>{c.username}{c.notes ? ` · ${c.notes}` : ''}</option>)}
+                  </select>
                   <button onClick={handleAddServer} disabled={savingSrv} className="btn btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
                     <Icon name="plus" size={11} color="currentColor" /> {savingSrv ? 'Saving…' : 'Add Server'}
                   </button>

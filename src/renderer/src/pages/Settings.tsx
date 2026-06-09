@@ -221,7 +221,7 @@ const NAV_ITEMS: { id: string; label: string }[] = [
   { id: 'msf',        label: 'Metasploit RPC' },
   { id: 'nessus',     label: 'Nessus' },
   { id: 'env',        label: 'Environment' },
-  { id: 'passkeys',   label: 'Passkeys' },
+  { id: 'passkeys',   label: 'Access & Integrations' },
   { id: 'demo',       label: 'Demo Data' },
 ]
 
@@ -373,6 +373,10 @@ export default function Settings() {
       loadDemoStatus()
     }
   }, [])
+
+  useEffect(() => {
+    if (activeNav === 'nessus') loadNessusConfig()
+  }, [activeNav])
 
   // ── API functions ─────────────────────────────────────────────────────────
 
@@ -673,6 +677,18 @@ export default function Settings() {
     } catch { /* ignore */ }
   }
 
+  async function loadNessusConfig() {
+    try {
+      const res = await fetch(`${getApiBase()}/nessus/config`)
+      if (!res.ok) return
+      const d = await res.json()
+      if (d.host) setNessusHost(d.host)
+      if (d.port) setNessusPort(String(d.port))
+      if (d.username) setNessusUsername(d.username)
+      setNessusVerifySsl(!!d.verify_ssl)
+    } catch { /* ignore */ }
+  }
+
   async function saveMsfConfig() {
     setMsfSaving(true)
     try {
@@ -896,6 +912,57 @@ export default function Settings() {
             })}
           </div>
         </Section>
+
+        <Section title="AUTO-PROBE"
+          right={
+            <button
+              onClick={() => setProbeEnabled(v => !v)}
+              style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: probeEnabled ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+            >
+              <span style={{ position: 'absolute', top: 2, left: probeEnabled ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+            </button>
+          }
+        >
+          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', lineHeight: 1.6 }}>
+              Automatically run a recon chain when a new target is added to a project. Runs in the background and creates findings.
+            </p>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' }}>Intensity</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['quick', 'standard', 'deep'] as const).map(v => (
+                  <button key={v} onClick={() => setProbeIntensity(v)}
+                    style={{ padding: '4px 14px', fontSize: 11, fontFamily: 'var(--font-sans)', textTransform: 'capitalize', cursor: 'pointer', background: probeIntensity === v ? 'var(--accent-2)' : 'var(--bg)', border: probeIntensity === v ? '1px solid var(--accent)' : ruleStrong, color: probeIntensity === v ? 'var(--accent)' : 'var(--fg-2)' }}
+                  >{v}</button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' }}>Tools</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {['whois', 'rustscan', 'nmap', 'nikto', 'testssl', 'nuclei', 'feroxbuster'].map(t => {
+                  const active = probeTools.includes(t)
+                  return (
+                    <button key={t} onClick={() => toggleProbeTool(t)}
+                      style={{ padding: '3px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer', background: active ? 'rgba(84,175,97,0.08)' : 'var(--bg)', border: active ? '1px solid rgba(84,175,97,0.35)' : ruleStrong, color: active ? 'var(--ok)' : 'var(--fg-3)' }}
+                    >
+                      {active && <CheckCircle size={9} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />}
+                      {t}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <button onClick={saveProbeConfig} disabled={probeSaving} className="btn btn-primary">
+                {probeSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
+              </button>
+            </div>
+          </div>
+        </Section>
       </div>
     )
   }
@@ -1107,31 +1174,22 @@ export default function Settings() {
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Section title="METASPLOIT RPC">
-          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Field label="Host">
-                <input type="text" value={msfHost} onChange={e => setMsfHost(e.target.value)} placeholder="127.0.0.1" style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
-              </Field>
-              <Field label="Port">
-                <input type="text" value={msfPort} onChange={e => setMsfPort(e.target.value)} placeholder="55553" style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
-              </Field>
-              <Field label="Password">
-                <input type="password" value={msfPassword} onChange={e => setMsfPassword(e.target.value)} placeholder="msf_password" style={inputStyle} />
-              </Field>
-              <Field label="SSL">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-                  <button onClick={() => setMsfSsl(v => !v)} style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: msfSsl ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer' }}>
-                    <span style={{ position: 'absolute', top: 2, left: msfSsl ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
-                  </button>
-                  <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>{msfSsl ? 'Enabled' : 'Disabled'}</span>
+          <div style={{ padding: '20px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 4, background: 'rgba(240,168,58,0.08)', border: '1px solid rgba(240,168,58,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name="zap" size={16} color="var(--accent)" />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--fg)', fontFamily: 'var(--font-sans)', fontWeight: 500, marginBottom: 6 }}>MSF connections are managed in the C2 Console</div>
+                <div style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', lineHeight: 1.6, maxWidth: 460 }}>
+                  Use the <strong style={{ color: 'var(--fg-2)' }}>Infrastructure</strong> tab in C2 Console to add, connect, and manage Metasploit RPC nodes.
+                  Multiple nodes can be registered, checked, and switched between — with encrypted credential storage.
                 </div>
-              </Field>
+              </div>
             </div>
-            <div>
-              <button onClick={saveMsfConfig} disabled={msfSaving} className="btn btn-primary">
-                {msfSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
-              </button>
-            </div>
+            <button onClick={() => navigate('/c2')} className="btn btn-primary">
+              <Icon name="zap" size={13} color="currentColor" /> Open C2 Console
+            </button>
           </div>
         </Section>
       </div>
@@ -1357,85 +1415,7 @@ export default function Settings() {
             </div>
           </div>
         </Section>
-      </div>
-    )
-  }
 
-  function renderDemo() {
-    return (
-      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Section title="DEMO DATA">
-          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', lineHeight: 1.6 }}>
-              Populate the platform with three realistic demo projects — external pentest, web app audit, and internal network assessment — with targets, findings, credentials, and vulnerabilities. Turning off removes all demo data cleanly.
-            </p>
-            {demoError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{demoError}</p>}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {demoActive ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px rgba(240,168,58,0.8)' }} /> Demo mode active — 3 projects seeded
-                </span>
-              ) : (
-                <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Demo mode off</span>
-              )}
-              <button onClick={handleDemoToggle} disabled={demoLoading} className={demoActive ? 'btn btn-danger' : 'btn btn-primary'}>
-                {demoLoading ? <Loader size={13} className="animate-spin" /> : <FlaskConical size={13} />}
-                {demoLoading ? (demoActive ? 'Clearing…' : 'Seeding…') : (demoActive ? 'Remove demo data' : 'Load demo data')}
-              </button>
-            </div>
-          </div>
-        </Section>
-
-        {/* Appearance (grouped here for convenience) */}
-        <Section title="APPEARANCE">
-          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Field label="Accent Color">
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {[
-                  { value: 'amber' as const,          label: 'Amber',          color: '#f0a83a' },
-                  { value: 'signal-red' as const,     label: 'Signal Red',     color: '#e85c4e' },
-                  { value: 'cyan' as const,            label: 'Cyan',           color: '#5fb6c4' },
-                  { value: 'electric-green' as const,  label: 'Electric Green', color: '#8ad26b' },
-                  { value: 'violet' as const,          label: 'Violet',         color: '#b794f6' },
-                ].map(opt => (
-                  <button key={opt.value} onClick={() => setAccent(opt.value)} title={opt.label}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: accent === opt.value ? `${opt.color}18` : 'var(--bg)', border: accent === opt.value ? `1px solid ${opt.color}` : ruleStrong, cursor: 'pointer', fontSize: 11, color: accent === opt.value ? opt.color : 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}
-                  >
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: opt.color }} /> {opt.label}
-                    {accent === opt.value && <CheckCircle size={10} />}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Background">
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[
-                  { value: 'paper' as const,      label: 'Paper Dark',  swatch: '#0d0c0a' },
-                  { value: 'true-black' as const, label: 'True Black',  swatch: '#000000' },
-                  { value: 'midnight' as const,   label: 'Midnight',    swatch: '#07091a' },
-                ].map(opt => (
-                  <button key={opt.value} onClick={() => setBg(opt.value)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: bg === opt.value ? 'var(--accent-2)' : 'var(--bg)', border: bg === opt.value ? '1px solid var(--accent)' : ruleStrong, cursor: 'pointer', fontSize: 11, color: bg === opt.value ? 'var(--accent)' : 'var(--fg-2)', fontFamily: 'var(--font-sans)' }}
-                  >
-                    <span style={{ width: 10, height: 10, border: '1px solid var(--rule-strong)', background: opt.swatch }} /> {opt.label}
-                    {bg === opt.value && <CheckCircle size={10} />}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Density">
-              <div style={{ display: 'flex', gap: 8 }}>
-                {(['compact', 'standard', 'roomy'] as const).map(v => (
-                  <button key={v} onClick={() => setDensity(v)}
-                    style={{ padding: '4px 14px', fontSize: 11, background: density === v ? 'var(--accent-2)' : 'var(--bg)', border: density === v ? '1px solid var(--accent)' : ruleStrong, cursor: 'pointer', color: density === v ? 'var(--accent)' : 'var(--fg-2)', fontFamily: 'var(--font-sans)', textTransform: 'capitalize' }}
-                  >{v}</button>
-                ))}
-              </div>
-            </Field>
-          </div>
-        </Section>
-
-        {/* Webhooks */}
         <Section title="WEBHOOKS">
           <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {webhookError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{webhookError}</p>}
@@ -1478,6 +1458,35 @@ export default function Settings() {
             )}
           </div>
         </Section>
+      </div>
+    )
+  }
+
+  function renderDemo() {
+    return (
+      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Section title="DEMO DATA">
+          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', lineHeight: 1.6 }}>
+              Populate the platform with three realistic demo projects — external pentest, web app audit, and internal network assessment — with targets, findings, credentials, and vulnerabilities. Turning off removes all demo data cleanly.
+            </p>
+            {demoError && <p style={{ margin: 0, fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-sans)' }}>{demoError}</p>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {demoActive ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-sans)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px rgba(240,168,58,0.8)' }} /> Demo mode active — 3 projects seeded
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>Demo mode off</span>
+              )}
+              <button onClick={handleDemoToggle} disabled={demoLoading} className={demoActive ? 'btn btn-danger' : 'btn btn-primary'}>
+                {demoLoading ? <Loader size={13} className="animate-spin" /> : <FlaskConical size={13} />}
+                {demoLoading ? (demoActive ? 'Clearing…' : 'Seeding…') : (demoActive ? 'Remove demo data' : 'Load demo data')}
+              </button>
+            </div>
+          </div>
+        </Section>
+
       </div>
     )
   }

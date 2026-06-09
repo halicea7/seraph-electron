@@ -268,6 +268,30 @@ Every hour   →  0 * * * *`}</Block>
           </>
         ),
       },
+      {
+        id: 'ciscat',
+        title: 'CIS-CAT Report Import',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Import CIS-CAT benchmark assessment output directly into Seraph as findings. Supported formats: <Cmd>.xml</Cmd> (XCCDF), <Cmd>.json</Cmd> (CIS-CAT JSON), and <Cmd>.csv</Cmd>.
+            </p>
+            <Steps items={[
+              'In Audit Builder, scroll to the "Import CIS-CAT Report" section',
+              'Select the project and target to import into',
+              'Choose your CIS-CAT output file (.xml / .json / .csv)',
+              'Click "Import" — findings are created per failed rule with CIS-CAT metadata',
+            ]} />
+            <Bullets items={[
+              'Each failed rule becomes a Finding with severity "medium"; passed rules become "info" findings',
+              'All imported findings are tagged framework="CIS-CAT" and include the rule control_id',
+              'A summary card shows pass / fail / not-applicable counts after import',
+              'The created Scan is tagged scan_type="ciscat_import" so you can filter it in All Scans',
+            ]} />
+            <Tip>XCCDF files contain the richest metadata — descriptions and fix text are extracted automatically. For CSV files, columns Rule ID / Title / Result / Severity are expected.</Tip>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -424,6 +448,32 @@ Every hour   →  0 * * * *`}</Block>
           </p>
         ),
       },
+      {
+        id: 'remote-servers',
+        title: 'Remote Cracking Servers',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Offload cracking jobs to a remote GPU server over SSH. The cracking script is built locally and executed on the remote host — results stream back over the WebSocket connection and are written to the vault on completion.
+            </p>
+            <Steps items={[
+              'In the REMOTE SERVERS section, click "Manage" to open the server panel',
+              'Click "Add Server" — provide name, host/IP, SSH port, SSH user, and remote workdir',
+              'Select an SSH private key from the Credential Vault (type=key) — this is required for key-based auth',
+              'In the main cracking form, set "Run On" to your server instead of "Local"',
+              'Enter the full path to a wordlist already present on the remote server',
+              'Submit the job — the bash cracking script runs remotely; output streams in real time',
+            ]} />
+            <Bullets items={[
+              'The remote server needs hashcat or john installed at a standard path',
+              'SSH key credentials must be stored in Credential Vault before adding a server',
+              'Remote workdir (default /tmp/seraph_crack) is created automatically and cleaned after the job',
+              'Results after the === SERAPH_CRACKED_RESULTS === delimiter are parsed and written to vault',
+            ]} />
+            <Warning>Password-based SSH auth is not supported for remote cracking. You must select a private key credential from the vault.</Warning>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -503,6 +553,61 @@ Every hour   →  0 * * * *`}</Block>
               'The route appears in the table; click the trash icon to remove it',
             ]} />
             <Tip>After adding a route, tools like nmap and impacket can reach the internal subnet through the Meterpreter session without additional proxy configuration.</Tip>
+          </>
+        ),
+      },
+      {
+        id: 'infra-nodes',
+        title: 'C2 Node Registry',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              The <strong style={{ color: 'var(--fg)' }}>Infrastructure</strong> tab in C2 Console maintains a persistent registry of Metasploit RPC and Sliver C2 server connections. Multiple nodes can be registered and switched between without re-entering credentials each session.
+            </p>
+            <Steps items={[
+              'Open C2 Console → Infrastructure tab',
+              'Click "Add Node" to expand the registration form',
+              'Enter name, type (MSF or Sliver), host, port, and RPC password',
+              'Click "Save" — the node is stored encrypted in the vault',
+              'Click "Connect" on a node row to make it the active C2 — existing modules and sessions use this node',
+              'Click "Check" to ping the node\'s health without switching the active connection',
+            ]} />
+            <Bullets items={[
+              <>Node <Badge color="green">connected</Badge> badge marks the currently active node — shown in the tab header</>,
+              <>Nodes created by EC2 provisioning appear with a <Badge color="amber">ec2</Badge> source badge</>,
+              '"Check All" pings every registered node and updates their status simultaneously',
+              'Passwords are AES-256-GCM encrypted at rest — never stored in plaintext',
+            ]} />
+            <Note>MSF nodes connect via the msfrpcd RPC endpoint. Sliver nodes connect via the gRPC multiplayer API. Make sure the correct service is running on the remote host before connecting.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'infra-ec2',
+        title: 'AWS EC2 C2 Provisioning',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Spin up a cloud C2 node on AWS EC2 directly from the Infrastructure tab. Seraph launches an Ubuntu instance, installs and configures Metasploit or Sliver over SSH, then automatically registers it as a C2 node.
+            </p>
+            <Steps items={[
+              'In Infrastructure → AWS EC2 section, click "Cloud Settings"',
+              'Enter your AWS Access Key, Secret Key, and default region — click "Save & Verify"',
+              'Click "Launch New Instance" to expand the launch form',
+              'Choose region, instance type (t3.medium recommended), C2 type, and a name',
+              'Click "Launch" — a CloudC2Instance record is created immediately; a provision stream opens',
+              'Watch the stream: EC2 starts → SSH becomes available → install script runs → node registered',
+              'The new node appears in the C2 Node Registry above when provisioning completes',
+            ]} />
+            <Bullets items={[
+              'A dedicated EC2 key pair is generated per launch and stored encrypted in Credential Vault',
+              'A security group is created with the minimum required ports (22, 55553 for MSF, 31337/8443 for Sliver)',
+              'Provisioning uses Ubuntu 22.04 LTS — AMI IDs are hardcoded per region for reliability',
+              'The RPC password for the installed C2 service is randomly generated and stored encrypted',
+              'Provisioning timeout: 5 minutes to reach "running" state + 3 minutes for SSH availability',
+            ]} />
+            <Warning>AWS charges apply for running EC2 instances. Terminate instances you no longer need from the Instances table using the "Terminate" button — this calls the AWS API and updates the DB record.</Warning>
+            <Tip>t3.medium (2 vCPU, 4 GB RAM) is sufficient for most engagements. Use t3.large or c5.large for heavy multi-session work.</Tip>
           </>
         ),
       },
@@ -1176,6 +1281,34 @@ LMStudio default: http://localhost:1234`}</Block>
               'Stat card shows total sections indexed and last sync time',
             ]} />
             <Tip>PTES context is automatically appended to the AI Operator's system prompt (up to 2 relevant sections per query). This helps the AI follow standard pentest methodology steps rather than free-forming its approach.</Tip>
+          </>
+        ),
+      },
+      {
+        id: 'settings-nessus',
+        title: 'Nessus / Tenable.io Integration',
+        content: (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.7 }}>
+              Connect Seraph to a self-hosted Nessus instance or Tenable.io to import scan findings. Settings → Nessus stores the credentials; importing is done from the <strong style={{ color: 'var(--fg)' }}>All Findings</strong> page.
+            </p>
+            <Steps items={[
+              'Go to Settings → Nessus',
+              'For self-hosted Nessus: enter the host IP/hostname, port (default 8834), username, and password',
+              'For Tenable.io: type api.tenable.com as the host — the form switches to API key fields automatically',
+              'Click "Save", then "Test Connection" to verify',
+              'Navigate to All Findings → "Import from Nessus" button (top right)',
+              'A modal lists all scans from your Nessus instance — select a project and click "Import" on any scan',
+            ]} />
+            <Bullets items={[
+              'Auth is auto-detected: self-hosted uses session token (POST /session); Tenable.io uses X-ApiKeys header',
+              'Each Nessus host becomes a Target in the selected project (created if it doesn\'t exist)',
+              'Each vulnerability becomes a Finding with severity mapped from Nessus\'s 0–4 scale',
+              'All imported findings are tagged framework="Nessus" with the plugin_id as control_id',
+              'Passwords are stored encrypted in AppSettings — never in plaintext',
+            ]} />
+            <Note>For self-hosted Nessus with a self-signed certificate, disable "Verify SSL" in the settings form. Tenable.io always uses valid TLS.</Note>
+            <Tip>Re-importing a scan from the same Nessus instance does not duplicate Targets — existing targets with matching hostnames are reused.</Tip>
           </>
         ),
       },
