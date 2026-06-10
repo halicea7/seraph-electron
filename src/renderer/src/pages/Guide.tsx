@@ -4,6 +4,7 @@ import {
   Network, Lock, Terminal, KeyRound, FileText, Settings, Zap,
   BookOpen as Playbooks, ChevronRight, Info, AlertTriangle, Lightbulb,
   Bell, Command, GitCompare, Bot, Library, StickyNote,
+  Cpu, GitBranch, Eye, Radio, FileSearch, History, Bug,
 } from 'lucide-react'
 
 const rule = '1px solid var(--rule)'
@@ -1309,6 +1310,293 @@ LMStudio default: http://localhost:1234`}</Block>
             ]} />
             <Note>For self-hosted Nessus with a self-signed certificate, disable "Verify SSL" in the settings form. Tenable.io always uses valid TLS.</Note>
             <Tip>Re-importing a scan from the same Nessus instance does not duplicate Targets — existing targets with matching hostnames are reused.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'agents',
+    title: 'Infrastructure Agents',
+    icon: <Cpu size={15} />,
+    subsections: [
+      {
+        id: 'agents-overview',
+        title: 'What agents are',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              By default every scan runs on the machine hosting the Seraph backend. <strong style={{ color: 'var(--fg)' }}>Agents</strong> let you run those same scans from a different host — an EC2 instance inside a target VPC, a VPS in a foreign ASN, a Raspberry Pi on a client's internal network, or any other machine you control.
+            </p>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              The model is a lightweight pull-based beacon: the agent process on the remote host polls Seraph every 60 seconds asking for pending jobs. When you dispatch a scan, the agent picks it up, executes it locally, and ships results back automatically.
+            </p>
+            <Bullets items={[
+              'No inbound firewall rules needed on the remote host — the agent initiates all connections outbound',
+              'Results (findings, scan output) are ingested into the project exactly like local scans',
+              'Multiple agents can be registered simultaneously for different network vantage points',
+              'Each agent authenticates via a unique bearer token generated at creation time',
+            ]} />
+            <Note>If all your targets are directly reachable from the Seraph server you don't need agents at all — they are only useful when you need a different network origin for your scans.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'agents-deploy',
+        title: 'Deploying an agent',
+        content: (
+          <>
+            <Steps items={[
+              'Open Infrastructure Agents from the left nav',
+              'Click "New Agent" — give it a name and optionally link it to an existing target',
+              'Click "Deploy" on the new agent row to open the install instructions',
+              'Copy the one-liner install command and run it as root on the remote host',
+              'The installer sets up a systemd service — within 60 seconds the agent row turns Online',
+            ]} />
+            <Tip>The install URL uses a short-code so you don't need to paste a long token into a terminal. The same page shows an uninstall command to cleanly remove the service later.</Tip>
+            <Note>The remote host must be able to reach the Seraph backend URL over the network. If you are using Tailscale, any machine on your Tailscale network can run an agent without exposing the backend to the public internet.</Note>
+          </>
+        ),
+      },
+      {
+        id: 'agents-jobs',
+        title: 'Dispatching scan jobs',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Once an agent is online it appears as an available executor in scan dispatch flows. Select the agent instead of running locally and Seraph queues the job for the next poll cycle.
+            </p>
+            <Bullets items={[
+              <>Job status progresses: <Badge color="amber">pending</Badge> → <Badge color="cyan">running</Badge> → <Badge color="green">completed</Badge> or <Badge color="red">failed</Badge></>,
+              'Output and findings are returned automatically when the job completes',
+              'Click any job row in the agent detail panel to expand its full terminal output',
+              'Failed jobs retain their output — check it to diagnose tool errors on the remote host',
+            ]} />
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'attack-paths',
+    title: 'Attack Paths',
+    icon: <GitBranch size={15} />,
+    subsections: [
+      {
+        id: 'attack-paths-overview',
+        title: 'What the graph shows',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Attack Paths visualises the relationships between your attacker node, targets, active C2 sessions, and discovered findings as a directed graph. It answers the question: given what you know and what you've compromised, what are the viable paths to your objective?
+            </p>
+            <Bullets items={[
+              <>Edges are coloured by type: <Badge color="red">C2 implant</Badge> (active session), <Badge color="amber">exploit</Badge> (finding-backed), <Badge color="purple">cred-reuse</Badge> (lateral movement via credential)</>,
+              'Each edge shows the tool or username that enables the hop',
+              'Nodes show compromised status and finding severity at a glance',
+              'Sort chains by impact, complexity, or shortest path using the toolbar',
+            ]} />
+          </>
+        ),
+      },
+      {
+        id: 'attack-paths-chains',
+        title: 'Attack chains',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Below the graph, Seraph derives concrete attack chains — ordered sequences of steps from your current foothold to a target. Each chain includes the tool to use, CVSS impact score, and a copy-ready command for each step.
+            </p>
+            <Bullets items={[
+              'Click a chain to expand its step-by-step breakdown',
+              'Each step shows the specific finding or technique that enables it',
+              'Commands are pre-populated with target IPs from your project data',
+              'Use the sort controls to prioritise high-impact or shortest chains first',
+            ]} />
+            <Tip>Attack chains update as you add findings and establish new sessions — check this page after each exploitation phase to see what new paths have opened up.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'cve-watch',
+    title: 'CVE Watch',
+    icon: <Eye size={15} />,
+    subsections: [
+      {
+        id: 'cve-watch-overview',
+        title: 'Monitoring services for new CVEs',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              CVE Watch tracks a list of services and software versions you care about and surfaces new CVEs as they are published. It is primarily useful for ongoing monitoring engagements where you want to know as soon as a critical CVE drops for software running on your targets.
+            </p>
+            <Bullets items={[
+              'Add a watched service by entering a search term (e.g. "ProFTPD 1.3.5", "Apache 2.4.51")',
+              'Link the watch entry to a target in your project for context',
+              'Seraph periodically queries the CVE feed and stores matched CVE IDs against each watch entry',
+              <><Badge color="red">KEV</Badge> badge marks CVEs on CISA's Known Exploited Vulnerabilities catalogue — prioritise these</>,
+              'CVSS score and asset match count are shown per CVE row',
+            ]} />
+            <Note>CVE Watch checks runs on a background schedule. New entries may take up to the next scheduled interval before results populate.</Note>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'listeners',
+    title: 'Listeners',
+    icon: <Radio size={15} />,
+    subsections: [
+      {
+        id: 'listeners-overview',
+        title: 'Automated event listeners',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Listeners are rules that trigger automated actions based on time or observed conditions. They run in the background independent of the UI, making them useful for continuous monitoring and unattended engagement automation.
+            </p>
+            <Bullets items={[
+              <><Badge color="amber">Scheduled</Badge> — run a scan category against a target on a cron schedule (e.g. nightly recon)</>,
+              <><Badge color="cyan">Threshold</Badge> — fire when the finding count for a project crosses a defined number</>,
+              <><Badge color="green">Health Check</Badge> — ping a target on a schedule and record up/down state</>,
+              <><Badge color="purple">Agent Audit</Badge> — alert when a registered agent stops checking in (goes offline)</>,
+            ]} />
+          </>
+        ),
+      },
+      {
+        id: 'listeners-create',
+        title: 'Creating a listener',
+        content: (
+          <>
+            <Steps items={[
+              'Click "New Listener" and choose a type from the dropdown',
+              'Fill in the required fields — project, target (if applicable), and type-specific config',
+              'For Scheduled listeners: enter a cron expression and select the scan categories to run',
+              'For Threshold listeners: enter the finding count that should trigger the alert',
+              'Click Save — the listener starts in Running state immediately',
+            ]} />
+            <Bullets items={[
+              'Pause a listener temporarily without deleting it using the status toggle',
+              'The event log under each listener shows every time it fired, with outcome and detail message',
+              'Listeners survive backend restarts — they are persisted in the database and rescheduled on startup',
+            ]} />
+            <Tip>Use a nightly Scheduled listener on your most critical targets to catch configuration drift between active engagement phases.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'log-analysis',
+    title: 'Log Analysis',
+    icon: <FileSearch size={15} />,
+    subsections: [
+      {
+        id: 'log-analysis-overview',
+        title: 'Analysing log files',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Log Analysis accepts raw log text — paste it directly or upload a file — and runs two passes: pattern matching against a library of known malicious signatures, and IOC extraction to pull out every IP, domain, hash, email, and URL.
+            </p>
+            <Bullets items={[
+              'Paste log content into the text area or click Upload to load a file',
+              'Click Analyse — results appear immediately below without leaving the page',
+              'Pattern matches are grouped by severity (Critical → Low) with the matching line shown in context',
+              'IOCs are grouped by type: public IPs, private IPs, domains, MD5/SHA1/SHA256 hashes, emails, URLs',
+              'Click any IOC pill to copy it to the clipboard',
+            ]} />
+          </>
+        ),
+      },
+      {
+        id: 'log-analysis-iocs',
+        title: 'Using extracted IOCs',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              Extracted IOCs can be used directly in the rest of the engagement workflow.
+            </p>
+            <Bullets items={[
+              'Copy public IPs and add them as new targets in the relevant project',
+              'Feed extracted domains into the OSINT module for further enumeration',
+              'Hash IOCs can be looked up via threat intel feeds externally',
+              'Use the Scratchpad to build a running IOC list across multiple log files during an investigation',
+            ]} />
+            <Tip>Log Analysis is stateless — it does not save results. Copy or screenshot what you need before navigating away.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'timeline',
+    title: 'Timeline',
+    icon: <History size={15} />,
+    subsections: [
+      {
+        id: 'timeline-overview',
+        title: 'Engagement event history',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              The Timeline page shows a chronological log of everything that happened in an engagement: project and target creation, scan starts and completions, and findings discovered. It is useful for reconstructing the sequence of events after the fact and for including a timeline of activities in your final report.
+            </p>
+            <Bullets items={[
+              'Events are sorted newest-first by default — use the order toggle to reverse',
+              'Filter by event kind: All, Scans, Findings, or Project events',
+              'Finding events are colour-coded by severity — critical and high findings stand out immediately',
+              'Each event shows the associated target and a timestamp',
+              'The timeline updates in real time as new scans and findings are created',
+            ]} />
+            <Tip>Switch to the selected engagement using the left nav engagement selector before viewing the Timeline — it only shows events for the currently active project.</Tip>
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: 'vuln-tracker',
+    title: 'Vulnerability Tracker',
+    icon: <Bug size={15} />,
+    subsections: [
+      {
+        id: 'vuln-tracker-overview',
+        title: 'Structured vulnerability management',
+        content: (
+          <>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+              The Vulnerability Tracker is a structured record of confirmed vulnerabilities with a full remediation lifecycle. It sits alongside Findings (raw scan output) and gives you a place to manage the confirmed, deduplicated set of issues through to resolution.
+            </p>
+            <Bullets items={[
+              <>Status lifecycle: <Badge color="red">Open</Badge> → <Badge color="amber">In Progress</Badge> → <Badge color="green">Mitigated</Badge> — or close as <Badge>Accepted</Badge> / <Badge>False Positive</Badge></>,
+              'Each entry has CVSS score, CVE ID, affected asset, and a free-text remediation notes field',
+              'Tag entries for grouping and filtering (e.g. "web", "network", "ad")',
+              'Import directly from existing scan findings using the "Import from Findings" button',
+              'AI Remediation generates a specific fix recommendation for each vulnerability using the configured LLM',
+            ]} />
+          </>
+        ),
+      },
+      {
+        id: 'vuln-tracker-workflow',
+        title: 'Tracker workflow',
+        content: (
+          <>
+            <Steps items={[
+              'After a scan run, open Vulnerability Tracker and click "Import from Findings"',
+              'Select the findings you want to promote to tracked vulnerabilities',
+              'Set severity, CVSS, CVE ID and affected asset for each entry',
+              'During remediation, move entries to In Progress and add notes on the fix applied',
+              'After the client re-tests, mark confirmed fixes as Mitigated',
+              'Export the tracker state as part of your final report to show remediation progress',
+            ]} />
+            <Tip>Use "AI Remediation" on critical and high entries to get a tailored fix recommendation. The AI uses the vulnerability title, description, and affected asset to generate context-specific guidance.</Tip>
+            <Note>The Vulnerability Tracker is separate from the Findings list. Findings are raw scan output; the tracker is your curated, deduplicated view of confirmed issues with lifecycle state.</Note>
           </>
         ),
       },

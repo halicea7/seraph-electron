@@ -89,6 +89,9 @@ const TOOL_PKGS: Record<string, Partial<Record<string, string>>> = {
   'impacket-psexec':       { apt: 'python3-impacket', pip: 'impacket' },
   'impacket-wmiexec':      { apt: 'python3-impacket', pip: 'impacket' },
   responder:               { apt: 'responder' },
+  amass:                   { brew: 'amass' },
+  wafw00f:                 { pip: 'wafw00f' },
+  sherlock:                { pip: 'sherlock-project' },
 }
 
 interface ToolUsage { feature: string; detail: string }
@@ -125,6 +128,10 @@ const TOOL_INFO: Record<string, ToolInfoData> = {
   'impacket-psexec': { description: 'Impacket implementation of PsExec — remote execution via SMB.', usedIn: [{ feature: 'Pentest Workbench', detail: 'Active Directory engagement — exploitation phase' }] },
   'impacket-wmiexec': { description: 'Impacket WMI-based remote execution.', usedIn: [{ feature: 'Pentest Workbench', detail: 'Active Directory engagement — exploitation phase' }] },
   responder: { description: 'LLMNR/NBT-NS/mDNS poisoner. Captures NTLMv2 challenge/response hashes.', usedIn: [{ feature: 'Pentest Workbench', detail: 'Internal Network engagement — exploitation phase' }] },
+  oscap: { description: 'OpenSCAP — SCAP-based compliance scanner. Audits system configuration against CIS, DISA STIG, and PCI-DSS baselines.', usedIn: [{ feature: 'Hardening Module', detail: 'CIS-CAT style compliance scanning' }] },
+  amass: { description: 'OWASP Amass — in-depth DNS enumeration and network mapping using 20+ data sources.', usedIn: [{ feature: 'OSINT Module', detail: 'Deep subdomain enumeration and DNS graph mapping' }] },
+  wafw00f: { description: 'Web Application Firewall detection tool. Identifies the WAF product protecting a target web application.', usedIn: [{ feature: 'Tool Chains', detail: 'Reconnaissance phase for web application targets' }] },
+  sherlock: { description: 'Username OSINT tool. Searches 300+ social networks for a given username.', usedIn: [{ feature: 'OSINT Module', detail: 'Social media presence enumeration' }] },
 }
 
 const FEATURE_STYLES: Record<string, { color: string; background: string; border: string }> = {
