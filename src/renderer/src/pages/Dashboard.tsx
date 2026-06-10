@@ -989,7 +989,7 @@ export default function Dashboard() {
     setFindings([])
     setProjectSev({})
     setPhases([])
-    fetch(`${getApiBase()}/projects/${pid}/phases`)
+    fetch(`${getApiBase()}/projects/${pid}/phases`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (Array.isArray(d)) setPhases(d) })
       .catch(() => {})
