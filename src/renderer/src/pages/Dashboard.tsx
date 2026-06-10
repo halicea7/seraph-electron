@@ -989,8 +989,10 @@ export default function Dashboard() {
     setFindings([])
     setProjectSev({})
     setPhases([])
-    fetch(`${getApiBase()}/projects/${pid}/phases`)
-      .then(r => { console.log('[phases] status', r.status, 'ok', r.ok); return r.ok ? r.json() : r.text().then(t => { console.error('[phases] error body:', t); return null }) })
+    const phasesUrl = `${getApiBase()}/projects/${pid}/phases`
+    console.log('[phases] fetching', phasesUrl)
+    fetch(phasesUrl)
+      .then(r => { console.log('[phases] status', r.status, 'ok', r.ok); return r.ok ? r.json() : r.text().then(t => { console.error('[phases] error body:', t.slice(0, 200)); return null }) })
       .then(d => { console.log('[phases] data', d); if (Array.isArray(d)) setPhases(d) })
       .catch(e => console.error('[phases] fetch threw:', e))
     fetch(`${getApiBase()}/findings?project_id=${pid}`)
