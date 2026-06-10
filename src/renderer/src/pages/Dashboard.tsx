@@ -130,16 +130,7 @@ interface PhaseData {
   progress?: number
 }
 
-function PhasePipeline({ projectId }: { projectId: string | null }) {
-  const [phases, setPhases] = useState<PhaseData[]>([])
-
-  useEffect(() => {
-    if (!projectId) { setPhases([]); return }
-    fetch(`${getApiBase()}/projects/${projectId}/phases`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (Array.isArray(d)) setPhases(d) })
-      .catch(() => {})
-  }, [projectId])
+function PhasePipeline({ phases }: { phases: PhaseData[] }) {
 
   const borderColor = (s: PhaseData['status']) =>
     s === 'running' ? 'var(--warn)' : s === 'done' ? 'var(--ok)' : 'var(--rule-strong)'
@@ -147,7 +138,7 @@ function PhasePipeline({ projectId }: { projectId: string | null }) {
   if (phases.length === 0) return (
     <Section title="PHASE PIPELINE">
       <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-        {projectId ? 'No scans recorded yet.' : 'Select a project.'}
+        No scans recorded yet.
       </div>
     </Section>
   )
@@ -903,6 +894,7 @@ export default function Dashboard() {
   const [now, setNow] = useState(new Date())
   const [findings, setFindings] = useState<FindingRow[]>([])
   const [projectSev, setProjectSev] = useState<Record<string, number>>({})
+  const [phases, setPhases] = useState<PhaseData[]>([])
 
   const [probeToast, setProbeToast] = useState(false)
   const [probeToastFading, setProbeToastFading] = useState(false)
@@ -989,13 +981,18 @@ export default function Dashboard() {
     }
   }, [setProjects]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh project-specific findings + severity counts when engagement changes
+  // Refresh project-specific data when engagement changes
   useEffect(() => {
     projectIdRef.current = selectedProject?.id ?? null
-    if (!selectedProject?.id) { setFindings([]); setProjectSev({}); return }
+    if (!selectedProject?.id) { setFindings([]); setProjectSev({}); setPhases([]); return }
     const pid = selectedProject.id
     setFindings([])
     setProjectSev({})
+    setPhases([])
+    fetch(`${getApiBase()}/projects/${pid}/phases`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (Array.isArray(d)) setPhases(d) })
+      .catch(() => {})
     fetch(`${getApiBase()}/findings?project_id=${pid}`)
       .then(r => r.json())
       .then(d => {
@@ -1149,7 +1146,7 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', borderBottom: rule, minHeight: 0 }}>
         {/* Left column */}
         <div style={{ borderRight: rule }}>
-          <PhasePipeline projectId={projectId} />
+          <PhasePipeline phases={phases} />
           <FindingsPreview findings={findings} />
           <ProjectsList onNew={() => setShowProjectModal(true)} onNavigate={() => navigate('/pentest')} />
         </div>
