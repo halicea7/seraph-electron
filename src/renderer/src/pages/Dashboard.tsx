@@ -132,20 +132,15 @@ interface PhaseData {
 
 function PhasePipeline({ projectId }: { projectId: string | null }) {
   const [phases, setPhases] = useState<PhaseData[]>([])
+  const [phaseError, setPhaseError] = useState(false)
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId) { setPhases([]); setPhaseError(false); return }
+    setPhaseError(false)
     fetch(`${getApiBase()}/projects/${projectId}/phases`)
-      .then((r) => r.json())
-      .then((d: PhaseData[]) => setPhases(d))
-      .catch(() =>
-        setPhases([
-          { id: '1', name: 'Recon', status: 'done', tools: ['nmap', 'amass'], started: null, ended: null, progress: 100 },
-          { id: '2', name: 'Scan', status: 'running', tools: ['nikto', 'nessus'], started: null, ended: null, progress: 60 },
-          { id: '3', name: 'Exploit', status: 'pending', tools: ['msf', 'sqlmap'], started: null, ended: null, progress: 0 },
-          { id: '4', name: 'Post', status: 'pending', tools: ['bloodhound'], started: null, ended: null, progress: 0 },
-        ])
-      )
+      .then((r) => { if (!r.ok) throw new Error('not ok'); return r.json() })
+      .then((d: PhaseData[]) => { if (Array.isArray(d)) setPhases(d) })
+      .catch(() => { setPhases([]); setPhaseError(true) })
   }, [projectId])
 
   const borderColor = (s: PhaseData['status']) =>
@@ -153,7 +148,18 @@ function PhasePipeline({ projectId }: { projectId: string | null }) {
 
   return (
     <Section title="PHASE PIPELINE">
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${phases.length || 4}, 1fr)`, gap: 0 }}>
+      {phaseError && (
+        <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+          Backend unreachable — start the server to see phase data.
+        </div>
+      )}
+      {!phaseError && phases.length === 0 && projectId && (
+        <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+          No scans recorded yet — run scans to track phase progress.
+        </div>
+      )}
+      {phases.length > 0 && (
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${phases.length}, 1fr)`, gap: 0 }}>
         {phases.map((ph, i) => (
           <div
             key={ph.id}
@@ -198,6 +204,7 @@ function PhasePipeline({ projectId }: { projectId: string | null }) {
           </div>
         ))}
       </div>
+      )}
     </Section>
   )
 }
