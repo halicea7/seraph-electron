@@ -172,7 +172,7 @@ export default function Ticker({ backendOnline }: { backendOnline: boolean | nul
             <EventItem ev={tel.events[rotIdx % tel.events.length]} onClick={() => navigate(tel.events[rotIdx % tel.events.length].to)} />
           </div>
         ) : (
-          <div className="ticker-track" style={{ animationDuration: '48s', paddingLeft: 16 }}>
+          <div className="ticker-track" style={{ animationDuration: '90s', paddingLeft: 16 }}>
             {doubled.map((ev, i) => (
               <span key={`${ev.id}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 16 }}>
                 <span style={{ color: 'var(--fg-4)' }}>◆</span>
