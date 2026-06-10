@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import type React from 'react'
-import { X, Plus, Trash2, ChevronDown, ChevronRight, Shield } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, ChevronRight, Shield, Database } from 'lucide-react'
+import { getApiBase } from '@/lib/config'
+
+interface NessusScanItem { id: number; name: string; status: string; host_count: number }
+interface NessusHostItem { host_id: number; hostname: string; critical: number; high: number; medium: number; low: number; info: number }
 
 interface TargetInput {
   hostname_or_ip: string
@@ -16,7 +20,7 @@ interface ScopeData {
 
 interface ProjectModalProps {
   onClose: () => void
-  onSave: (project: { name: string; description: string }, targets: TargetInput[], scope: ScopeData) => Promise<void>
+  onSave: (project: { name: string; description: string }, targets: TargetInput[], scope: ScopeData, nessusData?: { scan_id: number; host_ids: number[] }) => Promise<void>
 }
 
 const TARGET_TYPES = [
@@ -49,6 +53,17 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Nessus seed
+  const [nessusExpanded, setNessusExpanded] = useState(false)
+  const [nessusStep, setNessusStep] = useState<'scans' | 'hosts'>('scans')
+  const [nessusScans, setNessusScans] = useState<NessusScanItem[]>([])
+  const [nessusLoadingScans, setNessusLoadingScans] = useState(false)
+  const [nessusError, setNessusError] = useState('')
+  const [nessusSelectedScan, setNessusSelectedScan] = useState<NessusScanItem | null>(null)
+  const [nessusScanHosts, setNessusScanHosts] = useState<NessusHostItem[]>([])
+  const [nessusLoadingHosts, setNessusLoadingHosts] = useState(false)
+  const [nessusSelectedHostIds, setNessusSelectedHostIds] = useState<Set<number>>(new Set())
+
   function addTarget() {
     setTargets(prev => [...prev, { hostname_or_ip: '', target_type: 'linux_host', ports: '', notes: '' }])
   }
@@ -73,13 +88,45 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
     setScope(s => ({ ...s, [type]: s[type].filter((_, i) => i !== idx) }))
   }
 
+  async function openNessusSection() {
+    setNessusExpanded(true)
+    if (nessusScans.length > 0) return
+    setNessusLoadingScans(true)
+    setNessusError('')
+    try {
+      const res = await fetch(`${getApiBase()}/nessus/scans`)
+      if (!res.ok) { setNessusError('Failed to load scans. Check Settings → Nessus.'); return }
+      setNessusScans(await res.json())
+    } catch { setNessusError('Could not reach backend.') }
+    finally { setNessusLoadingScans(false) }
+  }
+
+  async function selectNessusScan(scan: NessusScanItem) {
+    setNessusSelectedScan(scan)
+    setNessusStep('hosts')
+    setNessusLoadingHosts(true)
+    setNessusError('')
+    try {
+      const res = await fetch(`${getApiBase()}/nessus/scans/${scan.id}`)
+      if (!res.ok) { setNessusError('Failed to load hosts.'); return }
+      const data = await res.json()
+      const hosts: NessusHostItem[] = data.hosts || []
+      setNessusScanHosts(hosts)
+      setNessusSelectedHostIds(new Set(hosts.map(h => h.host_id)))
+    } catch { setNessusError('Failed to load hosts.') }
+    finally { setNessusLoadingHosts(false) }
+  }
+
   async function handleSave() {
     if (!name.trim()) { setError('Project name is required'); return }
     const validTargets = targets.filter(t => t.hostname_or_ip.trim())
+    const nessusData = nessusExpanded && nessusSelectedScan && nessusSelectedHostIds.size > 0
+      ? { scan_id: nessusSelectedScan.id, host_ids: [...nessusSelectedHostIds] }
+      : undefined
     setSaving(true)
     setError('')
     try {
-      await onSave({ name: name.trim(), description: description.trim() }, validTargets, scope)
+      await onSave({ name: name.trim(), description: description.trim() }, validTargets, scope, nessusData)
       onClose()
     } catch (e: any) {
       setError(e.message || 'Failed to save project')
@@ -228,6 +275,113 @@ export default function ProjectModal({ onClose, onSave }: ProjectModalProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Nessus Seed */}
+          <div>
+            <button
+              type="button"
+              onClick={() => nessusExpanded ? setNessusExpanded(false) : openNessusSection()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.14em', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+            >
+              {nessusExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <Database size={12} style={{ color: 'var(--accent)' }} /> Seed from Nessus Scan (optional)
+            </button>
+            {nessusExpanded && (
+              <div style={{ marginTop: 10, background: 'var(--bg)', border: '1px solid var(--rule)', padding: 12 }}>
+                {nessusError && (
+                  <div style={{ fontSize: 11, color: 'var(--crit)', fontFamily: 'var(--font-mono)', marginBottom: 10 }}>{nessusError}</div>
+                )}
+
+                {/* Step: scan list */}
+                {nessusStep === 'scans' && (
+                  nessusLoadingScans ? (
+                    <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>Loading scans…</div>
+                  ) : nessusScans.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>No scans found. Configure Nessus in Settings first.</div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--rule)' }}>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Scan</th>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-3)', width: 60 }}>Hosts</th>
+                          <th style={{ width: 70 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nessusScans.map(s => (
+                          <tr key={s.id} style={{ borderBottom: '1px solid var(--rule-2)', cursor: 'pointer' }} onClick={() => selectNessusScan(s)}>
+                            <td style={{ padding: '6px 8px', color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{s.name}</td>
+                            <td style={{ padding: '6px 8px', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>{s.host_count}</td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <button type="button" onClick={e => { e.stopPropagation(); selectNessusScan(s) }}
+                                style={{ fontSize: 10, padding: '2px 8px', background: 'none', border: '1px solid var(--rule-strong)', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                                Select →
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
+                )}
+
+                {/* Step: host selection */}
+                {nessusStep === 'hosts' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button type="button" onClick={() => { setNessusStep('scans'); setNessusSelectedScan(null) }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 11, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
+                        ← Back
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-sans)' }}>{nessusSelectedScan?.name}</span>
+                    </div>
+                    {nessusLoadingHosts ? (
+                      <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>Loading hosts…</div>
+                    ) : (
+                      <>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--rule)' }}>
+                              <th style={{ width: 28, padding: '4px 6px' }}>
+                                <input type="checkbox"
+                                  checked={nessusSelectedHostIds.size === nessusScanHosts.length && nessusScanHosts.length > 0}
+                                  onChange={e => setNessusSelectedHostIds(e.target.checked ? new Set(nessusScanHosts.map(h => h.host_id)) : new Set())}
+                                />
+                              </th>
+                              <th style={{ textAlign: 'left', padding: '4px 6px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-3)', textTransform: 'uppercase' }}>Host</th>
+                              <th style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--crit)' }}>C</th>
+                              <th style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: '#f97316' }}>H</th>
+                              <th style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)' }}>M</th>
+                              <th style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ok)' }}>L</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {nessusScanHosts.map(h => (
+                              <tr key={h.host_id} style={{ borderBottom: '1px solid var(--rule-2)', cursor: 'pointer' }}
+                                onClick={() => setNessusSelectedHostIds(prev => { const n = new Set(prev); n.has(h.host_id) ? n.delete(h.host_id) : n.add(h.host_id); return n })}>
+                                <td style={{ padding: '5px 6px' }} onClick={e => e.stopPropagation()}>
+                                  <input type="checkbox" checked={nessusSelectedHostIds.has(h.host_id)}
+                                    onChange={() => setNessusSelectedHostIds(prev => { const n = new Set(prev); n.has(h.host_id) ? n.delete(h.host_id) : n.add(h.host_id); return n })} />
+                                </td>
+                                <td style={{ padding: '5px 6px', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{h.hostname}</td>
+                                <td style={{ textAlign: 'center', color: h.critical > 0 ? 'var(--crit)' : 'var(--fg-4)' }}>{h.critical || '—'}</td>
+                                <td style={{ textAlign: 'center', color: h.high > 0 ? '#f97316' : 'var(--fg-4)' }}>{h.high || '—'}</td>
+                                <td style={{ textAlign: 'center', color: h.medium > 0 ? 'var(--accent)' : 'var(--fg-4)' }}>{h.medium || '—'}</td>
+                                <td style={{ textAlign: 'center', color: h.low > 0 ? 'var(--ok)' : 'var(--fg-4)' }}>{h.low || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                          {nessusSelectedHostIds.size}/{nessusScanHosts.length} hosts selected — will be imported as targets after project is created
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

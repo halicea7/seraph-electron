@@ -215,6 +215,7 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
     proj: { name: string; description: string },
     targets: any[],
     scope: any,
+    nessusData?: { scan_id: number; host_ids: number[] },
   ) {
     const res = await fetch(`${getApiBase()}/projects`, {
       method: 'POST',
@@ -224,13 +225,22 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
     if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
     const newProject = await res.json()
 
-    // Create targets if any
+    // Create manually-entered targets if any
     for (const t of targets) {
       if (!t.hostname_or_ip.trim()) continue
       await fetch(`${getApiBase()}/projects/${newProject.id}/targets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(t),
+      })
+    }
+
+    // Import selected Nessus hosts if provided
+    if (nessusData) {
+      await fetch(`${getApiBase()}/nessus/scans/${nessusData.scan_id}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: newProject.id, host_ids: nessusData.host_ids }),
       })
     }
 

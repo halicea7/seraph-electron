@@ -1123,7 +1123,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 // ── Main AllFindings page ──────────────────────────────────────────────────────
 
 export default function AllFindings() {
-  const { selectedProject: sp } = useAppStore()
+  const { selectedProject: sp, addProject, setSelectedProject: setStoreProject } = useAppStore()
   const projectId = sp?.id ?? ''
   const [activeTab, setActiveTab] = useState<'findings' | 'vulns'>('findings')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1389,6 +1389,12 @@ export default function AllFindings() {
       if (!res.ok) { const d = await res.json(); setNessusImportError(d.detail ?? 'Import failed'); return }
       const data = await res.json()
       setNessusImportResult(data)
+      if (nessusProjectMode === 'new' && data.project_id) {
+        fetch(`${getApiBase()}/projects/${data.project_id}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(proj => { if (proj) { addProject(proj); setStoreProject(proj) } })
+          .catch(() => {})
+      }
       const url = projectId ? `${getApiBase()}/findings?project_id=${projectId}` : `${getApiBase()}/findings`
       fetch(url).then(r => r.json()).then(setFindings).catch(() => {})
     } catch { setNessusImportError('Import request failed.') }
