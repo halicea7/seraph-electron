@@ -907,6 +907,7 @@ export default function Dashboard() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const projectIdRef = useRef<string | null>(selectedProject?.id ?? null)
 
   // Clock — updates every 5s
   useEffect(() => {
@@ -950,8 +951,8 @@ export default function Dashboard() {
               status: 'open',
             }))
           )
-        } else if (selectedProject) {
-          fetch(`${getApiBase()}/findings?project_id=${selectedProject.id}&limit=8`)
+        } else if (projectIdRef.current) {
+          fetch(`${getApiBase()}/findings?project_id=${projectIdRef.current}&limit=8`)
             .then((r) => r.json())
             .then((d) => setFindings(d))
             .catch(() => {})
@@ -987,7 +988,8 @@ export default function Dashboard() {
 
   // Refresh project-specific findings + severity counts when engagement changes
   useEffect(() => {
-    if (!selectedProject?.id) return
+    projectIdRef.current = selectedProject?.id ?? null
+    if (!selectedProject?.id) { setFindings([]); setProjectSev({}); return }
     const pid = selectedProject.id
     setFindings([])
     setProjectSev({})
@@ -1032,7 +1034,7 @@ export default function Dashboard() {
     loadData()
   }
 
-  const sev = Object.keys(projectSev).length > 0 ? projectSev : (stats?.severity_counts ?? {})
+  const sev = selectedProject ? projectSev : (stats?.severity_counts ?? {})
   const projectId = selectedProject?.id ?? (projects.length > 0 ? projects[0].id : null)
 
   // Generate trend arrays from current severity counts
@@ -1071,7 +1073,7 @@ export default function Dashboard() {
         <div>
           <div className="smcap" style={{ marginBottom: 4 }}>
             {projects.length > 0
-              ? `${projects.length} project${projects.length !== 1 ? 's' : ''} · ${stats?.targets ?? 0} targets`
+              ? `${projects.length} project${projects.length !== 1 ? 's' : ''} · ${selectedProject?.target_count ?? stats?.targets ?? 0} targets`
               : 'workspace'}
           </div>
           <h1 className="mono" style={{ margin: 0, fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>
