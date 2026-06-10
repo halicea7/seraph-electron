@@ -5,6 +5,10 @@ import { Brain, Sparkles, AlertTriangle } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
+import { useConfirm } from '@/contexts/ConfirmContext'
+import EmptyState from '@/components/EmptyState'
+import { SkeletonRows } from '@/components/Skeleton'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -505,19 +509,13 @@ function VulnRecords({ projectId }: { projectId: string }) {
 
       {/* Vuln list */}
       {filtered.length === 0 ? (
-        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4, padding: '64px 24px', textAlign: 'center' }}>
-          <Icon name="shield" size={40} color="var(--rule-strong)" />
-          <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
-            {vulns.length === 0 ? 'No vulnerabilities tracked yet.' : 'No vulnerabilities match the current filters.'}
-          </p>
-          {vulns.length === 0 && projectId && (
-            <button
-              onClick={openCreateModal}
-              style={{ marginTop: 12, fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-            >
-              + Add your first vulnerability
-            </button>
-          )}
+        <div style={{ background: 'var(--bg-2)', border: ruleStrong, borderRadius: 4 }}>
+          <EmptyState
+            icon="flag"
+            title={vulns.length === 0 ? 'No vulnerabilities tracked yet' : 'No vulnerabilities match the current filters'}
+            action={vulns.length === 0 && projectId ? { label: 'Add your first vulnerability', onClick: openCreateModal } : undefined}
+            pad={56}
+          />
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1125,6 +1123,8 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 export default function AllFindings() {
   const { selectedProject: sp, addProject, setSelectedProject: setStoreProject } = useAppStore()
   const projectId = sp?.id ?? ''
+  const toast = useToast()
+  const confirm = useConfirm()
   const [activeTab, setActiveTab] = useState<'findings' | 'vulns'>('findings')
   const [searchParams, setSearchParams] = useSearchParams()
   const [findings, setFindings] = useState<FindingRow[]>([])
@@ -1289,13 +1289,26 @@ export default function AllFindings() {
     setFindings(prev => prev.map(f => f.id === id ? { ...f, status: 'open', fp_reason: null } : f))
   }
 
-  function deleteFinding(id: string) {
-    fetch(`${getApiBase()}/findings/${id}`, { method: 'DELETE' }).then(res => {
+  async function deleteFinding(id: string) {
+    const ok = await confirm({
+      title: 'Delete finding?',
+      message: 'This permanently removes the finding from the engagement. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`${getApiBase()}/findings/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setFindings(prev => prev.filter(f => f.id !== id))
         if (selectedId === id) setSelectedId(null)
+        toast.success('Finding deleted')
+      } else {
+        toast.error('Could not delete finding')
       }
-    })
+    } catch {
+      toast.error('Could not delete finding — backend unreachable')
+    }
   }
 
   async function addFpRule() {
@@ -1319,6 +1332,13 @@ export default function AllFindings() {
   }
 
   async function deleteFpRule(ruleId: string) {
+    const ok = await confirm({
+      title: 'Delete suppression rule?',
+      message: 'Findings matching this rule will no longer be auto-suppressed.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     await fetch(`${getApiBase()}/projects/${ruleProjectId}/fp-rules/${ruleId}`, { method: 'DELETE' })
     setFpRules(prev => prev.filter(r => r.id !== ruleId))
   }
@@ -1523,9 +1543,9 @@ export default function AllFindings() {
             {/* List */}
             <div style={{ overflowY: 'auto', borderRight: selectedFinding ? rule : 'none' }}>
               {loading ? (
-                <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Loading…</div>
+                <div style={{ paddingTop: 4 }}><SkeletonRows rows={8} cols={4} /></div>
               ) : filtered.length === 0 ? (
-                <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No findings match the current filter.</div>
+                <EmptyState icon="flag" title="No findings match the current filter" hint="Clear the filters above, or import a Nessus scan to bring findings in." pad={52} />
               ) : (
                 <table className="data">
                   <thead>

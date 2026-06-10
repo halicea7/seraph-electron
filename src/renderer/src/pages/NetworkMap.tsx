@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Icon from '@/components/Icon'
+import EmptyState from '@/components/EmptyState'
 import { getApiBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 
@@ -541,15 +542,8 @@ export default function NetworkMap() {
 
           {/* Empty / loading overlays */}
           {!graph && !loading && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
-              pointerEvents: 'none',
-            }}>
-              <Icon name="network" size={36} color="var(--rule-strong)" />
-              <p className="mono" style={{ fontSize: 12, color: 'var(--fg-4)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                select a project to visualise
-              </p>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+              <EmptyState icon="network" title="Select an engagement to visualize" hint="Pick a project from the sidebar to render its hosts, services, and relationships." />
             </div>
           )}
           {loading && (
@@ -565,15 +559,8 @@ export default function NetworkMap() {
             </div>
           )}
           {graph && pNodes.filter(n => n.type === 'target').length === 0 && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
-              pointerEvents: 'none',
-            }}>
-              <Icon name="shield" size={36} color="var(--rule-strong)" />
-              <p className="mono" style={{ fontSize: 12, color: 'var(--fg-4)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                no targets in this project
-              </p>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+              <EmptyState icon="target" title="No targets in this engagement" hint="Add targets to the project to map the network." />
             </div>
           )}
         </div>

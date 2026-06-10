@@ -20,8 +20,9 @@ const NAV_GROUPS = [
   {
     id: 'recon', label: 'Recon',
     items: [
-      { to: '/osint',   label: 'OSINT',      icon: 'search' },
+      { to: '/osint',   label: 'OSINT',       icon: 'search' },
       { to: '/network', label: 'Network Map', icon: 'network' },
+      { to: '/scans',   label: 'Scans',       icon: 'target' },
     ],
   },
   {
@@ -36,6 +37,13 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'infra', label: 'Infrastructure',
+    items: [
+      { to: '/listeners', label: 'Listeners', icon: 'radio' },
+      { to: '/agents',    label: 'Agents',    icon: 'cpu' },
+    ],
+  },
+  {
     id: 'credentials', label: 'Credentials',
     items: [
       { to: '/vault',    label: 'Credential Vault',  icon: 'key' },
@@ -43,16 +51,19 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'analysis', label: 'Findings & Analysis',
+    items: [
+      { to: '/findings',  label: 'Findings',     icon: 'flag' },
+      { to: '/cve-watch', label: 'CVE Watch',    icon: 'eye' },
+      { to: '/timeline',  label: 'Timeline',     icon: 'clock' },
+      { to: '/logs',      label: 'Log Analysis', icon: 'history' },
+      { to: '/scan-diff', label: 'Scan Diff',    icon: 'layers' },
+    ],
+  },
+  {
     id: 'defense', label: 'Defense',
     items: [
-      { to: '/audit',     label: 'Audit Builder', icon: 'shield' },
-      { to: '/agents',    label: 'Agents',        icon: 'cpu' },
-      { to: '/listeners', label: 'Listeners',     icon: 'radio' },
-      { to: '/findings',  label: 'Vuln Tracker',  icon: 'flag' },
-      { to: '/cve-watch', label: 'CVE Watch',     icon: 'eye' },
-      { to: '/timeline',  label: 'Timeline',      icon: 'clock' },
-      { to: '/logs',      label: 'Log Analysis',  icon: 'history' },
-      { to: '/scan-diff', label: 'Scan Diff',     icon: 'layers' },
+      { to: '/audit', label: 'Audit Builder', icon: 'shield' },
     ],
   },
 ]
@@ -115,7 +126,7 @@ function NavRow({ to, label, icon, end = false }: { to: string; label: string; i
 
 // ── Ticker ────────────────────────────────────────────────────────────────────
 
-function Ticker({ backendOnline }: { backendOnline: boolean | null }) {
+function Ticker({ backendOnline, engagement }: { backendOnline: boolean | null; engagement: string | null }) {
   const [time, setTime] = useState(() => new Date().toLocaleTimeString('en-GB'))
 
   useEffect(() => {
@@ -163,7 +174,13 @@ function Ticker({ backendOnline }: { backendOnline: boolean | null }) {
           ))}
         </div>
       </div>
-      <div style={{ flexShrink: 0, padding: '0 14px', borderLeft: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ flexShrink: 0, padding: '0 14px', borderLeft: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        {engagement && (
+          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 6, maxWidth: 220, overflow: 'hidden' }}>
+            <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: 9 }}>Engagement</span>
+            <span style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{engagement}</span>
+          </span>
+        )}
         <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{time}</span>
       </div>
     </div>
@@ -179,6 +196,17 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
   const [showPicker, setShowPicker] = useState(false)
   const [showNewProject, setShowNewProject] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('nav-collapsed') || '{}') } catch { return {} }
+  })
+
+  function toggleGroup(id: string) {
+    setCollapsed(prev => {
+      const next = { ...prev, [id]: !prev[id] }
+      try { localStorage.setItem('nav-collapsed', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
 
   // Load projects once
   useEffect(() => {
@@ -303,6 +331,7 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
             background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
             borderTop: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
             maxHeight: 260, overflowY: 'auto',
+            animation: 'modal-pop .13s cubic-bezier(0.16,1,0.3,1)', transformOrigin: 'top',
           }}>
             {projects.length === 0 ? (
               <div style={{ padding: '12px 14px', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>No projects yet</div>
@@ -348,14 +377,28 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
           <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
         ))}
 
-        {NAV_GROUPS.map(group => (
-          <div key={group.id} style={{ marginTop: 14 }}>
-            <div className="smcap smcap-2" style={{ padding: '0 10px 4px' }}>{group.label}</div>
-            {group.items.map(item => (
-              <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} />
-            ))}
-          </div>
-        ))}
+        {NAV_GROUPS.map(group => {
+          const isCol = collapsed[group.id]
+          return (
+            <div key={group.id} style={{ marginTop: 14 }}>
+              <button
+                onClick={() => toggleGroup(group.id)}
+                className="smcap smcap-2 nav-row"
+                aria-expanded={!isCol}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '0 10px 4px', background: 'transparent', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <span>{group.label}</span>
+                <Icon name={isCol ? 'chev_r' : 'chev_d'} size={9} color="var(--fg-4)" />
+              </button>
+              {!isCol && group.items.map(item => (
+                <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} />
+              ))}
+            </div>
+          )
+        })}
 
         <div style={{ borderTop: '1px solid var(--rule)', margin: '14px 8px 8px' }} />
         <div className="smcap smcap-2" style={{ padding: '0 10px 4px' }}>Workspace</div>
@@ -469,7 +512,7 @@ export default function Layout() {
 
       {/* Right column: ticker + page content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        <Ticker backendOnline={backendOnline} />
+        <Ticker backendOnline={backendOnline} engagement={selectedProject?.name ?? null} />
 
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
           {selectedProject && (
@@ -477,7 +520,7 @@ export default function Layout() {
               <ActiveUsers projectId={selectedProject.id} page={currentPage} />
             </div>
           )}
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div key={location.pathname} className="page-enter" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <Outlet />
           </div>
         </main>

@@ -519,3 +519,41 @@ a.nav-row:hover {
   0%, 100% { box-shadow: 0 0 18px rgba(168,85,247,0.7), 0 0 36px rgba(168,85,247,0.3); }
   50%       { box-shadow: 0 0 28px rgba(168,85,247,1.0), 0 0 56px rgba(168,85,247,0.5); }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Shared motion — modals, toasts, spin
+   ══════════════════════════════════════════════════════════════════ */
+
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(0.98) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* `spin` is referenced by inline styles (App.tsx, Layout orb) — define it explicitly. */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════════════════════════════════════
+   Interactive hover utility — standardizes the ad-hoc per-page transitions
+   ══════════════════════════════════════════════════════════════════ */
+
+.interactive { transition: background .14s ease, border-color .14s ease, color .14s ease, transform .14s ease; }
+.hover-lift  { transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
+.hover-lift:hover { transform: translateY(-1px); border-color: var(--rule-strong); }
+
+/* ══════════════════════════════════════════════════════════════════
+   Reduced-motion — respect the OS accessibility setting
+   ══════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

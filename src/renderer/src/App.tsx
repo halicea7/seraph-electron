@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AINarrativeProvider } from '@/contexts/AINarrativeContext'
 import { AIOperatorProvider } from '@/contexts/AIOperatorContext'
+import { ToastProvider } from '@/contexts/ToastContext'
+import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import { ConnectScreen } from '@/components/ConnectScreen'
 import { getServerUrl } from '@/lib/config'
 import Layout from '@/components/Layout'
@@ -131,11 +133,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AuthProvider>
-          <AINarrativeProvider>
-            <AuthGate />
-          </AINarrativeProvider>
-        </AuthProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <AuthProvider>
+              <AINarrativeProvider>
+                <AuthGate />
+              </AINarrativeProvider>
+            </AuthProvider>
+          </ConfirmProvider>
+        </ToastProvider>
       </ThemeProvider>
     </BrowserRouter>
   )

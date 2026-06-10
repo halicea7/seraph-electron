@@ -12,6 +12,8 @@ import {
 } from '@/api/client'
 import ProjectModal from '@/components/ProjectModal'
 import Icon from '@/components/Icon'
+import EmptyState from '@/components/EmptyState'
+import { useCountUp } from '@/lib/useCountUp'
 import { getApiBase, getWsBase } from '@/lib/config'
 
 const rule = '1px solid var(--rule)'
@@ -72,6 +74,7 @@ function KPI({
   divider?: boolean
 }) {
   const color = accentVar ? `var(${accentVar})` : 'var(--fg)'
+  const display = useCountUp(value)
   return (
     <div style={{ padding: '20px var(--pad) 18px', borderLeft: divider ? rule : 'none' }}>
       <div className="smcap">{label}</div>
@@ -80,7 +83,7 @@ function KPI({
           className="mono tnum"
           style={{ fontSize: 44, fontWeight: 500, color, letterSpacing: '-0.02em', lineHeight: 1 }}
         >
-          {String(value).padStart(2, '0')}
+          {String(display).padStart(2, '0')}
         </span>
         {trend && <Sparkline data={trend} width={70} height={26} color={color} fill />}
       </div>
@@ -137,9 +140,12 @@ function PhasePipeline({ phases }: { phases: PhaseData[] }) {
 
   if (phases.length === 0) return (
     <Section title="PHASE PIPELINE">
-      <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-        No scans recorded yet.
-      </div>
+      <EmptyState
+        icon="activity"
+        title="No scans recorded yet"
+        hint="Run a scan from a module like OSINT, Network Map, or Pentest Workbench to populate the engagement timeline."
+        pad={28}
+      />
     </Section>
   )
 
@@ -237,9 +243,12 @@ function FindingsPreview({ findings }: { findings: FindingRow[] }) {
       }
     >
       {sorted.length === 0 ? (
-        <div style={{ padding: 'var(--pad)', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-          No findings yet.
-        </div>
+        <EmptyState
+          icon="flag"
+          title="No findings yet"
+          hint="Findings surface here as scans complete. Import a Nessus scan or run a module to get started."
+          pad={28}
+        />
       ) : (
         <table className="data">
           <thead>
@@ -510,9 +519,7 @@ function ActivityLedger({ projectId }: { projectId: string | null }) {
     <Section title="ACTIVITY LEDGER">
       <div style={{ maxHeight: 320, overflowY: 'auto' }}>
         {entries.length === 0 ? (
-          <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
-            No activity yet.
-          </div>
+          <EmptyState icon="history" title="No activity yet" hint="Scans, findings, and sessions for this engagement will appear here as they happen." pad={28} />
         ) : (
           entries.map((e, i) => (
             <div
@@ -703,9 +710,7 @@ function PlaybooksSection() {
   return (
     <Section title="PLAYBOOKS" style={{ borderLeft: rule }}>
       {playbooks.length === 0 ? (
-        <div style={{ padding: 'var(--pad)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
-          No playbooks configured.
-        </div>
+        <EmptyState icon="book" title="No playbooks configured" pad={28} />
       ) : (
         <div>
           {playbooks.map((pb, i) => (

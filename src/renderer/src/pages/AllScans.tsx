@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
+import EmptyState from '@/components/EmptyState'
+import { SkeletonRows } from '@/components/Skeleton'
 
 const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
@@ -403,14 +405,16 @@ export default function AllScans() {
 
           {/* Scans table */}
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13, gap: 8 }}>
-              <Icon name="refresh" size={14} className="animate-spin" />
-              Loading…
+            <div style={{ paddingTop: 4 }}>
+              <SkeletonRows rows={7} cols={5} />
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: 'var(--fg-3)', fontSize: 13 }}>
-              No scans match the current filter.
-            </div>
+            <EmptyState
+              icon="target"
+              title="No scans match the current filter"
+              hint="Adjust the filters above, or run a scan from a module to populate this list."
+              pad={56}
+            />
           ) : (
             <table className="data" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>

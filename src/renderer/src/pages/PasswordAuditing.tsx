@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '../components/Icon'
+import EmptyState from '@/components/EmptyState'
 import type { Credential } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,6 +140,7 @@ function ProgressBar({ pct }: { pct: number }) {
 export default function PasswordAuditing() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
+  const toast = useToast()
 
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [tool, setTool] = useState<'hashcat' | 'john'>('hashcat')
@@ -318,9 +321,9 @@ export default function PasswordAuditing() {
 
   async function handleRun() {
     const hashes = getHashes()
-    if (!hashes.length) { alert('Paste at least one hash.'); return }
+    if (!hashes.length) { toast.error('Paste at least one hash.'); return }
     const wl = customWordlist || wordlist
-    if (!wl && attackMode !== '3') { alert('Select or enter a wordlist.'); return }
+    if (!wl && attackMode !== '3') { toast.error('Select or enter a wordlist.'); return }
 
     setRunning(true)
     setResults(null)
@@ -345,7 +348,7 @@ export default function PasswordAuditing() {
 
     if (!res.ok) {
       const err = await res.json()
-      alert(err.detail || 'Failed to start job')
+      toast.error(err.detail || 'Failed to start job')
       setRunning(false)
       return
     }
@@ -466,8 +469,8 @@ export default function PasswordAuditing() {
                   </tr>
                 ) : !loadingJobs && jobs.length === 0 && projectId ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--fg-3)', fontSize: 12, padding: '16px 0', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
-                      No cracking jobs yet.
+                    <td colSpan={6} style={{ padding: 0 }}>
+                      <EmptyState icon="lock" title="No cracking jobs yet" hint="Paste hashes and run a job to start auditing password strength." pad={24} />
                     </td>
                   </tr>
                 ) : (
