@@ -1317,7 +1317,7 @@ LMStudio default: http://localhost:1234`}</Block>
   },
   {
     id: 'agents',
-    title: 'Infrastructure Agents',
+    title: 'Agents',
     icon: <Cpu size={15} />,
     subsections: [
       {
