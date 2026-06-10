@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import CommandPalette from './CommandPalette'
+import Ticker from './Ticker'
 import NotificationBell from './NotificationBell'
 import ActiveUsers from './ActiveUsers'
 import ProjectModal from './ProjectModal'
@@ -121,69 +122,6 @@ function NavRow({ to, label, icon, end = false }: { to: string; label: string; i
         </>
       )}
     </NavLink>
-  )
-}
-
-// ── Ticker ────────────────────────────────────────────────────────────────────
-
-function Ticker({ backendOnline, engagement }: { backendOnline: boolean | null; engagement: string | null }) {
-  const [time, setTime] = useState(() => new Date().toLocaleTimeString('en-GB'))
-
-  useEffect(() => {
-    const id = setInterval(() => setTime(new Date().toLocaleTimeString('en-GB')), 1000)
-    return () => clearInterval(id)
-  }, [])
-
-  const items = [
-    'Recon phase active',
-    'Backend ' + (backendOnline === null ? 'connecting' : backendOnline ? 'online' : 'offline'),
-    'Press ? for command palette',
-    'v2.0 — Paper Dark',
-  ]
-  const doubled = [...items, ...items]
-
-  return (
-    <div style={{
-      height: 26,
-      borderBottom: '1px solid var(--rule)',
-      background: 'var(--bg-2)',
-      overflow: 'hidden',
-      display: 'flex',
-      alignItems: 'center',
-      flexShrink: 0,
-    }}>
-      <div style={{
-        flexShrink: 0,
-        padding: '0 12px',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        borderRight: '1px solid var(--rule)',
-        background: 'var(--accent)',
-        color: '#1a1408',
-      }}>
-        <span className="mono" style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase' }}>● LIVE</span>
-      </div>
-      <div style={{ overflow: 'hidden', flex: 1 }}>
-        <div className="ticker-track mono" style={{ fontSize: 10.5, color: 'var(--fg-2)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          {doubled.map((t, i) => (
-            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 16 }}>
-              <span style={{ color: 'var(--fg-4)' }}>◆</span>
-              <span>{t}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-      <div style={{ flexShrink: 0, padding: '0 14px', borderLeft: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 12 }}>
-        {engagement && (
-          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 6, maxWidth: 220, overflow: 'hidden' }}>
-            <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: 9 }}>Engagement</span>
-            <span style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{engagement}</span>
-          </span>
-        )}
-        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{time}</span>
-      </div>
-    </div>
   )
 }
 
@@ -512,7 +450,7 @@ export default function Layout() {
 
       {/* Right column: ticker + page content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        <Ticker backendOnline={backendOnline} engagement={selectedProject?.name ?? null} />
+        <Ticker backendOnline={backendOnline} />
 
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
           {selectedProject && (

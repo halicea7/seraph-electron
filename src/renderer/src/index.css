@@ -381,6 +381,28 @@ table.data tbody tr.selected { background: var(--accent-2); }
 
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .ticker-track { display: flex; gap: 32px; white-space: nowrap; animation: ticker 90s linear infinite; }
+/* Pause the scroll on hover so events can be read / clicked. */
+.ticker-track:hover { animation-play-state: paused; }
+
+/* War-room alert flash — one-shot glow + bottom-border pulse on a new finding. */
+@keyframes ticker-flash-crit {
+  0%   { box-shadow: inset 0 0 0 rgba(232,92,78,0); border-bottom-color: var(--rule); }
+  12%  { box-shadow: inset 0 -22px 26px -18px rgba(232,92,78,0.85); border-bottom-color: var(--crit); }
+  100% { box-shadow: inset 0 0 0 rgba(232,92,78,0); border-bottom-color: var(--rule); }
+}
+@keyframes ticker-flash-high {
+  0%   { box-shadow: inset 0 0 0 rgba(240,168,58,0); border-bottom-color: var(--rule); }
+  12%  { box-shadow: inset 0 -22px 26px -18px rgba(240,168,58,0.8); border-bottom-color: var(--accent); }
+  100% { box-shadow: inset 0 0 0 rgba(240,168,58,0); border-bottom-color: var(--rule); }
+}
+.ticker-bar.alert-crit { animation: ticker-flash-crit 2.8s ease-out; }
+.ticker-bar.alert-high { animation: ticker-flash-high 2.8s ease-out; }
+
+/* Reduced motion: no flash animation — a static colored bottom border instead. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-bar.alert-crit { border-bottom-color: var(--crit) !important; }
+  .ticker-bar.alert-high { border-bottom-color: var(--accent) !important; }
+}
 
 /* ══════════════════════════════════════════════════════════════════
    Crosshatch / stripe patterns

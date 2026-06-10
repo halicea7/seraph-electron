@@ -6,6 +6,7 @@ import { AINarrativeProvider } from '@/contexts/AINarrativeContext'
 import { AIOperatorProvider } from '@/contexts/AIOperatorContext'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
+import { LiveEventsProvider } from '@/contexts/LiveEventsContext'
 import { ConnectScreen } from '@/components/ConnectScreen'
 import { getServerUrl } from '@/lib/config'
 import Layout from '@/components/Layout'
@@ -70,6 +71,7 @@ function ProtectedRoutes() {
 
   return (
     <AIOperatorProvider>
+      <LiveEventsProvider>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -100,6 +102,7 @@ function ProtectedRoutes() {
           <Route path="*" element={<Dashboard />} />
         </Route>
       </Routes>
+      </LiveEventsProvider>
     </AIOperatorProvider>
   )
 }
