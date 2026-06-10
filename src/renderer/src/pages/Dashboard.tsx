@@ -132,32 +132,28 @@ interface PhaseData {
 
 function PhasePipeline({ projectId }: { projectId: string | null }) {
   const [phases, setPhases] = useState<PhaseData[]>([])
-  const [phaseError, setPhaseError] = useState(false)
 
   useEffect(() => {
-    if (!projectId) { setPhases([]); setPhaseError(false); return }
-    setPhaseError(false)
+    if (!projectId) { setPhases([]); return }
     fetch(`${getApiBase()}/projects/${projectId}/phases`)
-      .then((r) => { if (!r.ok) throw new Error('not ok'); return r.json() })
-      .then((d: PhaseData[]) => { if (Array.isArray(d)) setPhases(d) })
-      .catch(() => { setPhases([]); setPhaseError(true) })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Array.isArray(d)) setPhases(d) })
+      .catch(() => {})
   }, [projectId])
 
   const borderColor = (s: PhaseData['status']) =>
     s === 'running' ? 'var(--warn)' : s === 'done' ? 'var(--ok)' : 'var(--rule-strong)'
 
+  if (phases.length === 0) return (
+    <Section title="PHASE PIPELINE">
+      <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+        {projectId ? 'No scans recorded yet.' : 'Select a project.'}
+      </div>
+    </Section>
+  )
+
   return (
     <Section title="PHASE PIPELINE">
-      {phaseError && (
-        <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-          Backend unreachable — start the server to see phase data.
-        </div>
-      )}
-      {!phaseError && phases.length === 0 && projectId && (
-        <div style={{ padding: 'var(--pad)', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-          No scans recorded yet — run scans to track phase progress.
-        </div>
-      )}
       {phases.length > 0 && (
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${phases.length}, 1fr)`, gap: 0 }}>
         {phases.map((ph, i) => (
