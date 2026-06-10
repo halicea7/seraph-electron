@@ -90,18 +90,20 @@ function Logo({ size = 22 }: { size?: number }) {
 
 // ── NavRow ────────────────────────────────────────────────────────────────────
 
-function NavRow({ to, label, icon, end = false }: { to: string; label: string; icon: string; end?: boolean }) {
+function NavRow({ to, label, icon, end = false, railed = false }: { to: string; label: string; icon: string; end?: boolean; railed?: boolean }) {
   return (
     <NavLink
       to={to}
       end={end}
       className="nav-row"
+      title={railed ? label : undefined}
       style={({ isActive }) => ({
         display: 'flex',
         alignItems: 'center',
-        gap: 9,
+        gap: railed ? 0 : 9,
+        justifyContent: railed ? 'center' : 'flex-start',
         width: '100%',
-        padding: '6px 10px',
+        padding: railed ? '8px 0' : '6px 10px',
         marginBottom: 1,
         background: isActive ? 'var(--accent-2)' : 'transparent',
         border: 'none',
@@ -116,9 +118,9 @@ function NavRow({ to, label, icon, end = false }: { to: string; label: string; i
     >
       {({ isActive }) => (
         <>
-          <Icon name={icon} size={13} color={isActive ? 'var(--accent)' : 'currentColor'} />
-          <span style={{ flex: 1 }}>{label}</span>
-          {isActive && <Icon name="chev_r" size={10} color="var(--accent)" />}
+          <Icon name={icon} size={railed ? 15 : 13} color={isActive ? 'var(--accent)' : 'currentColor'} />
+          {!railed && <span style={{ flex: 1 }}>{label}</span>}
+          {!railed && isActive && <Icon name="chev_r" size={10} color="var(--accent)" />}
         </>
       )}
     </NavLink>
@@ -145,6 +147,22 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       return next
     })
   }
+
+  // Whole-sidebar collapse to an icon-only rail
+  const [railed, setRailed] = useState<boolean>(() => {
+    try { return localStorage.getItem('nav-railed') === '1' } catch { return false }
+  })
+  function toggleRail() {
+    setRailed(prev => {
+      const next = !prev
+      try { localStorage.setItem('nav-railed', next ? '1' : '0') } catch { /* ignore */ }
+      if (next) setShowPicker(false)
+      return next
+    })
+  }
+
+  // Flatten all nav items for the icon rail (group labels are hidden when railed)
+  const railSections = [NAV_TOP, NAV_GROUPS.flatMap(g => g.items), NAV_BOTTOM]
 
   // Load projects once
   useEffect(() => {
@@ -218,7 +236,7 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
   return (
     <>
     <aside style={{
-      width: 230,
+      width: railed ? 56 : 230,
       flexShrink: 0,
       borderRight: '1px solid var(--rule)',
       background: 'var(--bg)',
@@ -227,47 +245,79 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       height: '100vh',
       position: 'sticky',
       top: 0,
+      transition: 'width .16s ease',
     }}>
       {/* Brand */}
-      <div style={{ padding: '18px 18px 16px', borderBottom: '1px solid var(--rule)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Logo size={22} />
-          <div>
-            <div className="mono" style={{ fontSize: 13, letterSpacing: '0.22em', fontWeight: 600 }}>SERAPH</div>
-            <div className="mono" style={{ fontSize: 8.5, letterSpacing: '0.18em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Ops Console · v2.0</div>
+      <div style={{ padding: railed ? '14px 0 12px' : '18px 18px 16px', borderBottom: '1px solid var(--rule)' }}>
+        {railed ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <Logo size={22} />
+            <button onClick={toggleRail} title="Expand sidebar" className="nav-row"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 4 }}>
+              <Icon name="chev_r" size={13} />
+            </button>
           </div>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Logo size={22} />
+            <div>
+              <div className="mono" style={{ fontSize: 13, letterSpacing: '0.22em', fontWeight: 600 }}>SERAPH</div>
+              <div className="mono" style={{ fontSize: 8.5, letterSpacing: '0.18em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Ops Console · v2.0</div>
+            </div>
+            <button onClick={toggleRail} title="Collapse sidebar" className="nav-row"
+              style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 4 }}>
+              <Icon name="chev_l" size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Engagement switcher */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rule)', position: 'relative' }} ref={pickerRef}>
-        <div className="smcap smcap-2" style={{ marginBottom: 6 }}>Engagement</div>
-        <button
-          onClick={() => setShowPicker(v => !v)}
-          style={{
-            width: '100%', textAlign: 'left', background: 'transparent',
-            border: `1px solid ${showPicker ? 'var(--accent)' : 'var(--rule)'}`,
-            padding: '8px 10px', display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', color: 'var(--fg)', cursor: 'pointer',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
-              {selectedProject ? selectedProject.name : 'No project'}
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-              {selectedProject ? `${selectedProject.targets?.length ?? 0} targets` : 'Select a project'}
-            </span>
-          </div>
-          <Icon name={showPicker ? 'chev_u' : 'chev_d'} size={11} color="var(--fg-3)" />
-        </button>
+      <div style={{ padding: railed ? '10px 0' : '10px 14px', borderBottom: '1px solid var(--rule)', position: 'relative', display: railed ? 'flex' : 'block', justifyContent: 'center' }} ref={pickerRef}>
+        {!railed && <div className="smcap smcap-2" style={{ marginBottom: 6 }}>Engagement</div>}
+        {railed ? (
+          <button
+            onClick={() => setShowPicker(v => !v)}
+            title={selectedProject ? selectedProject.name : 'Select engagement'}
+            className="nav-row"
+            style={{
+              width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'transparent', border: `1px solid ${showPicker ? 'var(--accent)' : 'var(--rule)'}`,
+              color: selectedProject ? 'var(--accent)' : 'var(--fg-3)', cursor: 'pointer',
+            }}
+          >
+            <Icon name="folder" size={15} color="currentColor" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowPicker(v => !v)}
+            style={{
+              width: '100%', textAlign: 'left', background: 'transparent',
+              border: `1px solid ${showPicker ? 'var(--accent)' : 'var(--rule)'}`,
+              padding: '8px 10px', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', color: 'var(--fg)', cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
+                {selectedProject ? selectedProject.name : 'No project'}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
+                {selectedProject ? `${selectedProject.targets?.length ?? 0} targets` : 'Select a project'}
+              </span>
+            </div>
+            <Icon name={showPicker ? 'chev_u' : 'chev_d'} size={11} color="var(--fg-3)" />
+          </button>
+        )}
 
         {/* Dropdown */}
         {showPicker && (
           <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 40,
+            position: 'absolute', top: railed ? 8 : '100%',
+            left: railed ? '100%' : 0, right: railed ? 'auto' : 0, marginLeft: railed ? 6 : 0,
+            width: railed ? 220 : 'auto', zIndex: 40,
             background: 'var(--bg-2)', border: '1px solid var(--rule-strong)',
-            borderTop: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            borderTop: railed ? '1px solid var(--rule-strong)' : 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
             maxHeight: 260, overflowY: 'auto',
             animation: 'modal-pop .13s cubic-bezier(0.16,1,0.3,1)', transformOrigin: 'top',
           }}>
@@ -310,7 +360,17 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+      <nav style={{ flex: 1, overflowY: 'auto', padding: railed ? '8px 4px' : '8px 8px' }}>
+        {railed ? (
+          railSections.map((items, si) => (
+            <div key={si} style={si > 0 ? { borderTop: '1px solid var(--rule)', marginTop: 8, paddingTop: 8 } : undefined}>
+              {items.map(item => (
+                <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} end={(item as any).end} railed />
+              ))}
+            </div>
+          ))
+        ) : (
+        <>
         {NAV_TOP.map(item => (
           <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
         ))}
@@ -343,10 +403,34 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
         {NAV_BOTTOM.map(item => (
           <NavRow key={item.to} to={item.to} label={item.label} icon={item.icon} />
         ))}
+        </>
+        )}
       </nav>
 
       {/* Footer */}
-      <div style={{ borderTop: '1px solid var(--rule)', padding: 10 }}>
+      <div style={{ borderTop: '1px solid var(--rule)', padding: railed ? '10px 0' : 10 }}>
+        {railed ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+            <span
+              className={`dot ${backendOnline ? 'dot-live' : backendOnline === false ? 'dot-crit' : 'dot-idle'}`}
+              title={backendOnline === null ? 'connecting' : backendOnline ? 'backend online' : 'backend offline'}
+            />
+            <NotificationBell />
+            <div title={`${user?.username ?? '—'} · ${user?.role ?? ''}`} style={{ width: 24, height: 24, border: '1px solid var(--rule-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-2)' }}>
+              {initials}
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              style={{ background: 'transparent', border: 'none', padding: 4, display: 'flex', color: 'var(--fg-3)', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--crit)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-3)')}
+            >
+              <Icon name="logout" size={13} />
+            </button>
+          </div>
+        ) : (
+        <>
         {/* Status row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 4px 8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -404,6 +488,8 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
             <Icon name="logout" size={11} />
           </button>
         </div>
+        </>
+        )}
       </div>
     </aside>
 
