@@ -11,11 +11,11 @@ export function getServerUrl(): string | null {
 }
 
 export function getApiBase(): string {
-  return `${_cachedUrl ?? 'http://localhost:8000'}/api/v1`
+  return `${_cachedUrl ?? 'http://localhost:8002'}/api/v1`
 }
 
 export function getWsBase(): string {
-  return (_cachedUrl ?? 'http://localhost:8000').replace(/^http/, 'ws')
+  return (_cachedUrl ?? 'http://localhost:8002').replace(/^http/, 'ws')
 }
 
 export async function setServerUrl(url: string): Promise<void> {
