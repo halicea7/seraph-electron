@@ -183,7 +183,7 @@ export default function CveWatch() {
         right={
           <>
             <SegBtns options={['All', 'KEV', 'Matching', 'Last 24h']} value={tab} onChange={setTab} />
-            <button className="btn-primary" onClick={loadData} disabled={loading}>
+            <button className="btn btn-primary" onClick={loadData} disabled={loading}>
               <Icon name="refresh" size={12} color="currentColor" />
               {loading ? 'Syncing…' : 'Sync now'}
             </button>

@@ -854,7 +854,7 @@ export default function Settings() {
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Section title={`TOOL DETECTION · ${available.length}/${Object.keys(toolStatus).length} INSTALLED`}
           right={
-            <button onClick={loadTools} disabled={loading} className="btn-sm">
+            <button onClick={loadTools} disabled={loading} className="btn btn-sm">
               <Icon name="refresh" size={11} color={loading ? 'var(--accent)' : 'currentColor'} /> {loading ? 'Detecting…' : 'Refresh'}
             </button>
           }
@@ -868,7 +868,7 @@ export default function Settings() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <code style={{ flex: 1, background: 'var(--bg)', border: ruleStrong, borderRadius: 3, padding: '6px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bulkInstallCmd}</code>
-                <button onClick={() => copyText(bulkInstallCmd, 'bulk-all')} className="btn-sm">
+                <button onClick={() => copyText(bulkInstallCmd, 'bulk-all')} className="btn btn-sm">
                   <Icon name={copied === 'bulk-all' ? 'check' : 'copy'} size={11} color="currentColor" /> {copied === 'bulk-all' ? 'Copied!' : 'Copy all'}
                 </button>
               </div>
@@ -909,7 +909,7 @@ export default function Settings() {
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {!goMissing && <button onClick={() => startInstall(name)} className="btn-sm"><Icon name="download" size={10} color="currentColor" /> Install</button>}
+                        {!goMissing && <button onClick={() => startInstall(name)} className="btn btn-sm"><Icon name="download" size={10} color="currentColor" /> Install</button>}
                         {info.url && <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: 2 }}><ExternalLink size={10} /></a>}
                       </div>
                     </div>
@@ -1453,8 +1453,8 @@ export default function Settings() {
                       <td>{wh.active ? <Pill tone="pass">active</Pill> : <Pill tone="info">paused</Pill>}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={() => handleTestWebhook(wh.id)} disabled={webhookTestId === wh.id} className="btn-sm">{webhookTestId === wh.id ? '✓' : 'Test'}</button>
-                          <button onClick={() => handleToggleWebhook(wh.id, !wh.active)} className="btn-sm">{wh.active ? 'Pause' : 'Resume'}</button>
+                          <button onClick={() => handleTestWebhook(wh.id)} disabled={webhookTestId === wh.id} className="btn btn-sm">{webhookTestId === wh.id ? '✓' : 'Test'}</button>
+                          <button onClick={() => handleToggleWebhook(wh.id, !wh.active)} className="btn btn-sm">{wh.active ? 'Pause' : 'Resume'}</button>
                           <button onClick={() => handleDeleteWebhook(wh.id)} className="btn-sm btn-danger"><Icon name="trash" size={11} color="currentColor" /></button>
                         </div>
                       </td>

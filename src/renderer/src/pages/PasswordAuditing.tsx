@@ -418,7 +418,7 @@ export default function PasswordAuditing() {
             <button className="btn" onClick={loadFromVault} disabled={selectedCredIds.length === 0} style={{ opacity: selectedCredIds.length === 0 ? 0.4 : 1 }}>
               <Icon name="upload" size={11} color="currentColor" /> Import hashes
             </button>
-            <button className="btn-primary" onClick={handleRun} disabled={running || !getHashes().length} style={{ opacity: running || !getHashes().length ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button className="btn btn-primary" onClick={handleRun} disabled={running || !getHashes().length} style={{ opacity: running || !getHashes().length ? 0.5 : 1 }}>
               {running ? <><Icon name="refresh" size={12} color="currentColor" /> Cracking…</> : <><Icon name="play" size={12} color="currentColor" /> New job</>}
             </button>
           </>
@@ -513,7 +513,7 @@ export default function PasswordAuditing() {
                         <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>→</span>
                         <span className="mono" style={{ fontSize: 13, color: 'var(--ok)', fontWeight: 700, flex: 1 }}>{pair.plain}</span>
                         {projectId && !savedPairs.has(pair.hash) && (
-                          <button onClick={() => saveToVault(pair)} className="btn-sm">Save to Vault</button>
+                          <button onClick={() => saveToVault(pair)} className="btn btn-sm">Save to Vault</button>
                         )}
                         {savedPairs.has(pair.hash) && <Icon name="check" size={12} color="var(--ok)" />}
                       </div>
@@ -681,7 +681,7 @@ export default function PasswordAuditing() {
                               <Icon name="check" size={9} color="currentColor" /> Installed
                             </span>
                           ) : (
-                            <button onClick={() => installBundle(b.id)} disabled={installing !== null} className="btn-sm" style={{ opacity: installing !== null && installing !== b.id ? 0.4 : 1 }}>
+                            <button onClick={() => installBundle(b.id)} disabled={installing !== null} className="btn btn-sm" style={{ opacity: installing !== null && installing !== b.id ? 0.4 : 1 }}>
                               <Icon name={installing === b.id ? 'refresh' : 'download'} size={9} color="currentColor" />
                               {installing === b.id ? 'Installing…' : 'Install'}
                             </button>
