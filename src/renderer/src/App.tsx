@@ -36,6 +36,11 @@ import Timeline from '@/pages/Timeline'
 import CommandLibrary from '@/pages/CommandLibrary'
 import ScanDiff from '@/pages/ScanDiff'
 import Scratchpad from '@/pages/Scratchpad'
+import AttackNavigator from '@/pages/AttackNavigator'
+import ADAttack from '@/pages/ADAttack'
+import ScreenshotGallery from '@/pages/ScreenshotGallery'
+import EngagementQA from '@/pages/EngagementQA'
+import RequestWorkbench from '@/pages/RequestWorkbench'
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -90,6 +95,11 @@ function ProtectedRoutes() {
           <Route path="listeners" element={<Listeners />} />
           <Route path="agents" element={<Agents />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="attack-nav" element={<AttackNavigator />} />
+          <Route path="ad" element={<ADAttack />} />
+          <Route path="screenshots" element={<ScreenshotGallery />} />
+          <Route path="ask" element={<EngagementQA />} />
+          <Route path="http" element={<RequestWorkbench />} />
           <Route path="operator" element={<AIOperator />} />
           <Route path="hermes" element={<HermesOperator />} />
           <Route path="cve-watch" element={<CveWatch />} />

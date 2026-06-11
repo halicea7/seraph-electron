@@ -24,6 +24,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/osint',   label: 'OSINT',       icon: 'search' },
       { to: '/network', label: 'Network Map', icon: 'network' },
+      { to: '/screenshots', label: 'Screenshots', icon: 'eye' },
       { to: '/scans',   label: 'Scans',       icon: 'target' },
     ],
   },
@@ -32,11 +33,14 @@ const NAV_GROUPS = [
     items: [
       { to: '/pentest',         label: 'Pentest Workbench', icon: 'swords' },
       { to: '/c2',              label: 'C2 Console',        icon: 'terminal' },
+      { to: '/ad',              label: 'AD Attack Suite',   icon: 'cpu' },
       { to: '/playbooks',       label: 'Playbooks',         icon: 'book' },
       { to: '/attack-paths',    label: 'Attack Paths',      icon: 'activity' },
+      { to: '/attack-nav',      label: 'ATT&CK Navigator',  icon: 'grid' },
       { to: '/operator',        label: 'AI Operator',       icon: 'cube' },
       { to: '/hermes',          label: 'Hermes Operator',   icon: 'zap' },
       { to: '/command-library', label: 'Command Library',   icon: 'fingerprint' },
+      { to: '/http',            label: 'Request Workbench', icon: 'send' },
     ],
   },
   {
@@ -57,6 +61,7 @@ const NAV_GROUPS = [
     id: 'analysis', label: 'Findings & Analysis',
     items: [
       { to: '/findings',  label: 'Findings',     icon: 'flag' },
+      { to: '/ask',       label: 'Ask Seraph',   icon: 'help' },
       { to: '/cve-watch', label: 'CVE Watch',    icon: 'eye' },
       { to: '/timeline',  label: 'Timeline',     icon: 'clock' },
       { to: '/logs',      label: 'Log Analysis', icon: 'history' },
