@@ -162,9 +162,52 @@ function setupIPC(): void {
   })
 }
 
+// ── Backend TLS trust ───────────────────────────────────────────────────────
+// The Seraph backend can be served over HTTPS with a self-signed / mkcert
+// certificate (see seraph/setup-https.sh). Chromium rejects it because the
+// client machine doesn't trust that CA ("No matching issuer found"). Rather than
+// installing the CA on every client, we trust the cert ONLY for the exact host
+// the user configured as their backend — every other origin is still verified
+// normally.
+function configuredHost(): string | null {
+  const raw = settings.serverUrl
+  if (!raw) return null
+  try {
+    return new URL(raw).host
+  } catch {
+    // serverUrl may have been entered without a scheme (e.g. "10.0.0.5:8000").
+    try {
+      return new URL(`https://${raw}`).host
+    } catch {
+      return null
+    }
+  }
+}
+
+function setupCertificateTrust(): void {
+  app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
+    let host: string
+    try {
+      host = new URL(url).host
+    } catch {
+      callback(false)
+      return
+    }
+    const allowed = configuredHost()
+    if (allowed && host === allowed) {
+      // Trust the user's own Seraph backend cert.
+      event.preventDefault()
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  setupCertificateTrust()
   setupIPC()
   createWindow()
   app.on('activate', () => {
