@@ -9,12 +9,16 @@ A desktop pentest management platform built on Electron. Seraph connects to a se
 ### Recon
 - **OSINT Module** — passive intelligence gathering against targets
 - **Network Map** — interactive Cytoscape graph of discovered hosts, services, and relationships
+- **Screenshot Gallery** — gowitness web-host capture with live streaming, thumbnail grid, and click-to-zoom lightbox (out-of-scope URLs dropped automatically)
 
 ### Offense
 - **Pentest Workbench** — run scan modules, review raw output, and triage findings per target
+- **Request Workbench** — Repeater/Intruder-lite: edit & replay raw HTTP requests, fuzz a `§FUZZ§` marker across payloads with live streamed results, scope-enforced
 - **C2 Console** — Metasploit RPC integration with live session management, task execution, and loot capture
+- **AD Attack Suite** — import a BloodHound/SharpHound collection and surface quick-wins (kerberoastable, AS-REP, unconstrained delegation, high-value principals) with ready-to-copy commands
 - **Playbooks** — saved multi-step attack sequences with configurable scan categories
 - **Attack Paths** — graph-based visualization of exploitation chains across the network
+- **ATT&CK Navigator** — technique-coverage heatmap scored from findings + playbook runs; exports a MITRE Navigator layer
 - **AI Operator** — LLM-backed assistant with full project context for attack planning, script generation, and technique guidance
 - **Command Library** — searchable reference of offensive commands organized by category
 
@@ -30,6 +34,7 @@ A desktop pentest management platform built on Electron. Seraph connects to a se
 - **CVE Watch** — auto-detected services are monitored nightly against NVD; new CVEs surface as alerts
 - **Engagement Timeline** — chronological event feed (targets added, scans run, findings discovered) with severity and kind filters
 - **Log Analysis** — search and correlate raw scan logs across the project
+- **Ask Seraph** — natural-language Q&A grounded in the engagement's own findings/loot/scans/credential-metadata (keyword RAG + the configured Ollama model), with clickable citations back to source rows
 
 ### Reporting & Settings
 - **Reports** — generate structured engagement reports from findings
@@ -134,8 +139,9 @@ Then point the Connect screen at `https://localhost:8000` and register your pass
 
 | Section | Pages |
 |---------|-------|
-| **Recon** | OSINT, Network Map |
-| **Offense** | Pentest Workbench, C2 Console, Playbooks, Attack Paths, AI Operator, Command Library |
+| **Recon** | OSINT, Network Map, Screenshot Gallery |
+| **Offense** | Pentest Workbench, Request Workbench, C2 Console, AD Attack Suite, Playbooks, Attack Paths, ATT&CK Navigator, AI Operator, Command Library |
 | **Credentials** | Credential Vault, Password Auditing |
-| **Defense** | Audit Builder, Agents, Listeners, Vuln Tracker, CVE Watch, Timeline, Log Analysis |
+| **Findings & Analysis** | Findings, CVE Watch, Timeline, Log Analysis, Scan Diff, Ask Seraph |
+| **Defense** | Audit Builder, Agents, Listeners |
 | **Other** | Dashboard, Reports, Settings, Guide |
