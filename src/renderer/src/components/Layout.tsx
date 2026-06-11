@@ -10,6 +10,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useAINarrative } from '../contexts/AINarrativeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getApiBase } from '@/lib/config'
+import seraphMark from '@/assets/seraph-mark.svg'
 
 // ── Nav structure (mirrors handoff shell.jsx) ─────────────────────────────────
 
@@ -80,12 +81,27 @@ const NAV_BOTTOM = [
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
 function Logo({ size = 22 }: { size?: number }) {
+  // The Seraph emblem is a monochrome SVG; render it as a mask so it picks up the
+  // theme accent colour and stays crisp/visible on the dark sidebar.
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" style={{ display: 'block', flexShrink: 0 }}>
-      <polygon points="16,2 4,28 28,28" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
-      <polygon points="16,8 9,24 23,24" fill="var(--accent)" opacity={0.18} stroke="var(--accent)" strokeWidth="1" />
-      <line x1="16" y1="8" x2="16" y2="24" stroke="var(--accent)" strokeWidth="1.2" />
-    </svg>
+    <div
+      role="img"
+      aria-label="Seraph"
+      style={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        backgroundColor: 'var(--accent)',
+        WebkitMaskImage: `url(${seraphMark})`,
+        maskImage: `url(${seraphMark})`,
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+      }}
+    />
   )
 }
 

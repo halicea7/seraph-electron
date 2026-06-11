@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, net, session, shell } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
+import appIcon from '../../resources/icon.png?asset'
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
+    icon: appIcon, // taskbar/window icon on Linux & Windows (ignored on macOS)
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -239,6 +241,9 @@ function setupCertificateTrust(): void {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  // macOS shows the app's dock icon from this (in dev the packaged .icns isn't
+  // used, so set it explicitly to override the stock Electron icon).
+  if (process.platform === 'darwin') app.dock?.setIcon(appIcon)
   setupCertificateTrust()
   setupIPC()
   createWindow()
