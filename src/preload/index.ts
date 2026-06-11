@@ -9,6 +9,7 @@ export interface OllamaSettings {
 const api = {
   getServerUrl: (): Promise<string | null> => ipcRenderer.invoke('settings:get-server-url'),
   setServerUrl: (url: string | null): Promise<boolean> => ipcRenderer.invoke('settings:set-server-url', url),
+  prepareTrust: (url: string | null): Promise<boolean> => ipcRenderer.invoke('settings:prepare-trust', url),
 
   // Local Ollama
   ollamaGetSettings: (): Promise<OllamaSettings> => ipcRenderer.invoke('ollama:get-settings'),

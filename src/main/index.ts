@@ -112,6 +112,13 @@ function setupIPC(): void {
     return true
   })
 
+  // Trust a backend's self-signed/mkcert cert for the duration of a connection
+  // test, before the URL is persisted. The ConnectScreen calls this first.
+  ipcMain.handle('settings:prepare-trust', (_, url: string | null) => {
+    pendingTrustUrl = url
+    return true
+  })
+
   // ── Local Ollama ──────────────────────────────────────────────────────────
 
   ipcMain.handle('ollama:get-settings', () => ({
@@ -169,13 +176,17 @@ function setupIPC(): void {
 // installing the CA on every client, we trust the cert ONLY for the exact host
 // the user configured as their backend — every other origin is still verified
 // normally.
-function parseConfiguredUrl(): URL | null {
-  const raw = settings.serverUrl
+// A host the ConnectScreen is actively testing, set *before* it fetches the URL
+// (the URL isn't persisted to settings until the test passes — so without this
+// the very first reachability check could never trust a self-signed cert).
+let pendingTrustUrl: string | null = null
+
+function parseUrlLoose(raw: string | null): URL | null {
   if (!raw) return null
   try {
     return new URL(raw)
   } catch {
-    // serverUrl may have been entered without a scheme (e.g. "10.0.0.5:8000").
+    // May have been entered without a scheme (e.g. "10.0.0.5:8000").
     try {
       return new URL(`https://${raw}`)
     } catch {
@@ -184,26 +195,25 @@ function parseConfiguredUrl(): URL | null {
   }
 }
 
-// host = "host:port" (used by certificate-error, whose url includes the port).
-function configuredHost(): string | null {
-  return parseConfiguredUrl()?.host ?? null
+// "host:port" — used by certificate-error, whose url includes the port.
+function trustedHosts(): string[] {
+  return [parseUrlLoose(settings.serverUrl)?.host, parseUrlLoose(pendingTrustUrl)?.host]
+    .filter((h): h is string => !!h)
 }
 
-// hostname = host only, no port (used by setCertificateVerifyProc).
-function configuredHostname(): string | null {
-  return parseConfiguredUrl()?.hostname ?? null
+// hostname only (no port) — used by setCertificateVerifyProc.
+function trustedHostnames(): string[] {
+  return [parseUrlLoose(settings.serverUrl)?.hostname, parseUrlLoose(pendingTrustUrl)?.hostname]
+    .filter((h): h is string => !!h)
 }
 
 function setupCertificateTrust(): void {
   // Primary, most reliable path: intercept verification in the network stack.
   // Catches fetch / XHR / WebSocket. callback(0)=trust, callback(-3)=default.
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
-    const hostname = configuredHostname()
-    if (hostname && request.hostname === hostname) {
-      callback(0) // trust the user's own Seraph backend cert
-    } else {
-      callback(-3) // everything else: normal Chromium verification
-    }
+    const trust = trustedHostnames().includes(request.hostname)
+    console.log(`[seraph] cert check host=${request.hostname} -> ${trust ? 'TRUST (configured backend)' : 'default verification'}`)
+    callback(trust ? 0 : -3)
   })
 
   // Belt-and-suspenders: also handle the app-level event.
@@ -215,7 +225,7 @@ function setupCertificateTrust(): void {
       callback(false)
       return
     }
-    if (host === configuredHost()) {
+    if (trustedHosts().includes(host)) {
       event.preventDefault()
       callback(true)
     } else {
@@ -223,7 +233,7 @@ function setupCertificateTrust(): void {
     }
   })
 
-  console.log(`[seraph] backend TLS trust active for host: ${configuredHostname() ?? '(none configured)'}`)
+  console.log(`[seraph] backend TLS trust active; saved host: ${parseUrlLoose(settings.serverUrl)?.hostname ?? '(none yet)'}`)
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

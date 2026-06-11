@@ -12,6 +12,9 @@ export function ConnectScreen() {
     setTesting(true)
     setError(null)
     try {
+      // Trust this host's cert (self-signed/mkcert HTTPS) for the test fetch below,
+      // before it's persisted. Without this the very first probe over HTTPS fails.
+      await window.electronAPI.prepareTrust(trimmed)
       const res = await fetch(`${trimmed}/api/v1/auth/me`, { method: 'GET' })
       // 401 is fine — it means the server is reachable, just not logged in yet
       if (!res.ok && res.status !== 401) throw new Error(`Server returned ${res.status}`)
