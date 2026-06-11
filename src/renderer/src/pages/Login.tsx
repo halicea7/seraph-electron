@@ -142,7 +142,7 @@ export default function Login() {
       })
       const data = await completeRes.json()
       if (!completeRes.ok) throw new Error(data.detail || 'Passkey authentication failed')
-      login(data.access_token, data.user)
+      login(data.access_token, data.user, staySignedIn)
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
         setError('Passkey prompt was cancelled.')
@@ -187,7 +187,7 @@ export default function Login() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.detail || 'Setup failed')
-        login(data.access_token, data.user)
+        login(data.access_token, data.user, staySignedIn)
       } else {
         const form = new URLSearchParams()
         form.append('username', username.trim())
@@ -199,7 +199,7 @@ export default function Login() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.detail || 'Login failed')
-        login(data.access_token, data.user)
+        login(data.access_token, data.user, staySignedIn)
       }
     } catch (err: any) {
       setError(err.message || 'Unknown error')

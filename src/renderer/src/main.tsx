@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { initServerUrl } from './lib/config'
+import { getToken } from './lib/auth-token'
 import App from './App'
 
 // Initialise server URL from Electron settings before anything renders
@@ -9,7 +10,7 @@ initServerUrl().then(() => {
   // Global fetch interceptor — injects the stored JWT into every Seraph API request
   const _origFetch = window.fetch.bind(window)
   window.fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const token = localStorage.getItem('seraph_token')
+    const token = getToken()
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
     if (token && url.includes('/api/v1/')) {
       const headers = new Headers((init.headers as HeadersInit) ?? {})
