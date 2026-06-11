@@ -229,7 +229,7 @@ export default function ADAttack() {
           {/* Stats */}
           {active && (
             <div style={{ display: 'flex', gap: 16, marginBottom: 20, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-2)', flexWrap: 'wrap' }}>
-              {domain && <span>domain <span style={{ color: 'var(--accent)' }}>{domain}</span></span>
+              {domain && <span>domain <span style={{ color: 'var(--accent)' }}>{domain}</span></span>}
               {Object.entries(active.stats).map(([k, v]) => (
                 <span key={k}>{k} <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{v}</span></span>
               ))}
