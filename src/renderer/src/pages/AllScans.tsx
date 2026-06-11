@@ -4,6 +4,10 @@ import { getApiBase } from '@/lib/config'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { SkeletonRows } from '@/components/Skeleton'
+import NessusScanModal from '@/components/NessusScanModal'
+import { useLiveEvents } from '@/contexts/LiveEventsContext'
+import { useToast } from '@/contexts/ToastContext'
+import { controlNessusScan, requestNessusExport, nessusExportDownloadUrl } from '@/api/client'
 
 const rule = '1px solid var(--rule)'
 const ruleStrong = '1px solid var(--rule-strong)'
@@ -20,6 +24,9 @@ interface ScanRow {
   project_id: string | null
   finding_count: number
   auto_probe: boolean
+  nessus_scan_id: number | null
+  nessus_status: string | null
+  nessus_progress: number | null
   started_at: string | null
   completed_at: string | null
   created_at: string | null
@@ -155,6 +162,11 @@ export default function AllScans() {
   const [parseMsg, setParseMsg]           = useState('')
   const [cancelLoading, setCancelLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [showLaunch, setShowLaunch]       = useState(false)
+  const [ctrlLoading, setCtrlLoading]     = useState(false)
+
+  const toast = useToast()
+  const { subscribe } = useLiveEvents()
 
   function updateFilter(status: string, q: string) {
     const params: Record<string, string> = {}
@@ -165,11 +177,15 @@ export default function AllScans() {
 
   const openParam = searchParams.get('open')
 
-  useEffect(() => {
-    fetch(`${getApiBase()}/scans`)
+  function loadScans(): Promise<ScanRow[]> {
+    return fetch(`${getApiBase()}/scans`)
       .then(r => r.json())
-      .then((data: ScanRow[]) => {
-        setScans(data)
+      .then((data: ScanRow[]) => { setScans(data); return data })
+  }
+
+  useEffect(() => {
+    loadScans()
+      .then(data => {
         if (openParam) {
           const target = data.find(s => s.id === openParam)
           if (target) openDrawer(target)
@@ -178,6 +194,27 @@ export default function AllScans() {
       })
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live updates: Nessus poller pushes scan_update (status/progress) and
+  // finding_created (fan-out complete) over /ws/events.
+  useEffect(() => {
+    const unsub = subscribe((msg: any) => {
+      if (msg?.type === 'scan_update' && msg.scan_id) {
+        setScans(prev => prev.map(s => s.id === msg.scan_id
+          ? { ...s, nessus_status: msg.status ?? s.nessus_status,
+              nessus_progress: typeof msg.progress === 'number' ? msg.progress : s.nessus_progress,
+              status: msg.status === 'completed' ? 'completed' : s.status }
+          : s))
+      } else if (msg?.type === 'finding_created') {
+        loadScans()
+      } else if (msg?.type === 'nessus_export_ready' && msg.nessus_scan_id && msg.file_id) {
+        const url = nessusExportDownloadUrl(msg.nessus_scan_id, msg.file_id)
+        toast.success(`${String(msg.format ?? 'report').toUpperCase()} export ready`)
+        window.open(url, '_blank')
+      }
+    })
+    return unsub
+  }, [subscribe])
 
   const filtered = scans.filter(s => {
     if (statusFilter !== 'all' && s.status !== statusFilter) return false
@@ -219,6 +256,32 @@ export default function AllScans() {
       }
     } finally {
       setCancelLoading(false)
+    }
+  }
+
+  async function nessusControl(scan: ScanRow, action: 'pause' | 'resume' | 'stop') {
+    if (!scan.nessus_scan_id) return
+    setCtrlLoading(true)
+    try {
+      await controlNessusScan(scan.nessus_scan_id, action)
+      const optimistic = action === 'pause' ? 'paused' : action === 'resume' ? 'running' : 'stopping'
+      setScans(prev => prev.map(s => s.id === scan.id ? { ...s, nessus_status: optimistic } : s))
+      setDrawerScan(prev => prev?.id === scan.id ? { ...prev, nessus_status: optimistic } : prev)
+      toast.success(`Scan ${action}d`)
+    } catch (e: any) {
+      toast.error(e?.message ?? `Failed to ${action} scan`)
+    } finally {
+      setCtrlLoading(false)
+    }
+  }
+
+  async function nessusExport(scan: ScanRow, format: 'nessus' | 'pdf' | 'csv') {
+    if (!scan.nessus_scan_id) return
+    try {
+      await requestNessusExport(scan.nessus_scan_id, format)
+      toast.info(`Preparing ${format.toUpperCase()} export — you'll be notified when it's ready`)
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Export failed')
     }
   }
 
@@ -288,6 +351,15 @@ export default function AllScans() {
           <div className="smcap" style={{ marginBottom: 2 }}>All Scans</div>
           <h1 className="mono" style={{ fontSize: 20, fontWeight: 500, color: 'var(--fg)', margin: 0 }}>Scans</h1>
         </div>
+
+        <button
+          onClick={() => setShowLaunch(true)}
+          className="btn btn-primary btn-sm"
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Icon name="target" size={13} />
+          Launch Nessus scan
+        </button>
 
         {/* Right slot: diff controls */}
         {selected.length > 0 && (
@@ -484,7 +556,18 @@ export default function AllScans() {
 
                       {/* Status */}
                       <td style={{ padding: '10px 16px' }}>
-                        <span style={badgeStyle(s.status)}>{s.status}</span>
+                        {s.scan_type === 'nessus_job' && s.nessus_status && s.nessus_status !== 'completed' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 110 }}>
+                            <span className="mono" style={{ fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              {s.nessus_status} · {s.nessus_progress ?? 0}%
+                            </span>
+                            <div style={{ height: 3, background: 'var(--rule)', borderRadius: 2, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${s.nessus_progress ?? 0}%`, background: 'var(--accent)', transition: 'width .4s ease' }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={badgeStyle(s.status)}>{s.status}</span>
+                        )}
                       </td>
 
                       {/* Findings count */}
@@ -576,7 +659,47 @@ export default function AllScans() {
                 </button>
               )}
               {parseMsg && <span style={{ fontSize: 11, color: 'var(--ok)' }}>{parseMsg}</span>}
-              {(drawerScan.status === 'running' || drawerScan.status === 'pending') && (
+
+              {/* Nessus job lifecycle controls + export */}
+              {drawerScan.scan_type === 'nessus_job' && drawerScan.nessus_scan_id && (
+                <>
+                  {drawerScan.nessus_status && !['completed', 'stopping', 'canceled', 'cancelled'].includes(drawerScan.nessus_status) && (
+                    <>
+                      <button
+                        onClick={() => nessusControl(drawerScan, drawerScan.nessus_status === 'paused' ? 'resume' : 'pause')}
+                        disabled={ctrlLoading}
+                        className="btn btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: ctrlLoading ? 0.5 : 1 }}
+                      >
+                        <Icon name={drawerScan.nessus_status === 'paused' ? 'play' : 'pause'} size={11} />
+                        {drawerScan.nessus_status === 'paused' ? 'Resume' : 'Pause'}
+                      </button>
+                      <button
+                        onClick={() => nessusControl(drawerScan, 'stop')}
+                        disabled={ctrlLoading}
+                        className="btn btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: ctrlLoading ? 0.5 : 1 }}
+                      >
+                        <Icon name="stop" size={11} />
+                        Stop
+                      </button>
+                    </>
+                  )}
+                  {(['nessus', 'pdf', 'csv'] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      onClick={() => nessusExport(drawerScan, fmt)}
+                      className="btn btn-sm"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Icon name="download" size={11} />
+                      {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {(drawerScan.status === 'running' || drawerScan.status === 'pending') && drawerScan.scan_type !== 'nessus_job' && (
                 <button
                   onClick={() => cancelScan(drawerScan.id)}
                   disabled={cancelLoading}
@@ -627,6 +750,13 @@ export default function AllScans() {
           </div>
         )}
       </div>
+
+      {showLaunch && (
+        <NessusScanModal
+          onClose={() => setShowLaunch(false)}
+          onLaunched={() => loadScans()}
+        />
+      )}
     </div>
   )
 }

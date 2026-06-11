@@ -276,3 +276,79 @@ export interface PlatformStats {
 export function getStats(): Promise<PlatformStats> {
   return request<PlatformStats>('/stats')
 }
+
+// ── Nessus ────────────────────────────────────────────────────────────────────
+
+export interface NessusTemplate {
+  uuid: string
+  name: string
+  title: string
+  description: string
+  is_agent: boolean
+}
+
+export interface NessusPolicy {
+  id: number
+  name: string
+  description: string
+}
+
+export interface NessusFolder {
+  id: number
+  name: string
+  type: string
+}
+
+export function getNessusTemplates(): Promise<NessusTemplate[]> {
+  return request<NessusTemplate[]>('/nessus/templates')
+}
+
+export function getNessusPolicies(): Promise<NessusPolicy[]> {
+  return request<NessusPolicy[]>('/nessus/policies')
+}
+
+export function getNessusFolders(): Promise<NessusFolder[]> {
+  return request<NessusFolder[]>('/nessus/folders')
+}
+
+export function launchNessusScan(data: {
+  project_id: string
+  template_uuid: string
+  policy_id?: number | null
+  folder_id?: number | null
+  name?: string
+  targets: string
+}): Promise<{ scan_id: string; nessus_scan_id: number; name: string }> {
+  return request('/nessus/scans/launch', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function controlNessusScan(
+  nessusScanId: number,
+  action: 'pause' | 'resume' | 'stop' | 'kill'
+): Promise<{ ok: boolean; action: string }> {
+  return request(`/nessus/scans/${nessusScanId}/control/${action}`, { method: 'POST' })
+}
+
+export function requestNessusExport(
+  nessusScanId: number,
+  format: 'nessus' | 'pdf' | 'html' | 'csv'
+): Promise<{ ok: boolean; file_id: number; format: string }> {
+  return request(`/nessus/scans/${nessusScanId}/export`, {
+    method: 'POST',
+    body: JSON.stringify({ format }),
+  })
+}
+
+export function nessusExportStatus(
+  nessusScanId: number,
+  fileId: number
+): Promise<{ status: string }> {
+  return request(`/nessus/scans/${nessusScanId}/export/${fileId}/status`)
+}
+
+export function nessusExportDownloadUrl(nessusScanId: number, fileId: number): string {
+  return `${getApiBase()}/nessus/scans/${nessusScanId}/export/${fileId}/download`
+}

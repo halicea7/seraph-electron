@@ -21,6 +21,7 @@ interface FindingRow {
   severity: string
   title: string
   description: string
+  remediation: string | null
   cve_id: string | null
   cvss_score: string | null
   status: string
@@ -948,8 +949,18 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
         {finding.description && (
           <div style={{ border: rule, padding: 14 }}>
             <div className="smcap" style={{ marginBottom: 6 }}>Description</div>
-            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, fontFamily: 'var(--font-serif)' }}>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, fontFamily: 'var(--font-serif)', whiteSpace: 'pre-wrap' }}>
               {finding.description}
+            </p>
+          </div>
+        )}
+
+        {/* Remediation / solution (e.g. Nessus-provided) */}
+        {finding.remediation && (
+          <div style={{ border: rule, padding: 14 }}>
+            <div className="smcap" style={{ marginBottom: 6 }}>Solution</div>
+            <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, fontFamily: 'var(--font-serif)', whiteSpace: 'pre-wrap' }}>
+              {finding.remediation}
             </p>
           </div>
         )}
