@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,6 +20,7 @@ interface Answer {
   question: string
   answer: string
   citations: Citation[]
+  model: string
 }
 
 // Map a citation source type to the page that shows it.
@@ -50,6 +51,22 @@ export default function EngagementQA() {
   const [error, setError] = useState('')
   const [history, setHistory] = useState<Answer[]>([])
 
+  // Available models + the one to use. Defaults to the global Settings → AI model.
+  const [models, setModels] = useState<string[]>([])
+  const [model, setModel] = useState('')
+  const [defaultModel, setDefaultModel] = useState('')
+
+  useEffect(() => {
+    fetch(`${api}/ai/config`)
+      .then(r => r.json())
+      .then(cfg => { setDefaultModel(cfg.model || ''); setModel(m => m || cfg.model || '') })
+      .catch(() => {})
+    fetch(`${api}/ai/models`)
+      .then(r => r.json())
+      .then(d => setModels(d.models || []))
+      .catch(() => {})
+  }, [])
+
   async function ask(q: string) {
     if (!selectedProject || !q.trim()) return
     setLoading(true)
@@ -58,14 +75,14 @@ export default function EngagementQA() {
       const r = await fetch(`${api}/ai/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: selectedProject.id, question: q.trim() }),
+        body: JSON.stringify({ project_id: selectedProject.id, question: q.trim(), model: model || undefined }),
       })
       if (!r.ok) {
         const d = await r.json().catch(() => ({}))
         throw new Error(d.detail || 'Request failed')
       }
       const data = await r.json()
-      setHistory(prev => [{ question: q.trim(), answer: data.answer, citations: data.citations || [] }, ...prev])
+      setHistory(prev => [{ question: q.trim(), answer: data.answer, citations: data.citations || [], model: model || defaultModel }, ...prev])
       setQuestion('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed')
@@ -83,12 +100,38 @@ export default function EngagementQA() {
     <div style={{ padding: '24px 28px', maxWidth: 860, margin: '0 auto', width: '100%' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div className="smcap" style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 4 }}>Analysis</div>
-        <h1 className="sec-h" style={{ margin: 0 }}>Ask Seraph</h1>
-        <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 4 }}>
-          Ask questions about this engagement. Answers are grounded in your findings, loot, scans, and credentials — with citations.
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+        <div>
+          <div className="smcap" style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 4 }}>Analysis</div>
+          <h1 className="sec-h" style={{ margin: 0 }}>Ask Seraph</h1>
+          <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 4 }}>
+            Ask questions about this engagement. Answers are grounded in your findings, loot, scans, and credentials — with citations.
+          </p>
+        </div>
+
+        {/* Model selector — defaults to the Settings → AI model */}
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div className="smcap" style={{ fontSize: 9, color: 'var(--fg-3)', marginBottom: 4 }}>Model</div>
+          {models.length > 0 ? (
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              style={{
+                background: 'var(--bg)', border: '1px solid var(--rule)', color: 'var(--fg)',
+                fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 8px', borderRadius: 3, maxWidth: 220,
+              }}
+            >
+              {models.map(m => (
+                <option key={m} value={m}>{m}{m === defaultModel ? '  (default)' : ''}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="mono" style={{ fontSize: 11, color: model ? 'var(--fg-2)' : 'var(--crit)' }}>
+              {model || 'none — set one in Settings → AI'}
+            </span>
+          )}
+          <div className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', marginTop: 3 }}>via Ollama</div>
+        </div>
       </div>
 
       <div style={{ height: 1, background: 'var(--rule)', marginBottom: 20 }} />
@@ -133,7 +176,12 @@ export default function EngagementQA() {
             <div key={i} style={{ marginBottom: 18, border: '1px solid var(--rule)', borderRadius: 3 }}>
               <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--rule)', background: 'var(--bg-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Icon name="help" size={13} color="var(--accent)" />
-                <span style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 600 }}>{item.question}</span>
+                <span style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 600, flex: 1 }}>{item.question}</span>
+                {item.model && (
+                  <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-4)', flexShrink: 0 }} title="Model that produced this answer">
+                    {item.model}
+                  </span>
+                )}
               </div>
               <div style={{ padding: '12px 14px' }}>
                 <div className="qa-markdown" style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6 }}>
