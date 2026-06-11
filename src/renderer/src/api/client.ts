@@ -352,3 +352,39 @@ export function nessusExportStatus(
 export function nessusExportDownloadUrl(nessusScanId: number, fileId: number): string {
   return `${getApiBase()}/nessus/scans/${nessusScanId}/export/${fileId}/download`
 }
+
+// ── Hermes Agent ────────────────────────────────────────────────────────────────
+
+export interface HermesStatus {
+  installed: boolean
+  version: string
+  ollama_url: string
+  ollama_reachable: boolean
+}
+
+export interface HermesConfig {
+  allow_private_urls: boolean
+  sandbox: boolean
+  default_model: string
+}
+
+export function getHermesStatus(): Promise<HermesStatus> {
+  return request<HermesStatus>('/hermes/status')
+}
+
+export function getHermesConfig(): Promise<HermesConfig> {
+  return request<HermesConfig>('/hermes/config')
+}
+
+export function saveHermesConfig(data: HermesConfig): Promise<{ ok: boolean }> {
+  return request('/hermes/config', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function createHermesRun(data: {
+  project_id: string
+  target_id: string
+  mode: string
+  model: string
+}): Promise<{ scan_id: string; mode: string; model: string }> {
+  return request('/hermes/run', { method: 'POST', body: JSON.stringify(data) })
+}

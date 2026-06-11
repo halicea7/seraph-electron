@@ -560,9 +560,14 @@ export default function AIOperator() {
                 <Icon name="refresh" size={11} color={op.loadingModels ? 'var(--accent)' : 'currentColor'} />
               </button>
             </div>
-            {op.modelOptions.length === 0 && (
+            {op.modelOptions.length === 0 ? (
               <p style={{ fontSize: 10, color: 'var(--high)', margin: 0, lineHeight: 1.5 }}>
                 Pull a tool-capable model (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>ollama pull qwen3</code>).
+              </p>
+            ) : (
+              <p style={{ fontSize: 10, color: 'var(--fg-4)', margin: 0, lineHeight: 1.5 }}>
+                Multi-step pentest reasoning needs a strong tool-capable model — small models stall or
+                loop. Prefer ≥ ~14B (e.g. qwen2.5/llama3.1) if a run underperforms.
               </p>
             )}
           </OpField>
@@ -713,6 +718,24 @@ export default function AIOperator() {
               <span style={{ fontSize: 9, fontWeight: 600 }}>{active ? 'ON' : 'OFF'}</span>
             </button>
           ))}
+
+          {/* Auto-run budget — auto-approve the next N steps without prompting */}
+          <div style={{
+            border: `1px solid ${op.autoBudget > 0 ? modeConfig.border : 'var(--rule)'}`,
+            background: op.autoBudget > 0 ? modeConfig.bg : 'transparent',
+            padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          }}>
+            <span className="mono" style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: op.autoBudget > 0 ? modeConfig.color : 'var(--fg-3)' }}>
+              Auto-run{op.autoBudget > 0 ? ` · ${op.autoBudget} left` : ''}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={() => op.setAutoBudget(Math.max(0, op.autoBudget - 1))}
+                style={{ background: 'none', border: '1px solid var(--rule)', color: 'var(--fg-2)', cursor: 'pointer', width: 20, height: 20, lineHeight: '1', fontSize: 13 }}>−</button>
+              <span className="mono tnum" style={{ minWidth: 14, textAlign: 'center', fontSize: 12, color: 'var(--fg)' }}>{op.autoBudget}</span>
+              <button onClick={() => op.setAutoBudget(op.autoBudget + 1)}
+                style={{ background: 'none', border: '1px solid var(--rule)', color: 'var(--fg-2)', cursor: 'pointer', width: 20, height: 20, lineHeight: '1', fontSize: 13 }}>+</button>
+            </div>
+          </div>
 
           {op.phase === 'idle' ? (
             <button

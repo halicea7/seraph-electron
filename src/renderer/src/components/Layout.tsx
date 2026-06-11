@@ -34,6 +34,7 @@ const NAV_GROUPS = [
       { to: '/playbooks',       label: 'Playbooks',         icon: 'book' },
       { to: '/attack-paths',    label: 'Attack Paths',      icon: 'activity' },
       { to: '/operator',        label: 'AI Operator',       icon: 'cube' },
+      { to: '/hermes',          label: 'Hermes Operator',   icon: 'zap' },
       { to: '/command-library', label: 'Command Library',   icon: 'fingerprint' },
     ],
   },

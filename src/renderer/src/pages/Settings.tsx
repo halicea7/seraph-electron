@@ -227,12 +227,13 @@ const NAV_ITEMS: { id: string; label: string }[] = [
   { id: 'ai',         label: 'AI' },
   { id: 'msf',        label: 'Metasploit RPC' },
   { id: 'nessus',     label: 'Nessus' },
+  { id: 'hermes',     label: 'Hermes' },
   { id: 'env',        label: 'Environment' },
   { id: 'passkeys',   label: 'Access & Integrations' },
   { id: 'demo',       label: 'Demo Data' },
 ]
 
-type NavId = 'users' | 'appearance' | 'tools' | 'ai' | 'msf' | 'nessus' | 'env' | 'passkeys' | 'demo'
+type NavId = 'users' | 'appearance' | 'tools' | 'ai' | 'msf' | 'nessus' | 'hermes' | 'env' | 'passkeys' | 'demo'
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -325,6 +326,13 @@ export default function Settings() {
   const [nessusTesting, setNessusTesting] = useState(false)
   const [nessusStatus, setNessusStatus] = useState<{ configured: boolean; connected: boolean; error: string | null } | null>(null)
 
+  // Hermes
+  const [hermesStatus, setHermesStatus] = useState<{ installed: boolean; version: string; ollama_url: string; ollama_reachable: boolean } | null>(null)
+  const [hermesAllowPrivate, setHermesAllowPrivate] = useState(true)
+  const [hermesSandbox, setHermesSandbox] = useState(false)
+  const [hermesDefaultModel, setHermesDefaultModel] = useState('')
+  const [hermesSaving, setHermesSaving] = useState(false)
+
   // Demo
   const [demoActive, setDemoActive] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
@@ -383,9 +391,39 @@ export default function Settings() {
 
   useEffect(() => {
     if (activeNav === 'nessus') loadNessusConfig()
+    if (activeNav === 'hermes') loadHermesData()
   }, [activeNav])
 
   // ── API functions ─────────────────────────────────────────────────────────
+
+  async function loadHermesData() {
+    try {
+      const [s, c] = await Promise.all([
+        fetch(`${getApiBase()}/hermes/status`).then(r => r.json()),
+        fetch(`${getApiBase()}/hermes/config`).then(r => r.json()),
+      ])
+      setHermesStatus(s)
+      setHermesAllowPrivate(c.allow_private_urls ?? true)
+      setHermesSandbox(c.sandbox ?? false)
+      setHermesDefaultModel(c.default_model ?? '')
+    } catch { /* offline */ }
+  }
+
+  async function saveHermesConfigSettings() {
+    setHermesSaving(true)
+    try {
+      await fetch(`${getApiBase()}/hermes/config`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allow_private_urls: hermesAllowPrivate,
+          sandbox: hermesSandbox,
+          default_model: hermesDefaultModel.trim(),
+        }),
+      })
+    } finally {
+      setHermesSaving(false)
+    }
+  }
 
   async function loadPasskeys() {
     try {
@@ -1318,6 +1356,70 @@ export default function Settings() {
     )
   }
 
+  function renderHermes() {
+    return (
+      <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Section title="HERMES OPERATOR">
+          <div style={{ padding: '14px var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--fg-3)', lineHeight: 1.6 }}>
+              The Hermes Operator runs the Hermes Agent (Nous Research) autonomously on the backend host,
+              driven by your Ollama model with smart approvals. Install it on the backend with
+              <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}> pip install hermes-agent</code>.
+            </div>
+
+            {/* Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: hermesStatus?.installed ? 'var(--ok)' : 'var(--fg-4)' }}>
+                <span className={`dot ${hermesStatus?.installed ? 'dot-live' : 'dot-idle'}`} />
+                {hermesStatus ? (hermesStatus.installed ? `Hermes ${hermesStatus.version || 'ready'}` : 'Not installed') : 'Checking…'}
+              </span>
+              {hermesStatus && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: hermesStatus.ollama_reachable ? 'var(--ok)' : 'var(--high)' }}>
+                  <span className={`dot ${hermesStatus.ollama_reachable ? 'dot-live' : 'dot-warn'}`} />
+                  Ollama {hermesStatus.ollama_reachable ? 'reachable' : 'unreachable'}
+                </span>
+              )}
+            </div>
+
+            <Field label="Default model (optional)">
+              <input
+                type="text"
+                value={hermesDefaultModel}
+                onChange={e => setHermesDefaultModel(e.target.value)}
+                placeholder="e.g. qwen2.5:14b"
+                style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
+              />
+            </Field>
+
+            <Field label="Allow private/RFC1918 URLs">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+                <button onClick={() => setHermesAllowPrivate(v => !v)} style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: hermesAllowPrivate ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer' }}>
+                  <span style={{ position: 'absolute', top: 2, left: hermesAllowPrivate ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>Needed to reach internal lab targets</span>
+              </div>
+            </Field>
+
+            <Field label="Docker sandbox">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+                <button onClick={() => setHermesSandbox(v => !v)} style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: hermesSandbox ? 'var(--ok)' : 'rgba(100,116,139,0.3)', border: 'none', cursor: 'pointer' }}>
+                  <span style={{ position: 'absolute', top: 2, left: hermesSandbox ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>Run tools inside a container (requires Docker on the backend)</span>
+              </div>
+            </Field>
+
+            <div>
+              <button onClick={saveHermesConfigSettings} disabled={hermesSaving} className="btn btn-primary btn-sm">
+                {hermesSaving ? 'Saving…' : 'Save Hermes settings'}
+              </button>
+            </div>
+          </div>
+        </Section>
+      </div>
+    )
+  }
+
   function renderEnv() {
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1576,6 +1678,7 @@ export default function Settings() {
       case 'ai':         return renderAi()
       case 'msf':        return renderMsf()
       case 'nessus':     return renderNessus()
+      case 'hermes':     return renderHermes()
       case 'env':        return renderEnv()
       case 'passkeys':   return renderPasskeys()
       case 'demo':       return renderDemo()
@@ -1625,6 +1728,7 @@ export default function Settings() {
                 {item.id === 'ai'         && <Brain size={13} />}
                 {item.id === 'msf'        && <Icon name="zap"         size={13} color="currentColor" />}
                 {item.id === 'nessus'     && <Icon name="scan"        size={13} color="currentColor" />}
+                {item.id === 'hermes'     && <Icon name="cpu"         size={13} color="currentColor" />}
                 {item.id === 'env'        && <Monitor size={13} />}
                 {item.id === 'passkeys'   && <Icon name="fingerprint" size={13} color="currentColor" />}
                 {item.id === 'demo'       && <FlaskConical size={13} />}

@@ -30,6 +30,7 @@ import Listeners from '@/pages/Listeners'
 import Agents from '@/pages/Agents'
 import AttackPaths from '@/pages/AttackPaths'
 import AIOperator from '@/pages/AIOperator'
+import HermesOperator from '@/pages/HermesOperator'
 import CveWatch from '@/pages/CveWatch'
 import Timeline from '@/pages/Timeline'
 import CommandLibrary from '@/pages/CommandLibrary'
@@ -90,6 +91,7 @@ function ProtectedRoutes() {
           <Route path="agents" element={<Agents />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="operator" element={<AIOperator />} />
+          <Route path="hermes" element={<HermesOperator />} />
           <Route path="cve-watch" element={<CveWatch />} />
           <Route path="timeline" element={<Timeline />} />
           <Route path="command-library" element={<CommandLibrary />} />

@@ -52,6 +52,7 @@ export interface AIOperatorContextValue {
   lhostIp: string
   useToolCalling: boolean
   thinkingEnabled: boolean
+  autoBudget: number
 
   // Prompt editor
   promptDraft: string
@@ -79,6 +80,7 @@ export interface AIOperatorContextValue {
   setLhostIp: (ip: string) => void
   setUseToolCalling: (v: boolean) => void
   setThinkingEnabled: (v: boolean) => void
+  setAutoBudget: (n: number) => void
 
   // Actions
   loadModelOptions: () => Promise<void>
@@ -114,20 +116,28 @@ function phaseIdFor(mode: OperatorMode, toolId: string): string {
   return isMsfTool(toolId) ? 'exploitation' : 'scanning'
 }
 
+// Persisted operator config (model/tools/mode/etc.) — survives reloads.
+const LS_CONFIG = 'ai-operator-config'
+function loadConfig(): Record<string, any> {
+  try { return JSON.parse(localStorage.getItem(LS_CONFIG) || '{}') } catch { return {} }
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AIOperatorProvider({ children }: { children: React.ReactNode }) {
-  // ── Config state ────────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<OperatorMode>('attack')
+  // ── Config state (restored from localStorage where available) ────────────────
+  const _saved = loadConfig()
+  const _initMode: OperatorMode = _saved.mode ?? 'attack'
+  const [mode, setMode] = useState<OperatorMode>(_initMode)
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState('')
   const [targets, setTargets] = useState<TargetSummary[]>([])
   const [selectedTarget, setSelectedTarget] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
-  const [selectedModelKey, setSelectedModelKey] = useState('')
+  const [selectedModelKey, setSelectedModelKey] = useState(_saved.selectedModelKey ?? '')
   const [loadingModels, setLoadingModels] = useState(false)
-  const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set(MODE_CONFIGS.attack.defaultTools))
-  const [enabledMsf, setEnabledMsf] = useState<Set<string>>(new Set(MODE_CONFIGS.attack.defaultMsf))
+  const [enabledTools, setEnabledTools] = useState<Set<string>>(new Set(_saved.enabledTools ?? MODE_CONFIGS[_initMode].defaultTools))
+  const [enabledMsf, setEnabledMsf] = useState<Set<string>>(new Set(_saved.enabledMsf ?? MODE_CONFIGS[_initMode].defaultMsf))
 
   // ── Prompt state ────────────────────────────────────────────────────────────
   const [promptDraft, setPromptDraft] = useState('')
@@ -142,9 +152,14 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   const [errorMsg, setErrorMsg] = useState('')
   const [showStream, setShowStream] = useState(false)
   const [runStartTime, setRunStartTime] = useState<number | null>(null)
-  const [lhostIp, setLhostIp] = useState('')
-  const [useToolCalling, setUseToolCalling] = useState(true)
-  const [thinkingEnabled, setThinkingEnabled] = useState(false)
+  const [lhostIp, setLhostIp] = useState(_saved.lhostIp ?? '')
+  const [useToolCalling, setUseToolCalling] = useState(_saved.useToolCalling ?? true)
+  const [thinkingEnabled, setThinkingEnabled] = useState(_saved.thinkingEnabled ?? false)
+
+  // Auto-run budget: number of upcoming steps to auto-approve without prompting.
+  const [autoBudget, setAutoBudget] = useState(0)
+  const autoBudgetRef = useRef(0)
+  useEffect(() => { autoBudgetRef.current = autoBudget }, [autoBudget])
 
   // ── Refs (survive re-renders, not tied to any mounted component) ─────────────
   const messages = useRef<ChatMessage[]>([])
@@ -175,8 +190,19 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     if (!promptIsAuto) return
     const t = targets.find(x => x.id === selectedTarget)
     if (!t) return
-    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf]))
-  }, [mode, enabledTools, enabledMsf, selectedTarget, targets, promptIsAuto])
+    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf], useToolCalling))
+  }, [mode, enabledTools, enabledMsf, selectedTarget, targets, promptIsAuto, useToolCalling])
+
+  // Persist config across reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_CONFIG, JSON.stringify({
+        mode, selectedModelKey,
+        enabledTools: [...enabledTools], enabledMsf: [...enabledMsf],
+        useToolCalling, thinkingEnabled, lhostIp,
+      }))
+    } catch { /* quota / unavailable */ }
+  }, [mode, selectedModelKey, enabledTools, enabledMsf, useToolCalling, thinkingEnabled, lhostIp])
 
   // ── Model loading ────────────────────────────────────────────────────────────
 
@@ -233,7 +259,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       if (t) {
         const tools = resetTools ? cfg.defaultTools : [...enabledTools]
         const msf   = resetTools ? cfg.defaultMsf   : [...enabledMsf]
-        setPromptDraft(buildPreviewPrompt(newMode, t, tools, msf))
+        setPromptDraft(buildPreviewPrompt(newMode, t, tools, msf, useToolCalling))
       }
     }
   }
@@ -253,7 +279,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   function regeneratePrompt() {
     const t = targets.find(x => x.id === selectedTarget)
     if (!t) return
-    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf]))
+    setPromptDraft(buildPreviewPrompt(mode, t, [...enabledTools], [...enabledMsf], useToolCalling))
     setPromptIsAuto(true)
   }
 
@@ -506,6 +532,29 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     }
   }
 
+  // Parse the model's turn into a step; on a malformed/unrecognised response, nudge it
+  // to reformat and retry ONCE before giving up (a common cause of "doesn't perform well").
+  async function parseOrRetry(
+    result: LLMResult, resolvedMsgs: ChatMessage[], tools: object[],
+  ): Promise<{ step: OperatorStep | 'done' | 'error'; result: LLMResult; msgs: ChatMessage[] }> {
+    const step = parseStepFromResult(result)
+    if (step !== 'error') return { step, result, msgs: resolvedMsgs }
+
+    const nudge = useToolCalling
+      ? 'Your previous message did not contain a valid function call. Call `run_tool` (or `finish_engagement`) now with proper structured arguments — do not reply in plain text.'
+      : 'Your previous message was not valid JSON. Reply with ONLY the JSON object described in RESPONSE FORMAT — no prose, no markdown fences.'
+    const retryMsgs: ChatMessage[] = [
+      ...resolvedMsgs,
+      { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
+      { role: 'user', content: nudge },
+    ]
+    messages.current = retryMsgs
+    setLlmStream('')
+    const retried = await callLLM(retryMsgs, t => setLlmStream(p => p + t), tools, t => setLlmThinking(p => p + t))
+    const { result: r2, msgs: m2 } = await resolveAttackSearches(retried, retryMsgs, tools, t => setLlmStream(p => p + t), t => setLlmThinking(p => p + t))
+    return { step: parseStepFromResult(r2), result: r2, msgs: m2 }
+  }
+
   const advanceLLM = useCallback(async (userMsg: string, assistantContent: string, assistantToolCalls?: any[]) => {
     if (stopped.current) { setPhase('done'); return }
 
@@ -533,15 +582,17 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, newMsgs, tools, t => setLlmStream(prev => prev + t), t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
+      const { step, result: finalResult, msgs: finalMsgs } = await parseOrRetry(result, resolvedMsgs, tools)
+      if (stopped.current) { setPhase('done'); return }
+
       messages.current = [
-        ...resolvedMsgs,
-        { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
+        ...finalMsgs,
+        { role: 'assistant', content: finalResult.content, ...(finalResult.toolCalls ? { tool_calls: finalResult.toolCalls } : {}) },
       ]
 
-      const step = parseStepFromResult(result)
       if (step === 'done') { setPhase('done'); return }
       if (step === 'error') {
-        setErrorMsg('Model returned an unrecognised response. Try a more capable model.')
+        setErrorMsg('Model returned an unrecognised response twice. Try a stronger tool-capable model.')
         setPhase('done')
         return
       }
@@ -593,7 +644,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
         .slice(-40)   // last 40 runs, most recent context
 
       const systemPrompt = promptIsAuto
-        ? buildSystemPrompt(mode, target, findings, [...enabledTools], [...enabledMsf], priorScans)
+        ? buildSystemPrompt(mode, target, findings, [...enabledTools], [...enabledMsf], priorScans, useToolCalling)
         : promptDraft
 
       const initMsgs: ChatMessage[] = [
@@ -608,14 +659,16 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
       const { result, msgs: resolvedMsgs } = await resolveAttackSearches(rawResult, initMsgs, tools, t => setLlmStream(prev => prev + t), t => setLlmThinking(prev => prev + t))
       if (stopped.current) { setPhase('done'); return }
 
+      const { step, result: finalResult, msgs: finalMsgs } = await parseOrRetry(result, resolvedMsgs, tools)
+      if (stopped.current) { setPhase('done'); return }
+
       messages.current = [
-        ...resolvedMsgs,
-        { role: 'assistant', content: result.content, ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}) },
+        ...finalMsgs,
+        { role: 'assistant', content: finalResult.content, ...(finalResult.toolCalls ? { tool_calls: finalResult.toolCalls } : {}) },
       ]
 
-      const step = parseStepFromResult(result)
       if (step === 'done' || step === 'error') {
-        setErrorMsg(step === 'error' ? 'Model returned an unrecognised response. Try a more capable model.' : 'Model returned no action.')
+        setErrorMsg(step === 'error' ? 'Model returned an unrecognised response twice. Try a stronger tool-capable model.' : 'Model returned no action.')
         setPhase('done')
         return
       }
@@ -726,14 +779,25 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     stopped.current = true
     wsRef.current?.close()
     abortRef.current?.abort()
+    setAutoBudget(0)
     setPhase('done')
   }
+
+  // Auto-run budget: when a step is awaiting and budget remains, approve it automatically.
+  useEffect(() => {
+    if (phase !== 'awaiting' || autoBudgetRef.current <= 0) return
+    const last = steps[steps.length - 1]
+    if (!last || last.result !== 'pending') return
+    setAutoBudget(b => Math.max(0, b - 1))
+    handleApprove(last)
+  }, [phase, steps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetSession() {
     setPhase('idle')
     setSteps([])
     setLlmStream('')
     setLlmThinking('')
+    setAutoBudget(0)
     messages.current = []
   }
 
@@ -747,7 +811,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     mode, projects, targets, selectedProject, selectedTarget,
     modelOptions, selectedModelKey, loadingModels,
     enabledTools, enabledMsf, lhostIp,
-    useToolCalling, thinkingEnabled,
+    useToolCalling, thinkingEnabled, autoBudget,
     promptDraft, promptIsAuto,
     phase, steps, liveOutput, llmStream, llmThinking, errorMsg, showStream, runStartTime,
 
@@ -755,7 +819,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
     toggleTool, toggleMsf,
     setShowStream: (fn) => setShowStream(fn as any),
     setPromptDraft, setPromptIsAuto, setLhostIp,
-    setUseToolCalling, setThinkingEnabled,
+    setUseToolCalling, setThinkingEnabled, setAutoBudget,
 
     loadModelOptions, applyModeSwitch, regeneratePrompt,
     startSession, handleApprove, handleSkip, handleStop,

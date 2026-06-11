@@ -256,7 +256,8 @@ export function buildSystemPrompt(
   findings: Finding[],
   enabledTools: string[],
   enabledMsf: string[],
-  priorScans: PentestScanRecord[] = []
+  priorScans: PentestScanRecord[] = [],
+  useToolCalling = false,
 ): string {
   const pentestTemplates = getTemplatesForTools(enabledTools, 999)
   const pentestSection = enabledTools.length
@@ -282,6 +283,34 @@ export function buildSystemPrompt(
       ? 'see PREVIOUS RECONNAISSANCE below'
       : 'unknown'
 
+  // When native tool calling is on, instructing the model to emit "JSON ONLY" fights the
+  // tool path (it writes JSON text instead of calling run_tool). Branch the format section.
+  const responseFormat = useToolCalling
+    ? `RESPONSE FORMAT — use the provided FUNCTIONS, not text:
+  • To run an action, CALL the \`run_tool\` function with structured arguments. For CLI tools pass
+    tool_id + template_id + vars (and extra_flags only if needed); for MSF pass tool_id + msf_options.
+    Always include a one-sentence \`rationale\` and a brief \`analysis\`.
+  • To look up a technique, call \`search_attack_techniques\`.
+  • When no productive actions remain, call \`finish_engagement\`.
+  Do NOT write the action as plain text or JSON in your message — always make a function call.
+
+  Example run_tool arguments:
+  { "tool_id": "nmap", "template_id": "<pick one from the template list above>",
+    "vars": { "target": "${target.hostname_or_ip}" },
+    "analysis": "No prior service data for this host.",
+    "rationale": "Enumerate open services before deeper testing." }`
+    : `RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation outside the JSON:
+{
+  "analysis": "your analysis of the current situation or previous output",
+  "attack_path_note": null | "brief label for an attack path step you've just confirmed",
+  "next_action": null | {
+    "type": "command",
+    "tool": "<EXACT tool id from the enabled lists above — e.g. 'nmap', 'hydra', 'exploit/unix/ftp/vsftpd_234_backdoor'. NEVER use generic labels like 'msf-exploit' or 'metasploit'>",
+    "command": "<complete shell command to run>",
+    "rationale": "<one sentence: why this step now>"
+  }
+}`
+
   return `${buildPersona(mode, target.hostname_or_ip)}
 
 TARGET:
@@ -304,17 +333,7 @@ ${msfList}
 RULES — read carefully:
 ${buildRules(mode, target.hostname_or_ip)}
 
-RESPONSE FORMAT — respond with valid JSON ONLY, no markdown, no explanation outside the JSON:
-{
-  "analysis": "your analysis of the current situation or previous output",
-  "attack_path_note": null | "brief label for an attack path step you've just confirmed",
-  "next_action": null | {
-    "type": "command",
-    "tool": "<EXACT tool id from the enabled lists above — e.g. 'nmap', 'hydra', 'exploit/unix/ftp/vsftpd_234_backdoor'. NEVER use generic labels like 'msf-exploit' or 'metasploit'>",
-    "command": "<complete shell command to run>",
-    "rationale": "<one sentence: why this step now>"
-  }
-}`
+${responseFormat}`
 }
 
 // Preview variant — dynamic data shown as placeholders
@@ -322,9 +341,10 @@ export function buildPreviewPrompt(
   mode: OperatorMode,
   target: TargetSummary,
   enabledTools: string[],
-  enabledMsf: string[]
+  enabledMsf: string[],
+  useToolCalling = false,
 ): string {
-  const base = buildSystemPrompt(mode, target, [], enabledTools, enabledMsf, [])
+  const base = buildSystemPrompt(mode, target, [], enabledTools, enabledMsf, [], useToolCalling)
   return base
     .replace(
       '  None — this is the first engagement against this target.',
