@@ -76,6 +76,48 @@ npm run build:mac     # .dmg
 
 ---
 
+## Connecting over HTTPS
+
+If the backend is served over HTTPS with a self-signed / mkcert certificate (see the backend's
+`setup-https.sh`), the app trusts that certificate **automatically for the host you enter on the
+Connect screen** — no per-machine CA install. Every other origin is still verified normally. Just
+enter the `https://…` URL and connect.
+
+---
+
+## Passkeys (WebAuthn)
+
+Passkeys have two hard requirements that come from the OS / WebAuthn spec — the desktop app can't
+work around them:
+
+1. **Connect via a hostname or `localhost`, not a bare IP.** WebAuthn rejects IP addresses as
+   Relying Party IDs, so a passkey can't be registered against e.g. `https://172.16.235.128:8000`.
+   The backend's `SERAPH_RP_ID` defaults to `localhost`.
+2. **macOS: launch the built app from Finder, not a terminal.** Running `npm run dev` from a shell
+   makes the terminal the "responsible process," and macOS blocks Touch ID / caBLE
+   (`FIDO: ... process is not self-responsible`). Build the app and open the bundle instead.
+
+**Recommended setup when the backend is on another machine** — forward it to `localhost` and connect
+there. No backend changes are needed: the mkcert cert already covers `localhost`, and
+`https://localhost:8000` is an allowed origin by default.
+
+```bash
+# on the client: forward the remote backend port to localhost (leave running)
+ssh -L 8000:localhost:8000 user@backend-host -N
+
+# build + launch from Finder (macOS) so the platform authenticator is allowed
+npm run build:mac
+open dist/mac/Seraph.app          # 'open' launches via LaunchServices = self-responsible
+```
+
+Then point the Connect screen at `https://localhost:8000` and register your passkey in
+**Settings → Passkeys**.
+
+> Password login works over **any** URL (including a bare IP) — only passkeys require the
+> hostname/`localhost` + Finder-launch conditions above.
+
+---
+
 ## Stack
 
 - [Electron](https://electronjs.org) + [electron-vite](https://electron-vite.org)
