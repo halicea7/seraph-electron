@@ -55,7 +55,7 @@ export default function Login() {
         setTaglineIdx(i => (i + 1) % TAGLINES.length)
         setTaglineFading(false)
       }, 350)
-    }, 60000)
+    }, 7000)
     return () => clearInterval(t)
   }, [])
 
