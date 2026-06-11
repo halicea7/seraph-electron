@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Loader, Sparkles, Save, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader, Sparkles, Save, ChevronDown, ChevronUp, X } from 'lucide-react'
 import Icon from '@/components/Icon'
 import { getApiBase } from '@/lib/config'
+import { useToast } from '@/contexts/ToastContext'
 import {
   TEMPLATES,
   ALL_CATEGORIES,
@@ -13,6 +14,19 @@ import {
   type Category,
   type Phase,
 } from '@/lib/templates'
+
+// User-defined templates persist locally (the built-in TEMPLATES are read-only).
+const CUSTOM_TEMPLATES_KEY = 'seraph:commandlib:custom'
+function loadCustomTemplates(): CommandTemplate[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CUSTOM_TEMPLATES_KEY) ?? '[]')
+    return Array.isArray(raw) ? raw : []
+  } catch { return [] }
+}
+function parseVars(command: string): string[] {
+  const found = command.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? []
+  return Array.from(new Set(found.map(v => v.replace(/\{\{\s*|\s*\}\}/g, ''))))
+}
 
 // ── Static data shaped for the filter UI ─────────────────────────────────────
 
@@ -697,11 +711,51 @@ function TechniquesTab() {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommandLibrary() {
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState<'commands' | 'techniques'>('commands')
   const [query, setQuery] = useState('')
   const [activeCats, setActiveCats] = useState<Set<Category>>(new Set())
   const [activePhases, setActivePhases] = useState<Set<Phase>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Custom (user-created) templates, persisted in localStorage and merged with built-ins.
+  const [customTemplates, setCustomTemplates] = useState<CommandTemplate[]>(() => loadCustomTemplates())
+  const [showNewModal, setShowNewModal] = useState(false)
+  const [ntForm, setNtForm] = useState({ label: '', tool: '', category: ALL_CATEGORIES[0] as Category, phase: ALL_PHASES[0] as Phase, command: '', description: '' })
+  useEffect(() => { localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customTemplates)) }, [customTemplates])
+
+  const allTemplates = useMemo(() => [...TEMPLATES, ...customTemplates], [customTemplates])
+
+  function saveNewTemplate() {
+    if (!ntForm.label.trim() || !ntForm.command.trim()) { toast.error('Label and command are required'); return }
+    const tpl: CommandTemplate = {
+      id: `custom-${Date.now()}`,
+      tool: ntForm.tool.trim() || ntForm.command.trim().split(/\s+/)[0],
+      label: ntForm.label.trim(),
+      category: ntForm.category,
+      phase: ntForm.phase,
+      description: ntForm.description.trim(),
+      when_to_use: '',
+      command: ntForm.command.trim(),
+      vars: parseVars(ntForm.command),
+      tags: ['custom'],
+    }
+    setCustomTemplates(prev => [...prev, tpl])
+    setShowNewModal(false)
+    setNtForm({ label: '', tool: '', category: ALL_CATEGORIES[0] as Category, phase: ALL_PHASES[0] as Phase, command: '', description: '' })
+    toast.success(`Added template "${tpl.label}"`)
+  }
+
+  function exportLibrary() {
+    const blob = new Blob([JSON.stringify(allTemplates, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'seraph-command-library.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${allTemplates.length} templates`)
+  }
 
   function toggleCat(id: Category) {
     setActiveCats(prev => {
@@ -735,7 +789,7 @@ export default function CommandLibrary() {
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim()
-    return TEMPLATES.filter(t => {
+    return allTemplates.filter(t => {
       if (activeCats.size > 0 && !activeCats.has(t.category)) return false
       if (activePhases.size > 0 && !activePhases.has(t.phase)) return false
       if (!q) return true
@@ -749,7 +803,7 @@ export default function CommandLibrary() {
         (t.mitre_techniques ?? []).some(tid => tid.toLowerCase().includes(q))
       )
     })
-  }, [query, activeCats, activePhases])
+  }, [query, activeCats, activePhases, allTemplates])
 
   const grouped = useMemo(() => {
     const map = new Map<string, CommandTemplate[]>()
@@ -772,14 +826,14 @@ export default function CommandLibrary() {
         breadcrumb="Knowledge Base"
         title="Command Library"
         sub={activeTab === 'commands'
-          ? `${TEMPLATES.length} command templates · filter by category or phase`
+          ? `${allTemplates.length} command templates · filter by category or phase`
           : '697 MITRE ATT&CK techniques · browse by tactic or search · generate commands with AI'}
         right={
           <>
-            <button className="btn">
+            <button className="btn" onClick={exportLibrary}>
               <Icon name="download" size={11} /> Export
             </button>
-            <button className="btn">
+            <button className="btn" onClick={() => setShowNewModal(true)}>
               <Icon name="plus" size={11} /> New template
             </button>
           </>
@@ -799,7 +853,7 @@ export default function CommandLibrary() {
               fontFamily: 'var(--font-sans)', textTransform: 'capitalize',
             }}
           >
-            {tab === 'commands' ? `Commands (${TEMPLATES.length})` : 'ATT&CK Techniques'}
+            {tab === 'commands' ? `Commands (${allTemplates.length})` : 'ATT&CK Techniques'}
           </button>
         ))}
       </div>
@@ -862,7 +916,7 @@ export default function CommandLibrary() {
           ))}
           <span style={{ marginLeft: 'auto' }} className="mono">
             <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>
-              {filtered.length} of {TEMPLATES.length} templates
+              {filtered.length} of {allTemplates.length} templates
             </span>
           </span>
         </div>
@@ -931,6 +985,45 @@ export default function CommandLibrary() {
         )}
       </div>
       </>}
+
+      {/* ── New template modal ── */}
+      {showNewModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)' }}
+          onClick={() => setShowNewModal(false)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-2)', border: rule, padding: 24, width: '100%', maxWidth: 480, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <h2 className="mono" style={{ margin: 0, fontSize: 14, fontWeight: 500, marginRight: 'auto' }}>New command template</h2>
+              <button className="btn btn-sm" onClick={() => setShowNewModal(false)}><X size={11} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input value={ntForm.label} onChange={e => setNtForm(f => ({ ...f, label: e.target.value }))} placeholder="Label (e.g. Full TCP scan)"
+                style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)' }} />
+              <input value={ntForm.tool} onChange={e => setNtForm(f => ({ ...f, tool: e.target.value }))} placeholder="Tool (optional — defaults to first word of command)"
+                style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <select value={ntForm.category} onChange={e => setNtForm(f => ({ ...f, category: e.target.value as Category }))}
+                  style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)' }}>
+                  {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={ntForm.phase} onChange={e => setNtForm(f => ({ ...f, phase: e.target.value as Phase }))}
+                  style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)' }}>
+                  {ALL_PHASES.map(p => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
+                </select>
+              </div>
+              <textarea value={ntForm.command} onChange={e => setNtForm(f => ({ ...f, command: e.target.value }))} rows={2} placeholder="Command — use {{ target }} for variables"
+                style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', fontFamily: 'var(--font-mono)', resize: 'vertical' }} />
+              <textarea value={ntForm.description} onChange={e => setNtForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Description (optional)"
+                style={{ background: 'var(--bg)', border: rule, padding: '6px 10px', fontSize: 12, color: 'var(--fg)', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowNewModal(false)}>Cancel</button>
+              <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', opacity: ntForm.label.trim() && ntForm.command.trim() ? 1 : 0.5 }} disabled={!ntForm.label.trim() || !ntForm.command.trim()} onClick={saveNewTemplate}>Add template</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

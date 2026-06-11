@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 import EmptyState from '@/components/EmptyState'
 import type { Credential } from '../types/index'
@@ -49,13 +50,6 @@ const ATTACK_MODES = [
   { id: '0', label: 'Wordlist (dictionary)' },
   { id: '3', label: 'Brute-force (mask)' },
   { id: '6', label: 'Hybrid (wordlist + mask)' },
-]
-
-const STATIC_JOBS: Job[] = [
-  { id: '1', name: 'ntlm-spray-01', mode: 'WL', hashes: 412,  state: 'active',  recovered: 37,  progress: 62  },
-  { id: '2', name: 'md5-dump-web',  mode: 'BF', hashes: 288,  state: 'queued',  recovered: 0,   progress: 0   },
-  { id: '3', name: 'sha1-old-db',   mode: 'WL', hashes: 97,   state: 'done',    recovered: 54,  progress: 100 },
-  { id: '4', name: 'ntlmv2-cap',    mode: 'WL', hashes: 487,  state: 'queued',  recovered: 0,   progress: 0   },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -141,6 +135,7 @@ export default function PasswordAuditing() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
   const toast = useToast()
+  const location = useLocation()
 
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [tool, setTool] = useState<'hashcat' | 'john'>('hashcat')
@@ -266,7 +261,13 @@ export default function PasswordAuditing() {
     if (projectId) {
       fetch(`${getApiBase()}/credentials?project_id=${projectId}`)
         .then(r => r.json())
-        .then((data: Credential[]) => setVaultCreds(data.filter(c => c.cred_type === 'hash')))
+        .then((data: Credential[]) => {
+          const hashes = data.filter(c => c.cred_type === 'hash')
+          setVaultCreds(hashes)
+          // Pre-select hashes handed off from the Credential Vault "Send to cracking" action.
+          const want = (location.state as { credIds?: string[] } | null)?.credIds
+          if (want?.length) setSelectedCredIds(hashes.filter(c => want.includes(c.id)).map(c => c.id))
+        })
       loadJobs()
     }
   }, [projectId])

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import type { Credential, CredType, CredSource } from '../types/index'
 import { getApiBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
 
 const CRED_TYPES: CredType[] = ['password', 'hash', 'key', 'token', 'other']
 const CRED_SOURCES: CredSource[] = ['manual', 'c2_loot', 'osint', 'brute_force']
@@ -87,6 +89,9 @@ function SegBtns({ options, value, onChange }: { options: string[]; value: strin
 export default function CredentialVault() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
+  const toast = useToast()
+  const navigate = useNavigate()
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -126,6 +131,49 @@ export default function CredentialVault() {
   async function handleDelete(id: string) {
     await fetch(`${getApiBase()}/credentials/${id}`, { method: 'DELETE' })
     setCredentials(prev => prev.filter(c => c.id !== id))
+  }
+
+  // Import a hash file — one hash per line (raw hash kept intact, NTLM colons preserved).
+  async function handleImportHashes(file: File) {
+    if (!projectId) { toast.error('Select a project before importing'); return }
+    const text = await file.text()
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) { toast.error('No hashes found in file'); return }
+    let created = 0
+    for (const secret of lines) {
+      const res = await fetch(`${getApiBase()}/credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: '', secret, cred_type: 'hash', source: 'manual',
+          target_host: '', notes: `Imported from ${file.name}`, project_id: projectId,
+        }),
+      })
+      if (res.ok) created++
+    }
+    toast.success(`Imported ${created} hash${created !== 1 ? 'es' : ''}`)
+    loadCredentials()
+  }
+
+  // Export stored hashes as a plain hashcat input file (one hash per line).
+  function handleExportHashcat() {
+    const hashes = credentials.filter(c => c.cred_type === 'hash' && c.secret)
+    if (hashes.length === 0) { toast.error('No hashes to export'); return }
+    const blob = new Blob([hashes.map(c => c.secret).join('\n') + '\n'], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hashes-${sp?.name ?? 'all'}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${hashes.length} hash${hashes.length !== 1 ? 'es' : ''}`)
+  }
+
+  // Hand off stored hashes to the Password Auditing page, pre-selected for cracking.
+  function handleSendToCracking() {
+    const credIds = credentials.filter(c => c.cred_type === 'hash').map(c => c.id)
+    if (credIds.length === 0) { toast.error('No hashes to crack'); return }
+    navigate('/cracking', { state: { credIds } })
   }
 
   function toggleReveal(id: string) {
@@ -195,10 +243,21 @@ export default function CredentialVault() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          <button className="btn">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".txt,.hash,.lst,text/plain"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) handleImportHashes(file)
+              e.target.value = ''
+            }}
+          />
+          <button className="btn" onClick={() => importInputRef.current?.click()} disabled={!projectId}>
             <Icon name="upload" size={11} /> Import hashes
           </button>
-          <button className="btn">
+          <button className="btn" onClick={handleExportHashcat}>
             <Icon name="download" size={11} /> Export hashcat
           </button>
           <button
@@ -369,10 +428,10 @@ export default function CredentialVault() {
                 {byType.hash} hash{byType.hash !== 1 ? 'es' : ''} stored. Hashcat integration is configured via Settings → Tools.
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-sm">
+                <button className="btn btn-sm" onClick={handleExportHashcat}>
                   <Icon name="download" size={9} /> Export hashcat
                 </button>
-                <button className="btn btn-sm btn-primary">
+                <button className="btn btn-sm btn-primary" onClick={handleSendToCracking}>
                   <Icon name="target" size={9} color="#1a1408" /> Send to cracking
                 </button>
               </div>

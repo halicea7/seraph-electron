@@ -5,9 +5,11 @@ import {
   Zap, Brain,
   Plus, Trash2, ArrowUp, ArrowDown, Layers, PenLine, Save, X, Search,
 } from 'lucide-react'
+import { load as yamlLoad } from 'js-yaml'
 import Icon from '@/components/Icon'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -187,6 +189,9 @@ function Toggle({ checked, onChange, accentColor = 'var(--accent)' }: { checked:
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Playbooks() {
+  const toast = useToast()
+  const importYamlRef = useRef<HTMLInputElement>(null)
+  const [runsModalPb, setRunsModalPb] = useState<Playbook | null>(null)
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [runs, setRuns] = useState<PlaybookRun[]>([])
   const { selectedProject: sp } = useAppStore()
@@ -499,6 +504,40 @@ export default function Playbooks() {
     loadPlaybooks()
   }
 
+  // Import a playbook from a YAML file ({ name, description, steps[], mitre_techniques[] }).
+  async function handleImportYaml(file: File) {
+    try {
+      const doc = yamlLoad(await file.text()) as any
+      if (!doc || typeof doc !== 'object') throw new Error('Invalid YAML — expected a playbook object')
+      const rawSteps = Array.isArray(doc.steps) ? doc.steps : []
+      if (rawSteps.length === 0) throw new Error('Playbook has no steps')
+      const steps = rawSteps.map((s: any) => ({
+        name: String(s.name ?? s.scan_type ?? 'step'),
+        scan_type: String(s.scan_type ?? s.name ?? 'step'),
+        cmd_template: String(s.cmd_template ?? s.cmd ?? s.command ?? ''),
+        description: String(s.description ?? ''),
+        conditional: Boolean(s.conditional ?? false),
+        trigger_ports: Array.isArray(s.trigger_ports) ? s.trigger_ports.map(Number).filter((n: number) => !isNaN(n)) : [],
+        timeout: Number(s.timeout ?? 300),
+        parallel: Boolean(s.parallel ?? false),
+      }))
+      const body = {
+        name: String(doc.name ?? file.name.replace(/\.(ya?ml)$/i, '')),
+        description: String(doc.description ?? ''),
+        steps,
+        mitre_techniques: Array.isArray(doc.mitre_techniques) ? doc.mitre_techniques.map(String) : [],
+      }
+      const res = await fetch(`${getApiBase()}/playbooks`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      await loadPlaybooks()
+      toast.success(`Imported playbook "${body.name}" (${steps.length} steps)`)
+    } catch (err: any) {
+      toast.error(`Import failed: ${err.message ?? 'could not parse YAML'}`)
+    }
+  }
+
   function formatDate(s: string | null) {
     if (!s || s === 'None') return '—'
     try { return new Date(s).toLocaleString() } catch { return s }
@@ -538,7 +577,18 @@ export default function Playbooks() {
         sub="Multi-step automated workflows. Chain tools into repeatable attack and audit sequences."
         right={
           <>
-            <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              ref={importYamlRef}
+              type="file"
+              accept=".yaml,.yml,text/yaml,application/x-yaml"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) handleImportYaml(file)
+                e.target.value = ''
+              }}
+            />
+            <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => importYamlRef.current?.click()}>
               <Icon name="upload" size={11} /> Import yaml
             </button>
             <button
@@ -604,7 +654,7 @@ export default function Playbooks() {
                 <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { setMode('step_through'); openWizard(displayPb) }}>
                   <StepForward size={11} /> Step through
                 </button>
-                <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setRunsModalPb(displayPb)}>
                   Runs · {runsFor(displayPb)}
                 </button>
                 {!displayPb.is_builtin && (
@@ -1058,6 +1108,50 @@ export default function Playbooks() {
           </div>
         </div>
       )}
+
+      {/* ── Runs history modal ── */}
+      {runsModalPb && (() => {
+        const pbRuns = runs.filter(r => r.playbook_id === runsModalPb.id)
+          .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)' }}
+            onClick={() => setRunsModalPb(null)}
+          >
+            <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-2)', border: rule, width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+              <div className="sec-h" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="title" style={{ marginRight: 'auto' }}>Runs · {runsModalPb.name}</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{pbRuns.length} total</span>
+                <button className="btn btn-sm" onClick={() => setRunsModalPb(null)}><X size={11} /></button>
+              </div>
+              <div style={{ overflowY: 'auto' }}>
+                {pbRuns.length === 0 ? (
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 12 }}>
+                    No runs recorded for this playbook yet.
+                  </div>
+                ) : (
+                  <table className="data">
+                    <thead>
+                      <tr><th>Status</th><th>Target</th><th>Mode</th><th>Step</th><th>Started</th></tr>
+                    </thead>
+                    <tbody>
+                      {pbRuns.map(r => (
+                        <tr key={r.id}>
+                          <td className="mono" style={{ fontSize: 11 }}>{r.status}</td>
+                          <td className="mono" style={{ fontSize: 11, color: 'var(--fg-2)' }}>{r.target_host || '—'}</td>
+                          <td className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{r.mode}</td>
+                          <td className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{r.current_step || '—'}</td>
+                          <td className="mono" style={{ fontSize: 10.5, color: 'var(--fg-3)' }}>{formatDate(r.started_at ?? r.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import Icon from '@/components/Icon'
 import type { Target } from '../types/index'
 import { getApiBase, getWsBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
 import type { ToolStatus } from '../components/ToolCard'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ function Pill({ tone, children }: { tone: 'pass' | 'fail' | 'warn' | 'info'; chi
 export default function OSINTModule() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
+  const toast = useToast()
   const [targets, setTargets] = useState<Target[]>([])
   const [selectedTarget, setSelectedTarget] = useState('')
   const [domain, setDomain] = useState('')
@@ -112,6 +114,7 @@ export default function OSINTModule() {
   const [results, setResults] = useState<OSINTResult[]>([])
 
   const [username, setUsername] = useState('')
+  const seedInputRef = useRef<HTMLInputElement>(null)
   const [sherlockAvailable, setSherlockAvailable] = useState<boolean | null>(null)
   const [sherlockState, setSherlockState] = useState<{
     status: 'idle' | 'running' | 'completed' | 'failed'
@@ -263,6 +266,15 @@ export default function OSINTModule() {
     ws.onerror = () => setSherlockState(prev => ({ ...prev, status: 'failed' }))
   }
 
+  // Import a seed list (domains/hosts, one per line); applies the first as the active domain.
+  async function handleImportSeeds(file: File) {
+    const lines = (await file.text()).split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) { toast.error('No seeds found in file'); return }
+    setDomain(lines[0])
+    setQueryDomain(lines[0])
+    toast.success(`Loaded ${lines.length} seed${lines.length !== 1 ? 's' : ''} — domain set to ${lines[0]}`)
+  }
+
   const activeToolMeta = TOOLS_STATIC.find(t => t.key === activeTool)
   const displayCount = activeTool === 'sherlock'
     ? sherlockState.profiles.length
@@ -281,7 +293,18 @@ export default function OSINTModule() {
         sub="Passive reconnaissance — no packets to in-scope hosts. Results aggregate into the engagement's target tree."
         right={
           <>
-            <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              ref={seedInputRef}
+              type="file"
+              accept=".txt,.csv,.lst,text/plain"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) handleImportSeeds(file)
+                e.target.value = ''
+              }}
+            />
+            <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => seedInputRef.current?.click()}>
               <Icon name="upload" size={11} /> Import seed list
             </button>
             <button

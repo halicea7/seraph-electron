@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { getApiBase } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
+import { useToast } from '@/contexts/ToastContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,7 +200,21 @@ function LegendItem({
 
 // ── NodeDetail right pane ─────────────────────────────────────────────────────
 
-function NodeDetail({ node, edges, nodeMap }: { node: PNode | null; edges: GraphEdge[]; nodeMap: Map<string, PNode> }) {
+interface NodeDetailProps {
+  node: PNode | null
+  edges: GraphEdge[]
+  nodeMap: Map<string, PNode>
+  tags: string[]
+  onAddTag: (tag: string) => void
+  onRemoveTag: (tag: string) => void
+  onRescan: (node: PNode) => void
+  onSpray: (node: PNode) => void
+  onOpenShell: (node: PNode) => void
+}
+
+function NodeDetail({ node, edges, nodeMap, tags, onAddTag, onRemoveTag, onRescan, onSpray, onOpenShell }: NodeDetailProps) {
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const [tagDraft, setTagDraft] = useState('')
   if (!node) {
     return (
       <div style={{
@@ -295,24 +311,49 @@ function NodeDetail({ node, edges, nodeMap }: { node: PNode | null; edges: Graph
           </div>
         )}
 
+        {/* Tags */}
+        {node.type === 'target' && (
+          <div style={{ marginBottom: 18 }}>
+            <div className="smcap" style={{ marginBottom: 8, color: 'var(--fg-3)' }}>Tags</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {tags.map(tag => (
+                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, background: 'rgba(240,168,58,0.08)', color: 'var(--accent)', border: '1px solid rgba(240,168,58,0.25)', padding: '2px 8px' }}>
+                  {tag}
+                  <button onClick={() => onRemoveTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, display: 'flex' }}>
+                    <Icon name="x" size={9} />
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={tagInputRef}
+                type="text"
+                placeholder="add tag…"
+                value={tagDraft}
+                onChange={e => setTagDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && tagDraft.trim()) { onAddTag(tagDraft.trim()); setTagDraft('') } }}
+                style={{ background: 'transparent', fontSize: 10, color: 'var(--fg-3)', outline: 'none', width: 80, border: 'none', borderBottom: rule }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Quick actions */}
         {node.type === 'target' && (
           <div>
             <div className="smcap" style={{ marginBottom: 8, color: 'var(--fg-3)' }}>Quick actions</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {[
-                { icon: 'terminal', label: 'Open shell' },
-                { icon: 'target',   label: 'Re-scan' },
-                { icon: 'key',      label: 'Spray creds' },
-                { icon: 'flag',     label: 'Tag' },
-              ].map(({ icon, label }) => (
-                <button key={icon} className="btn btn-sm" style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  justifyContent: 'center',
-                }}>
-                  <Icon name={icon} size={9} />{label}
-                </button>
-              ))}
+              <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }} onClick={() => onOpenShell(node)}>
+                <Icon name="terminal" size={9} />Open shell
+              </button>
+              <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }} onClick={() => onRescan(node)}>
+                <Icon name="target" size={9} />Re-scan
+              </button>
+              <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }} onClick={() => onSpray(node)}>
+                <Icon name="key" size={9} />Spray creds
+              </button>
+              <button className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }} onClick={() => tagInputRef.current?.focus()}>
+                <Icon name="flag" size={9} />Tag
+              </button>
             </div>
           </div>
         )}
@@ -323,14 +364,85 @@ function NodeDetail({ node, edges, nodeMap }: { node: PNode | null; edges: Graph
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// Node tags persist locally per project (no backend node-tag store).
+function tagsStorageKey(projectId: string) { return `seraph:netmap:tags:${projectId}` }
+function loadNodeTags(projectId: string): Record<string, string[]> {
+  if (!projectId) return {}
+  try { return JSON.parse(localStorage.getItem(tagsStorageKey(projectId)) ?? '{}') } catch { return {} }
+}
+
 export default function NetworkMap() {
   const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
+  const navigate = useNavigate()
+  const toast = useToast()
 
   const [graph,   setGraph]   = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(false)
   const [layout,  setLayout]  = useState('attack-path')
   const [selId,   setSelId]   = useState<string | null>(null)
+  const [nodeTags, setNodeTags] = useState<Record<string, string[]>>({})
+
+  // Load/persist per-project node tags from localStorage.
+  useEffect(() => { setNodeTags(loadNodeTags(projectId)) }, [projectId])
+  useEffect(() => {
+    if (projectId) localStorage.setItem(tagsStorageKey(projectId), JSON.stringify(nodeTags))
+  }, [projectId, nodeTags])
+
+  function addNodeTag(nodeId: string, tag: string) {
+    setNodeTags(prev => {
+      const existing = prev[nodeId] ?? []
+      if (existing.includes(tag)) return prev
+      return { ...prev, [nodeId]: [...existing, tag] }
+    })
+  }
+  function removeNodeTag(nodeId: string, tag: string) {
+    setNodeTags(prev => ({ ...prev, [nodeId]: (prev[nodeId] ?? []).filter(t => t !== tag) }))
+  }
+
+  // Quick actions: hand the host off to the Pentest Workbench (which runs the tool over WS).
+  function rescanNode(node: PNode) {
+    navigate('/pentest', { state: { targetId: node.id, phaseId: 'ph-2' } })
+  }
+  function sprayNode(node: PNode) {
+    navigate('/pentest', { state: { targetId: node.id, phaseId: 'ph-3' } })
+  }
+  function openShell(_node: PNode) {
+    navigate('/c2')
+  }
+
+  // Export the current graph as GraphML (client-side).
+  function exportGraphml() {
+    if (!graph || graph.nodes.length === 0) { toast.error('No graph to export'); return }
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const nodeXml = graph.nodes.map(n =>
+      `    <node id="${esc(n.id)}">\n` +
+      `      <data key="label">${esc(n.label)}</data>\n` +
+      `      <data key="type">${esc(n.type)}</data>\n` +
+      `      <data key="severity">${esc(n.severity ?? '')}</data>\n` +
+      `      <data key="findings">${n.finding_count}</data>\n` +
+      `    </node>`
+    ).join('\n')
+    const edgeXml = graph.edges.map((e, i) =>
+      `    <edge id="e${i}" source="${esc(e.source)}" target="${esc(e.target)}"/>`
+    ).join('\n')
+    const xml =
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<graphml xmlns="http://graphml.graphdrawing.org/xmlns">\n` +
+      `  <key id="label" for="node" attr.name="label" attr.type="string"/>\n` +
+      `  <key id="type" for="node" attr.name="type" attr.type="string"/>\n` +
+      `  <key id="severity" for="node" attr.name="severity" attr.type="string"/>\n` +
+      `  <key id="findings" for="node" attr.name="findings" attr.type="int"/>\n` +
+      `  <graph edgedefault="directed">\n${nodeXml}\n${edgeXml}\n  </graph>\n` +
+      `</graphml>\n`
+    const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `network-${sp?.name ?? 'graph'}.graphml`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Exported GraphML')
+  }
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -374,7 +486,7 @@ export default function NetworkMap() {
             <button className="btn" onClick={loadGraph} disabled={!projectId || loading}>
               <Icon name="refresh" size={11} />{loading ? ' Loading…' : ' Re-scan'}
             </button>
-            <button className="btn btn-primary" style={{ color: '#1a1408' }}>
+            <button className="btn btn-primary" style={{ color: '#1a1408' }} onClick={exportGraphml} disabled={!graph}>
               <Icon name="download" size={11} color="#1a1408" /> Export graphml
             </button>
           </>
@@ -566,7 +678,17 @@ export default function NetworkMap() {
         </div>
 
         {/* ── Right: node detail pane ── */}
-        <NodeDetail node={selNode} edges={edges} nodeMap={nodeMap} />
+        <NodeDetail
+          node={selNode}
+          edges={edges}
+          nodeMap={nodeMap}
+          tags={selNode ? (nodeTags[selNode.id] ?? []) : []}
+          onAddTag={tag => selNode && addNodeTag(selNode.id, tag)}
+          onRemoveTag={tag => selNode && removeNodeTag(selNode.id, tag)}
+          onRescan={rescanNode}
+          onSpray={sprayNode}
+          onOpenShell={openShell}
+        />
       </div>
     </div>
   )

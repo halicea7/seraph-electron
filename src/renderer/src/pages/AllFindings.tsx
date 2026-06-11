@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, Download, ChevronDown, ChevronLeft, Tag, X, EyeOff, RotateCcw, ShieldOff, Plus, Trash2 } from 'lucide-react'
 import { Brain, Sparkles, AlertTriangle } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
@@ -855,16 +855,19 @@ interface DetailProps {
   onChangeStatus: (id: string, s: FindingStatus) => void
   onShowFpModal: () => void
   onRestore: (id: string) => void
+  onVerify: (id: string) => void
+  onReport: (finding: FindingRow) => void
   onDelete: (id: string) => void
   onClose: () => void
 }
 
-function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onDelete, onClose }: DetailProps) {
+function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onVerify, onReport, onDelete, onClose }: DetailProps) {
   const [aiModels, setAiModels] = useState<string[]>([])
   const [aiModel, setAiModel] = useState('')
   const [aiResult, setAiResult] = useState<string | null>(null)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const tagInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (aiModels.length > 0) return
@@ -980,6 +983,7 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Tag size={10} style={{ color: 'var(--fg-4)' }} />
               <input
+                ref={tagInputRef}
                 type="text"
                 placeholder="add tag…"
                 value={tagInput}
@@ -1087,13 +1091,29 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 
         {/* Action buttons */}
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+          <button
+            className="btn btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+            onClick={() => onVerify(finding.id)}
+            disabled={fStatus === 'in-review'}
+            title="Mark this finding as verified / in review"
+          >
             <Icon name="check" size={9} /> Verify
           </button>
-          <button className="btn btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+          <button
+            className="btn btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+            onClick={() => tagInputRef.current?.focus()}
+            title="Add a tag to this finding"
+          >
             <Icon name="flag" size={9} /> Tag
           </button>
-          <button className="btn btn-sm btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+          <button
+            className="btn btn-sm btn-primary"
+            style={{ flex: 1, justifyContent: 'center' }}
+            onClick={() => onReport(finding)}
+            title="Open the report for this finding's project"
+          >
             <Icon name="file" size={9} color="#1a1408" /> Report
           </button>
         </div>
@@ -1132,9 +1152,10 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
 // ── Main AllFindings page ──────────────────────────────────────────────────────
 
 export default function AllFindings() {
-  const { selectedProject: sp, addProject, setSelectedProject: setStoreProject } = useAppStore()
+  const { selectedProject: sp, projects, addProject, setSelectedProject: setStoreProject } = useAppStore()
   const projectId = sp?.id ?? ''
   const toast = useToast()
+  const navigate = useNavigate()
   const confirm = useConfirm()
   const [activeTab, setActiveTab] = useState<'findings' | 'vulns'>('findings')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1248,6 +1269,21 @@ export default function AllFindings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     }).then(() => setFindings(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f)))
+  }
+
+  function verifyFinding(id: string) {
+    changeStatus(id, 'in-review')
+    toast.success('Finding marked for verification')
+  }
+
+  function reportFinding(finding: FindingRow) {
+    const proj = projects.find(p => p.id === finding.project_id)
+    if (proj) setStoreProject(proj)
+    else if (!finding.project_id) {
+      toast.error('This finding is not linked to a project')
+      return
+    }
+    navigate('/reports')
   }
 
   function addTag(id: string) {
@@ -1616,6 +1652,8 @@ export default function AllFindings() {
                 onChangeStatus={changeStatus}
                 onShowFpModal={() => { setFpModal({ id: selectedFinding.id, title: selectedFinding.title }); setFpReason('') }}
                 onRestore={restoreFinding}
+                onVerify={verifyFinding}
+                onReport={reportFinding}
                 onDelete={deleteFinding}
                 onClose={() => setSelectedId(null)}
               />
