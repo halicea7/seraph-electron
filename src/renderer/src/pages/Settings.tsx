@@ -16,6 +16,7 @@ interface ToolInfo {
   path: string | null
   version: string | null
   label: string
+  tier?: 'required' | 'recommended' | 'optional'
   install_hint: string | null
   url: string | null
 }
@@ -888,6 +889,55 @@ export default function Settings() {
   }
 
   function renderTools() {
+    const TIERS = [
+      { id: 'required' as const,    label: 'Required',    color: 'var(--crit)',   blurb: 'Core — primary workflows depend on these' },
+      { id: 'recommended' as const, label: 'Recommended', color: 'var(--accent)', blurb: 'Broadly used across engagements and modules' },
+      { id: 'optional' as const,    label: 'Optional',    color: 'var(--fg-3)',   blurb: 'Engagement-specific or niche' },
+    ]
+
+    const renderToolCard = (name: string, info: ToolInfo) => {
+      const isGoRuntime = name === 'go'
+      const needsGo = !isGoRuntime && !info.available && info.install_hint?.startsWith('go install')
+      const goMissing = needsGo && toolStatus['go'] && !toolStatus['go'].available
+      const leftBorder = info.available ? '2px solid var(--ok)' : isGoRuntime ? '2px solid var(--accent)' : '2px solid var(--crit)'
+      return (
+        <div key={name} style={{ background: 'var(--bg)', border: ruleStrong, borderLeft: leftBorder, borderRadius: 3, padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            {info.available
+              ? <CheckCircle size={13} color="var(--ok)" style={{ flexShrink: 0 }} />
+              : <XCircle size={13} color={isGoRuntime ? 'var(--accent)' : 'var(--crit)'} style={{ flexShrink: 0 }} />
+            }
+            <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label || name}</span>
+            {TOOL_INFO[name] && (
+              <button onClick={() => setInfoTool(name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
+                <Info size={12} />
+              </button>
+            )}
+          </div>
+          {info.available ? (
+            <>
+              {info.version && <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.version.slice(0, 50)}</div>}
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {!goMissing && !isGoRuntime && info.install_hint && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <code className="mono" style={{ flex: 1, fontSize: 9, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.install_hint}</code>
+                  <button onClick={() => copyText(info.install_hint!, `tool-${name}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied === `tool-${name}` ? 'var(--ok)' : 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }}>
+                    <Icon name={copied === `tool-${name}` ? 'check' : 'copy'} size={11} color="currentColor" />
+                  </button>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6 }}>
+                {!goMissing && <button onClick={() => startInstall(name)} className="btn btn-sm"><Icon name="download" size={10} color="currentColor" /> Install</button>}
+                {info.url && <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: 2 }}><ExternalLink size={10} /></a>}
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Section title={`TOOL DETECTION · ${available.length}/${Object.keys(toolStatus).length} INSTALLED`}
@@ -912,50 +962,23 @@ export default function Settings() {
               </div>
             </div>
           )}
-          <div style={{ padding: '14px var(--pad)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            {Object.entries(toolStatus).map(([name, info]) => {
-              const isGoRuntime = name === 'go'
-              const needsGo = !isGoRuntime && !info.available && info.install_hint?.startsWith('go install')
-              const goMissing = needsGo && toolStatus['go'] && !toolStatus['go'].available
-              const leftBorder = info.available ? '2px solid var(--ok)' : isGoRuntime ? '2px solid var(--accent)' : '2px solid var(--crit)'
-              return (
-                <div key={name} style={{ background: 'var(--bg)', border: ruleStrong, borderLeft: leftBorder, borderRadius: 3, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    {info.available
-                      ? <CheckCircle size={13} color="var(--ok)" style={{ flexShrink: 0 }} />
-                      : <XCircle size={13} color={isGoRuntime ? 'var(--accent)' : 'var(--crit)'} style={{ flexShrink: 0 }} />
-                    }
-                    <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label || name}</span>
-                    {TOOL_INFO[name] && (
-                      <button onClick={() => setInfoTool(name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', padding: 0, display: 'flex' }}>
-                        <Info size={12} />
-                      </button>
-                    )}
-                  </div>
-                  {info.available ? (
-                    <>
-                      {info.version && <div className="mono" style={{ fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.version.slice(0, 50)}</div>}
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {!goMissing && !isGoRuntime && info.install_hint && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <code className="mono" style={{ flex: 1, fontSize: 9, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.install_hint}</code>
-                          <button onClick={() => copyText(info.install_hint!, `tool-${name}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied === `tool-${name}` ? 'var(--ok)' : 'var(--fg-3)', padding: 0, display: 'flex', flexShrink: 0 }}>
-                            <Icon name={copied === `tool-${name}` ? 'check' : 'copy'} size={11} color="currentColor" />
-                          </button>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {!goMissing && <button onClick={() => startInstall(name)} className="btn btn-sm"><Icon name="download" size={10} color="currentColor" /> Install</button>}
-                        {info.url && <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: 2 }}><ExternalLink size={10} /></a>}
-                      </div>
-                    </div>
-                  )}
+          {TIERS.map(tier => {
+            const entries = Object.entries(toolStatus).filter(([, v]) => (v.tier ?? 'optional') === tier.id)
+            if (entries.length === 0) return null
+            const installed = entries.filter(([, v]) => v.available).length
+            return (
+              <div key={tier.id} style={{ borderBottom: rule }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px var(--pad) 0' }}>
+                  <span className="smcap" style={{ color: tier.color }}>{tier.label}</span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{installed}/{entries.length} installed</span>
+                  <span style={{ fontSize: 10, color: 'var(--fg-4)', marginLeft: 'auto', fontFamily: 'var(--font-sans)' }}>{tier.blurb}</span>
                 </div>
-              )
-            })}
-          </div>
+                <div style={{ padding: '10px var(--pad) 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {entries.map(([name, info]) => renderToolCard(name, info))}
+                </div>
+              </div>
+            )
+          })}
         </Section>
 
         <Section title="AUTO-PROBE"
