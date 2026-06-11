@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, net, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, net, session, shell } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -169,22 +169,44 @@ function setupIPC(): void {
 // installing the CA on every client, we trust the cert ONLY for the exact host
 // the user configured as their backend — every other origin is still verified
 // normally.
-function configuredHost(): string | null {
+function parseConfiguredUrl(): URL | null {
   const raw = settings.serverUrl
   if (!raw) return null
   try {
-    return new URL(raw).host
+    return new URL(raw)
   } catch {
     // serverUrl may have been entered without a scheme (e.g. "10.0.0.5:8000").
     try {
-      return new URL(`https://${raw}`).host
+      return new URL(`https://${raw}`)
     } catch {
       return null
     }
   }
 }
 
+// host = "host:port" (used by certificate-error, whose url includes the port).
+function configuredHost(): string | null {
+  return parseConfiguredUrl()?.host ?? null
+}
+
+// hostname = host only, no port (used by setCertificateVerifyProc).
+function configuredHostname(): string | null {
+  return parseConfiguredUrl()?.hostname ?? null
+}
+
 function setupCertificateTrust(): void {
+  // Primary, most reliable path: intercept verification in the network stack.
+  // Catches fetch / XHR / WebSocket. callback(0)=trust, callback(-3)=default.
+  session.defaultSession.setCertificateVerifyProc((request, callback) => {
+    const hostname = configuredHostname()
+    if (hostname && request.hostname === hostname) {
+      callback(0) // trust the user's own Seraph backend cert
+    } else {
+      callback(-3) // everything else: normal Chromium verification
+    }
+  })
+
+  // Belt-and-suspenders: also handle the app-level event.
   app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
     let host: string
     try {
@@ -193,15 +215,15 @@ function setupCertificateTrust(): void {
       callback(false)
       return
     }
-    const allowed = configuredHost()
-    if (allowed && host === allowed) {
-      // Trust the user's own Seraph backend cert.
+    if (host === configuredHost()) {
       event.preventDefault()
       callback(true)
     } else {
       callback(false)
     }
   })
+
+  console.log(`[seraph] backend TLS trust active for host: ${configuredHostname() ?? '(none configured)'}`)
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
