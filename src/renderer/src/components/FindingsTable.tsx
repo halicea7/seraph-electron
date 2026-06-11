@@ -300,7 +300,7 @@ export default function FindingsTable({ findings, loading, onDelete }: FindingsT
                   {finding.evidence && (
                     <div>
                       <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Evidence</div>
-                      <pre style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', padding: '10px 12px', overflowX: 'auto', whiteSpace: 'pre-wrap', border: '1px solid var(--rule)', background: 'var(--bg-term)', margin: 0 }}>{finding.evidence}</pre>
+                      <pre className="on-term" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-2)', padding: '10px 12px', overflowX: 'auto', whiteSpace: 'pre-wrap', border: '1px solid var(--rule)', background: 'var(--bg-term)', margin: 0 }}>{finding.evidence}</pre>
                     </div>
                   )}
 

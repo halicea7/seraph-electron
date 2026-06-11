@@ -418,6 +418,17 @@ table.data tbody tr.selected { background: var(--accent-2); }
    Terminal
    ══════════════════════════════════════════════════════════════════ */
 
+/* Terminal surfaces keep a dark background in every theme (including day/light),
+   so their foreground tokens must stay light too — otherwise --fg* flips dark in
+   day mode and text becomes unreadable on the dark bg. .on-term is a reusable
+   context class for any inline-styled element that sits on --bg-term. */
+.term,
+.on-term {
+  --fg:   #e8e3d8;
+  --fg-2: #b8b2a4;
+  --fg-3: #7a7468;
+  --fg-4: #4a463d;
+}
 .term {
   background: var(--bg-term);
   color: var(--fg);

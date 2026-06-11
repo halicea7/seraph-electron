@@ -176,7 +176,7 @@ function TemplateCard({
       </div>
 
       {/* Command block */}
-      <div style={{
+      <div className="on-term" style={{
         margin: '0 14px 12px',
         border: '1px solid var(--rule)',
         background: 'var(--bg-term)',

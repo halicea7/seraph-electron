@@ -162,7 +162,7 @@ function OperatorThinking({
         </div>
       )}
       {showStream && (
-        <div style={{ border: `1px solid ${mode.border}`, background: 'var(--bg-term)' }}>
+        <div className="on-term" style={{ border: `1px solid ${mode.border}`, background: 'var(--bg-term)' }}>
           <div style={{
             padding: '7px 12px', borderBottom: rule,
             color: mode.color, fontFamily: 'var(--font-mono)', fontSize: 9.5,
@@ -342,7 +342,7 @@ function StepCard({
                 </span>
               )}
             </div>
-            <pre style={{
+            <pre className="on-term" style={{
               margin: 0, background: 'var(--bg-term)', color: 'var(--fg)',
               padding: '9px 12px', fontFamily: 'var(--font-mono)', fontSize: 11.5,
               border: rule, whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.55,
@@ -362,7 +362,7 @@ function StepCard({
             <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-3)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
               Live output
             </div>
-            <pre style={{
+            <pre className="on-term" style={{
               margin: 0, background: 'var(--bg-term)', color: '#8ad26b',
               padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 11,
               border: '1px solid rgba(107,138,114,0.2)', lineHeight: 1.55,
@@ -381,7 +381,7 @@ function StepCard({
             <summary className="mono" style={{ fontSize: 9.5, color: 'var(--fg-3)', cursor: 'pointer', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
               Output · {step.output.length.toLocaleString()} bytes
             </summary>
-            <pre style={{
+            <pre className="on-term" style={{
               marginTop: 8, background: 'var(--bg-term)', color: '#8ad26b',
               padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 11,
               border: rule, lineHeight: 1.55, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap',

@@ -106,6 +106,7 @@ export default function ToolCard({
           <div className="space-y-2">
             <textarea
               ref={textareaRef}
+              className="on-term"
               value={editedCommand}
               onChange={e => setEditedCommand(e.target.value)}
               style={{ width: '100%', padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)', background: 'var(--bg-term)', border: '1px solid var(--accent-border)', outline: 'none', resize: 'none' }}
@@ -129,7 +130,7 @@ export default function ToolCard({
           </div>
         ) : (
           <div>
-            <div style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', wordBreak: 'break-all', border: '1px solid var(--rule)', background: 'var(--bg-term)' }}>
+            <div className="on-term" style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', wordBreak: 'break-all', border: '1px solid var(--rule)', background: 'var(--bg-term)' }}>
               {renderedCommand}
             </div>
           </div>
@@ -188,7 +189,7 @@ export default function ToolCard({
 
       {/* Output */}
       {showOutput && output && (
-        <div style={{ borderTop: '1px solid var(--rule)', padding: '10px 14px', maxHeight: 192, overflowY: 'auto', background: 'var(--bg-term)' }}>
+        <div className="on-term" style={{ borderTop: '1px solid var(--rule)', padding: '10px 14px', maxHeight: 192, overflowY: 'auto', background: 'var(--bg-term)' }}>
           <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', margin: 0 }}>{output}</pre>
         </div>
       )}

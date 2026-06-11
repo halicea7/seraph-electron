@@ -165,22 +165,6 @@ function buildChains(graph: GraphData): AttackChain[] {
     })
   })
 
-  // If no data, show placeholder chain
-  if (chains.length === 0) {
-    chains.push({
-      id: '01',
-      impact: 'High',
-      cvss: 7.5,
-      steps: [
-        { tool: 'recon', title: 'External recon', sev: 'Info', description: 'Enumerate open ports, services, and OS fingerprint', command: 'nmap -sV -sC -O -T4 {target}' },
-        { tool: 'exploit', title: 'Initial access', sev: 'High', description: 'Exploit identified vulnerability to gain code execution', command: 'nxc smb {target} -u {user} -p {pass} --exec-method mmcexec' },
-        { tool: 'pivot', title: 'Lateral movement', sev: 'Medium', description: 'Reuse captured credentials for lateral movement', command: 'impacket-psexec {domain}/{user}:{pass}@{target}' },
-        { tool: 'exfil', title: 'Data exfiltration', sev: 'Critical', description: 'Deploy implant via exploit and establish callback', command: 'use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp' },
-      ],
-      time: '12m',
-    })
-  }
-
   return chains
 }
 
@@ -360,9 +344,11 @@ export default function AttackPaths() {
           )
         })}
 
-        {!loading && projectId && graph && graph.nodes.length === 0 && (
+        {!loading && projectId && graph && chains.length === 0 && (
           <div style={{ padding: '64px 0', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13 }}>
-            No targets in this project yet. Add targets and run scans to generate attack paths.
+            {graph.nodes.length === 0
+              ? 'No targets in this project yet. Add targets and run scans to generate attack paths.'
+              : 'No attack paths derived yet. Paths are built from discovered hosts and their relationships — run scans to map services and lateral movement.'}
           </div>
         )}
       </div>
