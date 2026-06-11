@@ -393,6 +393,9 @@ export default function Settings() {
   useEffect(() => {
     if (activeNav === 'nessus') loadNessusConfig()
     if (activeNav === 'hermes') loadHermesData()
+    // Always refresh tool detection when the Tools tab opens so we don't show
+    // a stale localStorage cache (e.g. one saved before tools gained tiers).
+    if (activeNav === 'tools') loadTools()
   }, [activeNav])
 
   // ── API functions ─────────────────────────────────────────────────────────
