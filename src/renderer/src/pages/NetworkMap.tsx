@@ -402,10 +402,10 @@ export default function NetworkMap() {
 
   // Quick actions: hand the host off to the Pentest Workbench (which runs the tool over WS).
   function rescanNode(node: PNode) {
-    navigate('/pentest', { state: { targetId: node.id, phaseId: 'ph-2' } })
+    navigate('/pentest', { state: { targetId: node.id, phaseId: 'scanning' } })
   }
   function sprayNode(node: PNode) {
-    navigate('/pentest', { state: { targetId: node.id, phaseId: 'ph-3' } })
+    navigate('/pentest', { state: { targetId: node.id, phaseId: 'enumeration' } })
   }
   function openShell(_node: PNode) {
     navigate('/c2')
