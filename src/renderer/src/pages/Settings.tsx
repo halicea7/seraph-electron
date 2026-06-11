@@ -971,12 +971,12 @@ export default function Settings() {
             const installed = entries.filter(([, v]) => v.available).length
             return (
               <div key={tier.id} style={{ borderBottom: rule }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px var(--pad) 0' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px var(--pad) 0', flexWrap: 'wrap' }}>
                   <span className="smcap" style={{ color: tier.color }}>{tier.label}</span>
                   <span className="mono" style={{ fontSize: 10, color: 'var(--fg-3)' }}>{installed}/{entries.length} installed</span>
                   <span style={{ fontSize: 10, color: 'var(--fg-4)', marginLeft: 'auto', fontFamily: 'var(--font-sans)' }}>{tier.blurb}</span>
                 </div>
-                <div style={{ padding: '10px var(--pad) 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div style={{ padding: '10px var(--pad) 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                   {entries.map(([name, info]) => renderToolCard(name, info))}
                 </div>
               </div>
