@@ -263,7 +263,7 @@ export default function Login() {
 
         {/* Brand */}
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <SeraphMark size={40} style={{ filter: 'drop-shadow(0 0 8px rgba(240,168,58,0.5))' }} />
+          <SeraphMark size={60} style={{ filter: 'drop-shadow(0 0 8px rgba(240,168,58,0.5))' }} />
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, letterSpacing: '0.32em', fontWeight: 600, color: 'var(--fg)' }}>SERAPH</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.22em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Operations Console · v2.0.1</div>

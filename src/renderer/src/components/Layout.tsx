@@ -252,7 +252,7 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       <div style={{ padding: railed ? '14px 0 12px' : '18px 18px 16px', borderBottom: '1px solid var(--rule)' }}>
         {railed ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <Logo size={22} />
+            <Logo size={28} />
             <button onClick={toggleRail} title="Expand sidebar" className="nav-row"
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 4 }}>
               <Icon name="chev_r" size={13} />
@@ -260,7 +260,7 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Logo size={22} />
+            <Logo size={28} />
             <div>
               <div className="mono" style={{ fontSize: 13, letterSpacing: '0.22em', fontWeight: 600 }}>SERAPH</div>
               <div className="mono" style={{ fontSize: 8.5, letterSpacing: '0.18em', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Ops Console · v2.0</div>
