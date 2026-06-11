@@ -1607,15 +1607,52 @@ export default function Settings() {
       { value: 'electric-green', label: 'Green',   color: '#8ad26b' },
       { value: 'signal-red',     label: 'Red',     color: '#e85c4e' },
       { value: 'violet',         label: 'Violet',  color: '#b794f6' },
+      { value: 'azure',          label: 'Azure',   color: '#5b8def' },
+      { value: 'teal',           label: 'Teal',    color: '#45c0a4' },
+      { value: 'magenta',        label: 'Magenta', color: '#d96fb8' },
+      { value: 'ember',          label: 'Ember',   color: '#f0794a' },
+      { value: 'steel',          label: 'Steel',   color: '#8f9bad' },
     ]
     const BG_OPTIONS: { value: import('@/contexts/ThemeContext').BgVariant; label: string; swatch: string }[] = [
       { value: 'paper',      label: 'Paper Dark', swatch: '#0d0c0a' },
       { value: 'true-black', label: 'True Black', swatch: '#000000' },
       { value: 'midnight',   label: 'Midnight',   swatch: '#07091a' },
+      { value: 'slate',      label: 'Slate',      swatch: '#0e1217' },
+      { value: 'abyss',      label: 'Abyss',      swatch: '#07130f' },
+      { value: 'nebula',     label: 'Nebula',     swatch: '#0c0816' },
+      { value: 'day',        label: 'Daylight',   swatch: '#f5f2ea' },
+    ]
+    type Accent = import('@/contexts/ThemeContext').Accent
+    type BgVariant = import('@/contexts/ThemeContext').BgVariant
+    const PRESETS: { name: string; accent: Accent; bg: BgVariant; color: string }[] = [
+      { name: 'Seraph',   accent: 'amber',          bg: 'paper',      color: '#f0a83a' },
+      { name: 'Cobalt',   accent: 'azure',          bg: 'midnight',   color: '#5b8def' },
+      { name: 'Matrix',   accent: 'electric-green', bg: 'true-black', color: '#8ad26b' },
+      { name: 'Tidal',    accent: 'teal',           bg: 'abyss',      color: '#45c0a4' },
+      { name: 'Nebula',   accent: 'violet',         bg: 'nebula',     color: '#b794f6' },
+      { name: 'Daybreak', accent: 'amber',          bg: 'day',        color: '#f0a83a' },
     ]
     const DENSITY_OPTIONS: import('@/contexts/ThemeContext').Density[] = ['compact', 'standard', 'roomy']
     return (
       <div style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Section title="PRESETS">
+          <div style={{ padding: '14px var(--pad)' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {PRESETS.map(p => {
+                const isActive = accent === p.accent && bg === p.bg
+                return (
+                  <button key={p.name} onClick={() => { setAccent(p.accent); setBg(p.bg) }} title={`${p.name} — ${p.accent} on ${p.bg}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)', background: isActive ? `${p.color}18` : 'var(--bg)', border: isActive ? `1px solid ${p.color}` : ruleStrong, color: isActive ? p.color : 'var(--fg-2)' }}
+                  >
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                    {p.name}
+                    {isActive && <CheckCircle size={10} />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </Section>
         <Section title="ACCENT COLOR">
           <div style={{ padding: '14px var(--pad)' }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

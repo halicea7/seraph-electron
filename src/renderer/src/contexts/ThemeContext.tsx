@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
-export type Accent = 'amber' | 'cyan' | 'signal-red' | 'electric-green' | 'violet'
-export type BgVariant = 'paper' | 'true-black' | 'midnight'
+export type Accent =
+  | 'amber' | 'cyan' | 'signal-red' | 'electric-green' | 'violet'
+  | 'azure' | 'teal' | 'magenta' | 'ember' | 'steel'
+export type BgVariant = 'paper' | 'true-black' | 'midnight' | 'slate' | 'abyss' | 'nebula' | 'day'
 export type Density = 'compact' | 'standard' | 'roomy'
 
 // Legacy compat
