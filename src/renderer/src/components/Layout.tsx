@@ -10,7 +10,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useAINarrative } from '../contexts/AINarrativeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getApiBase } from '@/lib/config'
-import seraphMark from '@/assets/seraph-mark.svg'
+import { SeraphMark } from './SeraphMark'
 
 // ── Nav structure (mirrors handoff shell.jsx) ─────────────────────────────────
 
@@ -81,28 +81,7 @@ const NAV_BOTTOM = [
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
 function Logo({ size = 22 }: { size?: number }) {
-  // The Seraph emblem is a monochrome SVG; render it as a mask so it picks up the
-  // theme accent colour and stays crisp/visible on the dark sidebar.
-  return (
-    <div
-      role="img"
-      aria-label="Seraph"
-      style={{
-        width: size,
-        height: size,
-        flexShrink: 0,
-        backgroundColor: 'var(--accent)',
-        WebkitMaskImage: `url(${seraphMark})`,
-        maskImage: `url(${seraphMark})`,
-        WebkitMaskRepeat: 'no-repeat',
-        maskRepeat: 'no-repeat',
-        WebkitMaskPosition: 'center',
-        maskPosition: 'center',
-        WebkitMaskSize: 'contain',
-        maskSize: 'contain',
-      }}
-    />
-  )
+  return <SeraphMark size={size} />
 }
 
 // ── NavRow ────────────────────────────────────────────────────────────────────
