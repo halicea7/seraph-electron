@@ -245,6 +245,11 @@ function Sidebar({ backendOnline }: { backendOnline: boolean | null }) {
       height: '100vh',
       position: 'sticky',
       top: 0,
+      // Lift above the page-content stacking context (`.page-enter` gets one via
+      // its transform animation) so the railed engagement dropdown — which opens
+      // to the right, overflowing the narrow rail into the page area — paints on
+      // top instead of behind the page. Stays below modals (z-index 100).
+      zIndex: 30,
       transition: 'width .16s ease',
     }}>
       {/* Brand */}
