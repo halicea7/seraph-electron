@@ -75,6 +75,12 @@ export interface Finding {
   status?: string       // open | in-review | remediated | accepted
   exploit_chain_json?: string | null
   created_at: string
+  // Optional fields from the deduped /findings/grouped view:
+  occurrences?: number
+  first_seen?: string | null
+  last_seen?: string | null
+  sla_due?: string | null
+  overdue?: boolean
 }
 
 // ── Tool registry ─────────────────────────────────────────────────────────────

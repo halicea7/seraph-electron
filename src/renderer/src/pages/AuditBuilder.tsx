@@ -125,8 +125,9 @@ export default function AuditBuilder() {
     if (!projectId) return
     setLoadingFindings(true)
     try {
-      const r = await fetch(`${getApiBase()}/audit/findings?project_id=${projectId}`)
-      setFindings(r.ok ? await r.json() : [])
+      // Deduped + SLA-annotated view of this project's scan findings.
+      const r = await fetch(`${getApiBase()}/findings/grouped?project_id=${projectId}`)
+      setFindings(r.ok ? (await r.json()).findings ?? [] : [])
     } catch { /* ignore */ } finally { setLoadingFindings(false) }
   }, [projectId])
 

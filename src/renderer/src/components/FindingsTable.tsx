@@ -208,7 +208,15 @@ export default function FindingsTable({ findings, loading, onDelete }: FindingsT
                   </span>
                 </div>
                 <div className="px-4 py-3">
-                  <div className="text-sm text-slate-200 leading-snug">{finding.title}</div>
+                  <div className="text-sm text-slate-200 leading-snug flex items-center gap-2 flex-wrap">
+                    <span>{finding.title}</span>
+                    {finding.overdue && (
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '1px 6px', color: 'var(--crit)', border: '1px solid var(--crit)', background: 'rgba(232,92,78,0.12)', fontFamily: 'var(--font-mono)' }}>SLA OVERDUE</span>
+                    )}
+                    {(finding.occurrences ?? 0) > 1 && (
+                      <span title={`Seen in ${finding.occurrences} scans`} style={{ fontSize: 9, padding: '1px 6px', color: 'var(--fg-3)', border: '1px solid var(--rule-strong)', fontFamily: 'var(--font-mono)' }}>×{finding.occurrences}</span>
+                    )}
+                  </div>
                   {finding.description && (
                     <div className="text-xs text-slate-400 truncate mt-0.5">{finding.description}</div>
                   )}
@@ -285,6 +293,14 @@ export default function FindingsTable({ findings, loading, onDelete }: FindingsT
                       </div>
                     )
                   })()}
+                  {(finding.occurrences || finding.first_seen || finding.sla_due) && (
+                    <div className="flex items-center gap-4 flex-wrap" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-3)' }}>
+                      {(finding.occurrences ?? 0) > 1 && <span>seen ×{finding.occurrences}</span>}
+                      {finding.first_seen && <span>first {finding.first_seen.slice(0, 10)}</span>}
+                      {finding.last_seen && <span>last {finding.last_seen.slice(0, 10)}</span>}
+                      {finding.sla_due && <span style={{ color: finding.overdue ? 'var(--crit)' : 'var(--fg-3)' }}>SLA due {finding.sla_due.slice(0, 10)}{finding.overdue ? ' · overdue' : ''}</span>}
+                    </div>
+                  )}
                   {finding.description && (
                     <div>
                       <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Description</div>
