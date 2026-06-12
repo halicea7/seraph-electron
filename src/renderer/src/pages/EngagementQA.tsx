@@ -23,6 +23,11 @@ interface Answer {
   model: string
 }
 
+interface ModelOption {
+  key: string   // "local:<m>" | "server:<m>"
+  label: string
+}
+
 // Map a citation source type to the page that shows it.
 const CITE_ROUTE: Record<string, (id: string) => string> = {
   finding: () => '/findings',
@@ -51,38 +56,90 @@ export default function EngagementQA() {
   const [error, setError] = useState('')
   const [history, setHistory] = useState<Answer[]>([])
 
-  // Available models + the one to use. Defaults to the global Settings → AI model.
-  const [models, setModels] = useState<string[]>([])
-  const [model, setModel] = useState('')
-  const [defaultModel, setDefaultModel] = useState('')
+  // Two model sources, like the AI Operator:
+  //   local:<m>  → Ollama on THIS computer (called directly from the app)
+  //   server:<m> → Ollama on the backend host (called via /ai/ask)
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [selectedKey, setSelectedKey] = useState('')
 
   useEffect(() => {
-    fetch(`${api}/ai/config`)
-      .then(r => r.json())
-      .then(cfg => { setDefaultModel(cfg.model || ''); setModel(m => m || cfg.model || '') })
-      .catch(() => {})
-    fetch(`${api}/ai/models`)
-      .then(r => r.json())
-      .then(d => setModels(d.models || []))
-      .catch(() => {})
+    (async () => {
+      const opts: ModelOption[] = []
+
+      // Local (this computer) Ollama — discovered via the Electron bridge.
+      try {
+        const localModels: string[] = await (window as any).electronAPI.ollamaModels()
+        localModels.forEach(m => opts.push({ key: `local:${m}`, label: `[Local] ${m}` }))
+      } catch { /* local Ollama not running / not in Electron */ }
+
+      // Server (backend host) Ollama — and its configured default model.
+      let serverDefault = ''
+      try {
+        const cfg = await fetch(`${api}/ai/config`).then(r => r.json())
+        serverDefault = cfg.model || ''
+      } catch { /* backend offline */ }
+      try {
+        const d = await fetch(`${api}/ai/models`).then(r => r.json())
+        ;(d.models as string[] || []).forEach(m =>
+          opts.push({ key: `server:${m}`, label: `[Server] ${m}${m === serverDefault ? '  (default)' : ''}` }),
+        )
+      } catch { /* backend offline */ }
+
+      setModelOptions(opts)
+      const fallback = serverDefault ? `server:${serverDefault}` : (opts[0]?.key ?? '')
+      setSelectedKey(k => k || fallback)
+    })()
   }, [])
 
   async function ask(q: string) {
     if (!selectedProject || !q.trim()) return
+    if (!selectedKey) {
+      setError('No model available. Start Ollama on this computer, or set a model in Settings → AI.')
+      return
+    }
+    const [source, ...parts] = selectedKey.split(':')
+    const model = parts.join(':')
+    const label = modelOptions.find(o => o.key === selectedKey)?.label ?? model
+
     setLoading(true)
     setError('')
     try {
-      const r = await fetch(`${api}/ai/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: selectedProject.id, question: q.trim(), model: model || undefined }),
-      })
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || 'Request failed')
+      let answer = ''
+      let cites: Citation[] = []
+
+      if (source === 'local') {
+        // 1) backend retrieves the grounded context (no LLM call)
+        const ctx = await fetch(`${api}/ai/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: selectedProject.id, question: q.trim(), retrieve_only: true }),
+        }).then(r => r.json())
+        cites = ctx.citations || []
+        // 2) run this computer's Ollama with those messages
+        const settings = await (window as any).electronAPI.ollamaGetSettings()
+        const baseUrl = settings.localOllamaUrl.replace(/\/$/, '')
+        const resp = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages: ctx.messages, stream: false }),
+        })
+        if (!resp.ok) throw new Error(`Local Ollama error: ${resp.status}`)
+        const data = await resp.json()
+        answer = data.message?.content ?? ''
+      } else {
+        // server model — backend does retrieval + the LLM call
+        const r = await fetch(`${api}/ai/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: selectedProject.id, question: q.trim(), model }),
+        })
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.detail || 'Request failed')
+        answer = data.answer
+        cites = data.citations || []
       }
-      const data = await r.json()
-      setHistory(prev => [{ question: q.trim(), answer: data.answer, citations: data.citations || [], model: model || defaultModel }, ...prev])
+
+      setHistory(prev => [{ question: q.trim(), answer, citations: cites, model: label }, ...prev])
       setQuestion('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed')
@@ -109,28 +166,30 @@ export default function EngagementQA() {
           </p>
         </div>
 
-        {/* Model selector — defaults to the Settings → AI model */}
+        {/* Model selector — [Local] = this computer's Ollama, [Server] = backend host's Ollama */}
         <div style={{ flexShrink: 0, textAlign: 'right' }}>
           <div className="smcap" style={{ fontSize: 9, color: 'var(--fg-3)', marginBottom: 4 }}>Model</div>
-          {models.length > 0 ? (
+          {modelOptions.length > 0 ? (
             <select
-              value={model}
-              onChange={e => setModel(e.target.value)}
+              value={selectedKey}
+              onChange={e => setSelectedKey(e.target.value)}
               style={{
                 background: 'var(--bg)', border: '1px solid var(--rule)', color: 'var(--fg)',
-                fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 8px', borderRadius: 3, maxWidth: 220,
+                fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 8px', borderRadius: 3, maxWidth: 240,
               }}
             >
-              {models.map(m => (
-                <option key={m} value={m}>{m}{m === defaultModel ? '  (default)' : ''}</option>
+              {modelOptions.map(o => (
+                <option key={o.key} value={o.key}>{o.label}</option>
               ))}
             </select>
           ) : (
-            <span className="mono" style={{ fontSize: 11, color: model ? 'var(--fg-2)' : 'var(--crit)' }}>
-              {model || 'none — set one in Settings → AI'}
+            <span className="mono" style={{ fontSize: 11, color: 'var(--crit)' }}>
+              none — start Ollama or set Settings → AI
             </span>
           )}
-          <div className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', marginTop: 3 }}>via Ollama</div>
+          <div className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', marginTop: 3 }}>
+            [Local] this computer · [Server] backend host
+          </div>
         </div>
       </div>
 
