@@ -500,8 +500,27 @@ export default function CredentialVault() {
                 <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} style={inputStyle} placeholder="administrator" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 10, color: 'var(--fg-3)', marginBottom: 5, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Secret (password / hash / key)</label>
-                <input type="password" value={form.secret} onChange={e => setForm(f => ({ ...f, secret: e.target.value }))} style={inputStyle} placeholder="••••••••" />
+                <label style={{ display: 'block', fontSize: 10, color: 'var(--fg-3)', marginBottom: 5, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {form.cred_type === 'key' ? 'Private key (PEM)' : 'Secret (password / hash)'}
+                </label>
+                {form.cred_type === 'key' ? (
+                  <>
+                    <textarea
+                      value={form.secret}
+                      onChange={e => setForm(f => ({ ...f, secret: e.target.value }))}
+                      style={{ ...inputStyle, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                      rows={6}
+                      placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n…paste or load a private key…\n-----END OPENSSH PRIVATE KEY-----'}
+                    />
+                    <label className="btn btn-sm" style={{ marginTop: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                      <Icon name="upload" size={11} style={{ marginRight: 5 }} /> Load from file
+                      <input type="file" accept=".pem,.key,.ppk,.txt,id_rsa,id_ed25519" style={{ display: 'none' }}
+                        onChange={async e => { const f = e.target.files?.[0]; if (f) { const text = await f.text(); setForm(s => ({ ...s, secret: text })) } }} />
+                    </label>
+                  </>
+                ) : (
+                  <input type="password" value={form.secret} onChange={e => setForm(f => ({ ...f, secret: e.target.value }))} style={inputStyle} placeholder="••••••••" />
+                )}
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 10, color: 'var(--fg-3)', marginBottom: 5, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Target host</label>

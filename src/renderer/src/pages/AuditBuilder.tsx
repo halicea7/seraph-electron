@@ -78,6 +78,9 @@ export default function AuditBuilder() {
   const [toolStatus, setToolStatus] = useState<Record<string, { available: boolean }>>({})
   const [sshCredentials, setSshCredentials] = useState<Array<{ id: string; username: string; target_host: string; notes: string }>>([])
   const [selectedCredentialId, setSelectedCredentialId] = useState('')
+  const [showAddKey, setShowAddKey] = useState(false)
+  const [newKey, setNewKey] = useState({ username: '', target_host: '', secret: '' })
+  const [savingKey, setSavingKey] = useState(false)
 
   // Selection
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
@@ -135,6 +138,29 @@ export default function AuditBuilder() {
     } catch { /* ignore */ }
   }, [projectId])
 
+  const loadKeys = useCallback(() => {
+    if (!projectId) return
+    fetch(`${getApiBase()}/credentials/keys?project_id=${projectId}`).then(r => r.ok ? r.json() : []).then(setSshCredentials).catch(() => {})
+  }, [projectId])
+
+  async function addSshKey() {
+    if (!projectId || !newKey.secret.trim()) { toast('Paste or load a private key first', 'error'); return }
+    setSavingKey(true)
+    try {
+      const r = await fetch(`${getApiBase()}/credentials`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, cred_type: 'key', source: 'manual', username: newKey.username, target_host: newKey.target_host, secret: newKey.secret, notes: 'Added from Audit Builder' }),
+      })
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'failed') }
+      const created = await r.json()
+      setNewKey({ username: '', target_host: '', secret: '' }); setShowAddKey(false)
+      loadKeys()
+      if (created?.id) setSelectedCredentialId(created.id)
+      toast('SSH key added', 'success')
+    } catch (e) { toast(e instanceof Error ? e.message : 'Failed to add key', 'error') }
+    finally { setSavingKey(false) }
+  }
+
   useEffect(() => {
     fetch(`${getApiBase()}/audit/categories`).then(r => r.json()).then((data: Record<string, ScanCategory>) => {
       setCategories(data)
@@ -156,13 +182,13 @@ export default function AuditBuilder() {
       setTargets(data)
       if (data.length) { setSelectedTarget(data[0].id); setCiscatTargetId(data[0].id) }
     }).catch(() => {})
-    fetch(`${getApiBase()}/credentials/keys?project_id=${projectId}`).then(r => r.ok ? r.json() : []).then(setSshCredentials).catch(() => {})
+    loadKeys()
     fetch(`${getApiBase()}/profiles`).then(r => r.ok ? r.json() : []).then((data: Profile[]) => {
       setProfiles(data.map(p => ({ ...p, scan_categories: typeof p.scan_categories === 'string' ? JSON.parse(p.scan_categories as unknown as string) : p.scan_categories })))
     }).catch(() => {})
     loadFindings()
     loadCoverage()
-  }, [projectId, loadFindings, loadCoverage])
+  }, [projectId, loadFindings, loadCoverage, loadKeys])
 
   useEffect(() => { termEndRef.current?.scrollIntoView({ block: 'end' }) }, [termLines])
 
@@ -348,15 +374,47 @@ export default function AuditBuilder() {
               </select>
             </div>
             {needsSSH && (
-              <div style={{ minWidth: 240 }}>
+              <div style={{ minWidth: 260 }}>
                 <label style={fieldLabel}>SSH credential (remote checks)</label>
-                <select style={{ ...inputStyle, borderColor: selectedCredentialId ? 'var(--rule)' : 'var(--high)' }} value={selectedCredentialId} onChange={e => setSelectedCredentialId(e.target.value)}>
-                  <option value="">— select key —</option>
-                  {sshCredentials.map(c => <option key={c.id} value={c.id}>{c.username}@{c.target_host || '?'} {c.notes ? `(${c.notes})` : ''}</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <select style={{ ...inputStyle, borderColor: selectedCredentialId ? 'var(--rule)' : 'var(--high)' }} value={selectedCredentialId} onChange={e => setSelectedCredentialId(e.target.value)}>
+                    <option value="">{sshCredentials.length ? '— select key —' : '— no SSH keys yet —'}</option>
+                    {sshCredentials.map(c => <option key={c.id} value={c.id}>{c.username}@{c.target_host || '?'} {c.notes ? `(${c.notes})` : ''}</option>)}
+                  </select>
+                  <button className="btn btn-sm" onClick={() => setShowAddKey(s => !s)} title="Add an SSH key" style={{ flexShrink: 0 }}>
+                    <Icon name={showAddKey ? 'x' : 'plus'} size={12} />
+                  </button>
+                </div>
               </div>
             )}
           </div>
+
+          {/* Inline "drop your key here" — adds an encrypted SSH key credential */}
+          {needsSSH && showAddKey && (
+            <div style={{ marginTop: 12, border: rule, borderLeft: '3px solid var(--accent)', borderRadius: 3, padding: 12, background: 'var(--bg-2)', maxWidth: 560 }}>
+              <div className="smcap" style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 8 }}>Add SSH key</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input style={{ ...inputStyle, flex: 1 }} placeholder="username (e.g. root)" value={newKey.username} onChange={e => setNewKey(k => ({ ...k, username: e.target.value }))} />
+                <input style={{ ...inputStyle, flex: 1 }} placeholder="target host (optional)" value={newKey.target_host} onChange={e => setNewKey(k => ({ ...k, target_host: e.target.value }))} />
+              </div>
+              <textarea
+                value={newKey.secret}
+                onChange={e => setNewKey(k => ({ ...k, secret: e.target.value }))}
+                rows={5}
+                placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n…paste the private key, or load from file…\n-----END OPENSSH PRIVATE KEY-----'}
+                style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 11, resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                <label className="btn btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                  <Icon name="upload" size={11} style={{ marginRight: 5 }} /> Load from file
+                  <input type="file" accept=".pem,.key,.ppk,.txt,id_rsa,id_ed25519" style={{ display: 'none' }}
+                    onChange={async e => { const f = e.target.files?.[0]; if (f) { const text = await f.text(); setNewKey(k => ({ ...k, secret: text })) } }} />
+                </label>
+                <button className="btn btn-primary btn-sm" onClick={addSshKey} disabled={savingKey || !newKey.secret.trim()}>{savingKey ? 'Saving…' : 'Save key'}</button>
+                <span style={{ fontSize: 10.5, color: 'var(--fg-4)' }}>Stored encrypted in the Credential Vault.</span>
+              </div>
+            </div>
+          )}
         </Section>
 
         {/* 2 · Checks */}
