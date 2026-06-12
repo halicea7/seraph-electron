@@ -126,7 +126,7 @@ export default function Timeline() {
   }, [activeProjectId])
 
   function exportJsonl() {
-    const lines = events.map(e => JSON.stringify(e)).join('\n')
+    const lines = filteredEvents.map(e => JSON.stringify(e)).join('\n')
     const blob = new Blob([lines], { type: 'application/jsonl' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -134,13 +134,16 @@ export default function Timeline() {
     URL.revokeObjectURL(url)
   }
 
-  // Group events by date
-  const grouped: Record<string, TimelineEvent[]> = {}
-  for (const evt of events) {
-    const day = new Date(evt.ts).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-    if (!grouped[day]) grouped[day] = []
-    grouped[day].push(evt)
+  // Apply the time-range filter (Today / 7d / 30d / Engagement).
+  function inRange(ts: string): boolean {
+    if (timeRange === 'Engagement') return true
+    const t = new Date(ts).getTime()
+    if (timeRange === 'Today') { const d = new Date(); d.setHours(0, 0, 0, 0); return t >= d.getTime() }
+    if (timeRange === '7d') return Date.now() - t <= 7 * 86_400_000
+    if (timeRange === '30d') return Date.now() - t <= 30 * 86_400_000
+    return true
   }
+  const filteredEvents = events.filter(e => inRange(e.ts))
 
   return (
     <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', color: 'var(--fg)' }}>
@@ -161,7 +164,7 @@ export default function Timeline() {
               </select>
             )}
             <SegBtns options={['Today', '7d', '30d', 'Engagement']} value={timeRange} onChange={setTimeRange} />
-            <button className="btn" onClick={exportJsonl} disabled={events.length === 0} style={{ opacity: events.length === 0 ? 0.4 : 1 }}>
+            <button className="btn" onClick={exportJsonl} disabled={filteredEvents.length === 0} style={{ opacity: filteredEvents.length === 0 ? 0.4 : 1 }}>
               <Icon name="download" size={12} color="currentColor" /> Export JSONL
             </button>
           </>
@@ -188,18 +191,18 @@ export default function Timeline() {
           </div>
         )}
 
-        {!loading && !error && activeProjectId && events.length === 0 && (
+        {!loading && !error && activeProjectId && filteredEvents.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--fg-3)', fontSize: 13 }}>
-            No events in this project yet.
+            {events.length === 0 ? 'No events in this project yet.' : `No events in the “${timeRange}” range.`}
           </div>
         )}
 
-        {!loading && events.length > 0 && (
+        {!loading && filteredEvents.length > 0 && (
           <div style={{ position: 'relative', paddingLeft: 80 }}>
             {/* Vertical line */}
             <div style={{ position: 'absolute', left: 76, top: 0, bottom: 0, width: 1, background: 'var(--rule-strong)' }} />
 
-            {events.map(event => (
+            {filteredEvents.map(event => (
               <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: 16, marginBottom: 18 }}>
                 {/* Time */}
                 <div className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', textAlign: 'right', paddingTop: 2 }}>
