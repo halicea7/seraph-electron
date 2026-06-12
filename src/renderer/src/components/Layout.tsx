@@ -64,6 +64,7 @@ const NAV_GROUPS = [
       { to: '/ask',       label: 'Ask Seraph',   icon: 'help' },
       { to: '/cve-watch', label: 'CVE Watch',    icon: 'eye' },
       { to: '/timeline',  label: 'Timeline',     icon: 'clock' },
+      { to: '/posture',   label: 'Posture',      icon: 'activity' },
       { to: '/logs',      label: 'Log Analysis', icon: 'history' },
       { to: '/scan-diff', label: 'Scan Diff',    icon: 'layers' },
     ],

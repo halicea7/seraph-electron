@@ -40,6 +40,7 @@ import AttackNavigator from '@/pages/AttackNavigator'
 import ADAttack from '@/pages/ADAttack'
 import ScreenshotGallery from '@/pages/ScreenshotGallery'
 import EngagementQA from '@/pages/EngagementQA'
+import Posture from '@/pages/Posture'
 import RequestWorkbench from '@/pages/RequestWorkbench'
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -99,6 +100,7 @@ function ProtectedRoutes() {
           <Route path="ad" element={<ADAttack />} />
           <Route path="screenshots" element={<ScreenshotGallery />} />
           <Route path="ask" element={<EngagementQA />} />
+          <Route path="posture" element={<Posture />} />
           <Route path="http" element={<RequestWorkbench />} />
           <Route path="operator" element={<AIOperator />} />
           <Route path="hermes" element={<HermesOperator />} />
