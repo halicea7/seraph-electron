@@ -338,7 +338,7 @@ function SliverPanel() {
 
 export default function C2Console() {
   const [activeTab, setActiveTab] = useState<'sessions' | 'payloads' | 'listeners' | 'attack' | 'loot' | 'postex' | 'lotl' | 'infra'>('sessions')
-  const { projectId: sp } = useAppStore()
+  const { selectedProject: sp } = useAppStore()
   const projectId = sp?.id ?? ''
   const [msfStatus, setMsfStatus] = useState<MsfStatus>({ connected: false })
   const [sessions, setSessions] = useState<C2Session[]>([])
