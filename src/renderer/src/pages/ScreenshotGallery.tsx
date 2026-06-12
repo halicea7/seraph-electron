@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/stores/appStore'
-import { getApiBase, wsUrl } from '@/lib/config'
+import { getApiBase, wsUrl, authedUrl } from '@/lib/config'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { useToast } from '@/contexts/ToastContext'
@@ -13,7 +13,10 @@ interface Shot {
   title: string
   status_code: string | null
   captured_at: string | null
+  finding_id?: string | null
 }
+
+interface FindingOpt { id: string; title: string; severity: string }
 
 interface Target {
   id: string
@@ -30,6 +33,7 @@ export default function ScreenshotGallery() {
 
   const [shots, setShots] = useState<Shot[]>([])
   const [targets, setTargets] = useState<Target[]>([])
+  const [findings, setFindings] = useState<FindingOpt[]>([])
   const [urlText, setUrlText] = useState('')
   const [running, setRunning] = useState(false)
   const [log, setLog] = useState<string[]>([])
@@ -50,9 +54,22 @@ export default function ScreenshotGallery() {
     if (selectedProject) {
       fetch(`${api}/projects/${selectedProject.id}/targets`)
         .then(r => r.json()).then(setTargets).catch(() => {})
+      fetch(`${api}/findings?project_id=${selectedProject.id}`)
+        .then(r => r.ok ? r.json() : []).then(setFindings).catch(() => {})
     }
     return () => { wsRef.current?.close() }
   }, [selectedProject])
+
+  async function linkShot(shotId: string, findingId: string | null) {
+    const r = await fetch(`${api}/screenshots/${shotId}/link`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ finding_id: findingId }),
+    })
+    if (r.ok) {
+      setShots(prev => prev.map(s => s.id === shotId ? { ...s, finding_id: findingId } : s))
+      showToast(findingId ? 'Attached as evidence' : 'Detached', 'success')
+    } else showToast('Link failed', 'error')
+  }
 
   function loadWebTargets() {
     const urls = targets
@@ -176,7 +193,7 @@ export default function ScreenshotGallery() {
                     style={{ cursor: 'pointer', aspectRatio: '16 / 10', overflow: 'hidden', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <img
-                      src={`${api}/screenshots/${s.id}/image`}
+                      src={authedUrl(`/screenshots/${s.id}/image`)}
                       alt={s.url}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                       loading="lazy"
@@ -189,6 +206,28 @@ export default function ScreenshotGallery() {
                     <button onClick={() => remove(s.id)} title="Delete" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex' }}>
                       <Icon name="trash" size={12} />
                     </button>
+                  </div>
+                  {/* Attach as finding evidence */}
+                  <div style={{ padding: '0 10px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {s.finding_id ? (
+                      <>
+                        <Icon name="flag" size={11} color="var(--accent)" />
+                        <span className="mono" style={{ flex: 1, fontSize: 10, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={findings.find(f => f.id === s.finding_id)?.title}>
+                          {findings.find(f => f.id === s.finding_id)?.title ?? 'evidence'}
+                        </span>
+                        <button onClick={() => linkShot(s.id, null)} title="Detach" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-4)', fontSize: 10 }}>unlink</button>
+                      </>
+                    ) : (
+                      <select
+                        value=""
+                        onChange={e => e.target.value && linkShot(s.id, e.target.value)}
+                        disabled={findings.length === 0}
+                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--rule)', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 6px', borderRadius: 2 }}
+                      >
+                        <option value="">{findings.length ? 'Attach to finding…' : 'no findings yet'}</option>
+                        {findings.map(f => <option key={f.id} value={f.id}>[{f.severity}] {f.title.slice(0, 50)}</option>)}
+                      </select>
+                    )}
                   </div>
                 </div>
               ))}
@@ -211,7 +250,7 @@ export default function ScreenshotGallery() {
             </button>
           </div>
           <img
-            src={`${api}/screenshots/${lightbox.id}/image`}
+            src={authedUrl(`/screenshots/${lightbox.id}/image`)}
             alt={lightbox.url}
             onClick={e => e.stopPropagation()}
             style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid var(--rule-strong)' }}

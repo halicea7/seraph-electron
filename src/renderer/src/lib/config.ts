@@ -27,6 +27,13 @@ export function wsUrl(path: string): string {
   return `${getWsBase()}${path}${sep}token=${encodeURIComponent(getToken() ?? '')}`
 }
 
+// Build an API URL with the token in the query string — for <img>/download URLs
+// that can't set the Authorization header (auth middleware also accepts ?token=).
+export function authedUrl(path: string): string {
+  const sep = path.includes('?') ? '&' : '?'
+  return `${getApiBase()}${path}${sep}token=${encodeURIComponent(getToken() ?? '')}`
+}
+
 export async function setServerUrl(url: string): Promise<void> {
   await window.electronAPI.setServerUrl(url.trim().replace(/\/$/, ''))
 }

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import type React from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Filter, Plus, Trash2, Zap, Loader, RefreshCw } from 'lucide-react'
 import type { Finding, FindingNote } from '../types/index'
-import { getApiBase } from '@/lib/config'
+import { getApiBase, authedUrl } from '@/lib/config'
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info']
 
@@ -42,6 +42,8 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
   const [savingNote, setSavingNote] = useState<string | null>(null)
   const [enriching, setEnriching] = useState<string | null>(null)
   const [enrichedData, setEnrichedData] = useState<Record<string, { cvss_score: string | null; cve_id: string | null }>>({})
+  const [shots, setShots] = useState<Record<string, { id: string; url: string }[]>>({})
+  const [lightboxShot, setLightboxShot] = useState<string | null>(null)
 
   const frameworks = useMemo(() => {
     const set = new Set(findings.map(f => f.framework).filter(Boolean) as string[])
@@ -79,10 +81,18 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
   }, [findings, sortField, sortDir, filterSeverity, filterFramework, search])
 
   useEffect(() => {
-    if (!expandedId || notes[expandedId]) return
-    fetch(`${getApiBase()}/findings/${expandedId}/notes`)
-      .then(r => r.json())
-      .then(data => setNotes(prev => ({ ...prev, [expandedId]: data })))
+    if (!expandedId) return
+    if (!notes[expandedId]) {
+      fetch(`${getApiBase()}/findings/${expandedId}/notes`)
+        .then(r => r.json())
+        .then(data => setNotes(prev => ({ ...prev, [expandedId]: data })))
+    }
+    if (!shots[expandedId]) {
+      fetch(`${getApiBase()}/screenshots?finding_id=${expandedId}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setShots(prev => ({ ...prev, [expandedId]: data })))
+        .catch(() => {})
+    }
   }, [expandedId])
 
   async function handleAddNote(findingId: string) {
@@ -322,6 +332,25 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
                     </div>
                   )}
 
+                  {/* Linked screenshot evidence */}
+                  {(shots[finding.id]?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Evidence ({shots[finding.id].length})</div>
+                      <div className="flex flex-wrap gap-2">
+                        {shots[finding.id].map(sh => (
+                          <img
+                            key={sh.id}
+                            src={authedUrl(`/screenshots/${sh.id}/image`)}
+                            alt={sh.url}
+                            title={sh.url}
+                            onClick={() => setLightboxShot(sh.id)}
+                            style={{ width: 160, height: 100, objectFit: 'cover', objectPosition: 'top', border: '1px solid var(--rule)', cursor: 'zoom-in', borderRadius: 3 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   {(onDelete || onRetest) && (
                     <div className="flex justify-end gap-2 pt-1">
@@ -389,6 +418,21 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
           ))
         )}
       </div>
+
+      {/* Evidence lightbox */}
+      {lightboxShot && (
+        <div
+          onClick={() => setLightboxShot(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}
+        >
+          <img
+            src={authedUrl(`/screenshots/${lightboxShot}/image`)}
+            alt="evidence"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '88vh', objectFit: 'contain', border: '1px solid var(--rule-strong)' }}
+          />
+        </div>
+      )}
     </div>
   )
 }
