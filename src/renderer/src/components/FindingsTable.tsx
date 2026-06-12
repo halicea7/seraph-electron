@@ -3,6 +3,8 @@ import type React from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Filter, Plus, Trash2, Zap, Loader, RefreshCw } from 'lucide-react'
 import type { Finding, FindingNote } from '../types/index'
 import { getApiBase, authedUrl } from '@/lib/config'
+import { useAiModel, completeFeature } from '@/lib/ai'
+import AiModelSelect from './AiModelSelect'
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info']
 
@@ -46,6 +48,7 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
   const [lightboxShot, setLightboxShot] = useState<string | null>(null)
   const [aiRemediation, setAiRemediation] = useState<Record<string, string>>({})
   const [aiLoading, setAiLoading] = useState<string | null>(null)
+  const { options: aiModels, modelKey: aiModelKey, setModelKey: setAiModelKey } = useAiModel()
 
   const frameworks = useMemo(() => {
     const set = new Set(findings.map(f => f.framework).filter(Boolean) as string[])
@@ -115,10 +118,8 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
   async function handleRemediate(findingId: string) {
     setAiLoading(findingId)
     try {
-      const r = await fetch(`${getApiBase()}/findings/${findingId}/ai-remediate`, { method: 'POST' })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.detail || 'AI request failed')
-      setAiRemediation(prev => ({ ...prev, [findingId]: d.ai_remediation }))
+      const text = await completeFeature(aiModelKey, `/findings/${findingId}/ai-remediate`, {})
+      setAiRemediation(prev => ({ ...prev, [findingId]: text }))
     } catch (e) {
       setAiRemediation(prev => ({ ...prev, [findingId]: `⚠ ${e instanceof Error ? e.message : 'AI request failed'}` }))
     } finally { setAiLoading(null) }
@@ -186,7 +187,10 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
             {frameworks.map(f => <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>)}
           </select>
         )}
-        <span className="text-xs text-slate-400 ml-auto">{sorted.length} findings</span>
+        <div className="ml-auto" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AiModelSelect value={aiModelKey} onChange={setAiModelKey} options={aiModels} />
+          <span className="text-xs text-slate-400">{sorted.length} findings</span>
+        </div>
       </div>
 
       {/* Table */}

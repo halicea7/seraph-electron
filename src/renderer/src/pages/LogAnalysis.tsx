@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import { getApiBase } from '@/lib/config'
+import { useAiModel, completeFeature } from '@/lib/ai'
+import AiModelSelect from '../components/AiModelSelect'
 import { Brain, AlertTriangle, Globe, Hash, Mail } from 'lucide-react'
 import Icon from '../components/Icon'
 
@@ -108,6 +110,7 @@ export default function LogAnalysis() {
   const [analyzing, setAnalyzing] = useState(false)
   const [results, setResults] = useState<AnalysisResults | null>(null)
   const [aiTriaging, setAiTriaging] = useState(false)
+  const { options: aiModels, modelKey: aiModelKey, setModelKey: setAiModelKey } = useAiModel()
   const [aiResult, setAiResult] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'patterns' | 'iocs' | 'ai'>('patterns')
   const [aiError, setAiError] = useState('')
@@ -137,16 +140,8 @@ export default function LogAnalysis() {
     if (!results) return
     setAiTriaging(true); setAiError('')
     try {
-      const res = await fetch(`${getApiBase()}/logs/ai-triage`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: logText, patterns: results.patterns }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      setAiResult(data.triage || data.result || '')
+      const text = await completeFeature(aiModelKey, '/logs/ai-triage', { text: logText, patterns: results.patterns })
+      setAiResult(text)
       setActiveTab('ai')
     } catch (err: any) {
       setAiError(err.message || 'AI triage failed.')
@@ -402,6 +397,9 @@ export default function LogAnalysis() {
                         >
                           <Brain size={14} /> Run AI Triage
                         </button>
+                        <div style={{ marginTop: 14, display: 'flex', justifyContent: 'center' }}>
+                          <AiModelSelect value={aiModelKey} onChange={setAiModelKey} options={aiModels} />
+                        </div>
                         <p style={{ margin: '14px 0 0', fontSize: 11, color: 'var(--fg-3)', fontFamily: 'var(--font-sans)' }}>
                           Requires AI to be configured in Settings → AI
                         </p>

@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, Download, ChevronDown, ChevronLeft, Tag, X, EyeOff, RotateCcw, ShieldOff, Plus, Trash2 } from 'lucide-react'
 import { Brain, Sparkles, AlertTriangle } from 'lucide-react'
 import { getApiBase } from '@/lib/config'
+import { useAiModel, completeFeature, runCompletion } from '@/lib/ai'
+import AiModelSelect from '@/components/AiModelSelect'
 import Icon from '@/components/Icon'
 import { useAppStore } from '@/stores/appStore'
 import { useToast } from '@/contexts/ToastContext'
@@ -241,8 +243,7 @@ function VulnRecords({ projectId }: { projectId: string }) {
 
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiExpanded, setAiExpanded] = useState<string | null>(null)
-  const [aiModels, setAiModels] = useState<string[]>([])
-  const [aiModel, setAiModel] = useState('')
+  const { options: aiModels, modelKey: aiModel, setModelKey: setAiModel } = useAiModel()
 
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -256,15 +257,6 @@ function VulnRecords({ projectId }: { projectId: string }) {
     }
   }, [projectId])
 
-  useEffect(() => {
-    if (aiModels.length > 0) return
-    window.electronAPI.ollamaModels()
-      .then(models => {
-        setAiModels(models)
-        if (models.length) setAiModel(models[0])
-      })
-      .catch(() => {})
-  }, [])
 
   async function loadVulns() {
     try {
@@ -341,13 +333,12 @@ function VulnRecords({ projectId }: { projectId: string }) {
   async function handleAiRemediate(vuln: Vuln) {
     setAiLoading(vuln.id)
     try {
-      const res = await fetch(`${getApiBase()}/vulns/${vuln.id}/ai-remediate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: aiModel || undefined }),
-      })
-      const data = await res.json()
-      setVulns(prev => prev.map(v => v.id === vuln.id ? { ...v, ai_remediation: data.ai_remediation } : v))
+      const text = await completeFeature(aiModel, `/vulns/${vuln.id}/ai-remediate`, {})
+      // Persist so local- and server-run results behave the same.
+      await fetch(`${getApiBase()}/vulns/${vuln.id}/ai-remediate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: text }),
+      }).catch(() => {})
+      setVulns(prev => prev.map(v => v.id === vuln.id ? { ...v, ai_remediation: text } : v))
       setAiExpanded(vuln.id)
     } catch { /* ignore */ } finally { setAiLoading(null) }
   }
@@ -404,16 +395,7 @@ function VulnRecords({ projectId }: { projectId: string }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {aiModels.length > 0 && (
-            <select
-              value={aiModel}
-              onChange={e => setAiModel(e.target.value)}
-              style={{ fontSize: 11, padding: '4px 8px', background: 'var(--bg)', border: ruleStrong, color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', cursor: 'pointer', borderRadius: 3 }}
-              title="AI model for remediation"
-            >
-              {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          )}
+          <AiModelSelect value={aiModel} onChange={setAiModel} options={aiModels} />
           <button
             onClick={openImportModal}
             disabled={!projectId}
@@ -862,40 +844,22 @@ interface DetailProps {
 }
 
 function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, onChangeStatus, onShowFpModal, onRestore, onVerify, onReport, onDelete, onClose }: DetailProps) {
-  const [aiModels, setAiModels] = useState<string[]>([])
-  const [aiModel, setAiModel] = useState('')
+  const { options: aiModels, modelKey: aiModel, setModelKey: setAiModel } = useAiModel()
   const [aiResult, setAiResult] = useState<string | null>(null)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (aiModels.length > 0) return
-    window.electronAPI.ollamaModels()
-      .then(models => {
-        setAiModels(models)
-        if (models.length && !aiModel) setAiModel(models[0])
-      })
-      .catch(() => {})
-  }, [])
 
   async function generateRemediation() {
     if (!aiModel) return
     setAiGenerating(true)
     setAiResult(null)
     try {
-      const settings = await window.electronAPI.ollamaGetSettings()
-      const base = settings.localOllamaUrl.replace(/\/$/, '')
       const prompt = `You are a senior penetration tester and security engineer. Give direct, technical remediation guidance for the following vulnerability. No emojis. No decorative symbols. No disclaimers. No preamble. Use plain markdown with headers and lists only where they add clarity.\n\nTitle: ${finding.title}\nSeverity: ${finding.severity}\nCVE: ${finding.cve_id ?? 'N/A'}\nTarget: ${finding.target ?? 'N/A'}\nDescription: ${finding.description ?? 'No description'}\n\n## Immediate Mitigation\nState the fastest way to reduce exposure right now.\n\n## Remediation\nExplain the proper long-term fix with specific configuration changes, commands, or code where applicable.\n\n## Verification\nProvide a command or test to confirm the issue is resolved.`
-      const res = await fetch(`${base}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: aiModel, prompt, stream: false }),
-      })
-      const data = await res.json()
-      setAiResult(data.response ?? 'No response from model.')
+      const text = await runCompletion(aiModel, [{ role: 'user', content: prompt }])
+      setAiResult(text || 'No response from model.')
     } catch {
-      setAiResult('Could not reach Ollama. Check Settings → AI for the endpoint configuration.')
+      setAiResult('AI request failed. Check the selected model / Settings → AI.')
     } finally {
       setAiGenerating(false)
     }
@@ -1041,18 +1005,8 @@ function FindingDetail({ finding, tagInput, setTagInput, onAddTag, onRemoveTag, 
         {/* AI Remediation */}
         <div style={{ border: `1px solid ${aiResult ? 'rgba(168,85,247,0.5)' : 'var(--rule)'}`, background: aiResult ? 'rgba(168,85,247,0.03)' : 'transparent' }}>
           <div className="sec-h" style={{ gap: 6 }}>
-            <span className="title" style={{ marginRight: 'auto' }}>AI REMEDIATION · LOCAL LLM</span>
-            {aiModels.length > 0 ? (
-              <select
-                value={aiModel}
-                onChange={e => setAiModel(e.target.value)}
-                style={{ fontSize: 10, padding: '2px 6px', background: 'var(--bg)', border: '1px solid rgba(168,85,247,0.3)', color: 'var(--fg-2)', fontFamily: 'var(--font-mono)', cursor: 'pointer', maxWidth: 130 }}
-              >
-                {aiModels.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            ) : (
-              <span style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>no models</span>
-            )}
+            <span className="title" style={{ marginRight: 'auto' }}>AI REMEDIATION</span>
+            <AiModelSelect value={aiModel} onChange={setAiModel} options={aiModels} style={{ maxWidth: 150 }} />
             <button
               onClick={generateRemediation}
               disabled={!aiModel || aiGenerating}
