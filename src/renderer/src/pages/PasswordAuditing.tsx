@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 import EmptyState from '@/components/EmptyState'
 import type { Credential } from '../types/index'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -276,7 +276,7 @@ export default function PasswordAuditing() {
     if (installing) return
     setInstalling(bundleId)
     setInstallLog(prev => ({ ...prev, [bundleId]: '' }))
-    const ws = new WebSocket(`${getWsBase()}/ws/wordlists/install/${bundleId}`)
+    const ws = new WebSocket(wsUrl(`/ws/wordlists/install/${bundleId}`))
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
       if (msg.type === 'stdout' || msg.type === 'stderr') {
@@ -357,7 +357,7 @@ export default function PasswordAuditing() {
     const { job_id } = await res.json()
     setJobId(job_id)
 
-    const ws = new WebSocket(`${getWsBase()}/ws/cracking/${job_id}`)
+    const ws = new WebSocket(wsUrl(`/ws/cracking/${job_id}`))
 
     ws.onopen = () => {
       setLiveOutput(`[*] Starting ${tool}...\n[*] ${hashes.length} hash(es) to crack\n`)

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import { getProjects, getTargets, getFindings, getPentestScans, createPentestScan } from '@/api/client'
 import {
   MODE_CONFIGS, OperatorMode,
@@ -439,7 +439,7 @@ export function AIOperatorProvider({ children }: { children: React.ReactNode }) 
   async function executeViaWS(scanId: string, command: string): Promise<string> {
     const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${getWsBase()}/ws/execute/${scanId}`)
+      const ws = new WebSocket(wsUrl(`/ws/execute/${scanId}`))
       wsRef.current = ws
       let output = ''
       let settled = false

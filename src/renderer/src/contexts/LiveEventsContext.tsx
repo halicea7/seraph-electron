@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type React from 'react'
-import { getWsBase } from '@/lib/config'
+import { wsUrl } from '@/lib/config'
 
 // ══════════════════════════════════════════════════════════════════════════════
 // One shared WebSocket to /ws/events. Components subscribe to backend pushes
@@ -41,7 +41,7 @@ export function LiveEventsProvider({ children }: { children: React.ReactNode }) 
 
     function connect() {
       try {
-        ws = new WebSocket(`${getWsBase()}/ws/events`)
+        ws = new WebSocket(wsUrl(`/ws/events`))
       } catch {
         scheduleReconnect()
         return

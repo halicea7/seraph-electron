@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '@/components/Icon'
 import type { Target } from '../types/index'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 import { useToast } from '@/contexts/ToastContext'
 import type { ToolStatus } from '../components/ToolCard'
@@ -192,7 +192,7 @@ export default function OSINTModule() {
     const { scan_id } = await res.json()
     updateTool(toolName, { scanId: scan_id })
 
-    const ws = new WebSocket(`${getWsBase()}/ws/osint/${scan_id}`)
+    const ws = new WebSocket(wsUrl(`/ws/osint/${scan_id}`))
     let outputBuffer = ''
 
     ws.onmessage = (event) => {
@@ -248,7 +248,7 @@ export default function OSINTModule() {
     const { job_id } = await res.json()
     setSherlockState(prev => ({ ...prev, jobId: job_id }))
 
-    const ws = new WebSocket(`${getWsBase()}/ws/sherlock/${job_id}`)
+    const ws = new WebSocket(wsUrl(`/ws/sherlock/${job_id}`))
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.type === 'stdout') {

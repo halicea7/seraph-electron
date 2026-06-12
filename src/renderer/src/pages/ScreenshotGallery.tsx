@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/stores/appStore'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { useToast } from '@/contexts/ToastContext'
@@ -82,7 +82,7 @@ export default function ScreenshotGallery() {
       const { job_id, skipped } = await r.json()
       if (skipped?.length) showToast(`${skipped.length} URL(s) skipped (out of scope)`, 'info')
 
-      const ws = new WebSocket(`${getWsBase()}/ws/screenshots/${job_id}`)
+      const ws = new WebSocket(wsUrl(`/ws/screenshots/${job_id}`))
       wsRef.current = ws
       ws.onmessage = ev => {
         const msg = JSON.parse(ev.data)

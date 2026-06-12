@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/stores/appStore'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { useToast } from '@/contexts/ToastContext'
@@ -163,7 +163,7 @@ export default function RequestWorkbench() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.detail || 'Fuzz failed to start')
 
-      const ws = new WebSocket(`${getWsBase()}/ws/httpfuzz/${data.run_id}`)
+      const ws = new WebSocket(wsUrl(`/ws/httpfuzz/${data.run_id}`))
       wsRef.current = ws
       ws.onmessage = ev => {
         const msg = JSON.parse(ev.data)

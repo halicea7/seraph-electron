@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { load as yamlLoad } from 'js-yaml'
 import Icon from '@/components/Icon'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -297,7 +297,7 @@ export default function Playbooks() {
     setLastInsight('')
     setSteps(pb.steps.map((s, i) => ({ step: i, tool: s.name, status: 'pending', findings: 0, parallel: s.parallel ?? false })))
 
-    const ws = new WebSocket(`${getWsBase()}/ws/playbooks/${runId}${aiEnabled ? '?use_ai=true' : ''}`)
+    const ws = new WebSocket(wsUrl(`/ws/playbooks/${runId}${aiEnabled ? '?use_ai=true' : ''}`))
     wsRef.current = ws
     ws.onmessage = (evt) => handleWsMessage(JSON.parse(evt.data))
     ws.onerror = () => appendLine('\x1b[31m[WebSocket error]\x1b[0m')

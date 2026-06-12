@@ -14,7 +14,7 @@ import ProjectModal from '@/components/ProjectModal'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { useCountUp } from '@/lib/useCountUp'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 
 const rule = '1px solid var(--rule)'
 
@@ -965,7 +965,7 @@ export default function Dashboard() {
     loadData()
     let delay = 1000
     function connect() {
-      const ws = new WebSocket(`${getWsBase()}/ws/events`)
+      const ws = new WebSocket(wsUrl(`/ws/events`))
       wsRef.current = ws
       ws.onmessage = (e) => {
         try {

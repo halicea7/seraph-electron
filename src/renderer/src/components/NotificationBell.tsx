@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Check, Trash2, X } from 'lucide-react'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 
 interface Notification {
   id: string
@@ -60,7 +60,7 @@ export default function NotificationBell() {
     let reconnectTimer: ReturnType<typeof setTimeout>
 
     function connect() {
-      ws = new WebSocket(`${getWsBase()}/ws/events`)
+      ws = new WebSocket(wsUrl(`/ws/events`))
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)

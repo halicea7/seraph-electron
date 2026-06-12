@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import { useToast } from '@/contexts/ToastContext'
@@ -83,7 +83,7 @@ export default function HermesOperator() {
       const run = await createHermesRun({
         project_id: selectedProject, target_id: selectedTarget, mode, model: selectedModel,
       })
-      const ws = new WebSocket(`${getWsBase()}/ws/hermes/${run.scan_id}`)
+      const ws = new WebSocket(wsUrl(`/ws/hermes/${run.scan_id}`))
       wsRef.current = ws
       ws.onopen = () => ws.send(JSON.stringify({ action: 'run' }))
       ws.onmessage = (e) => {

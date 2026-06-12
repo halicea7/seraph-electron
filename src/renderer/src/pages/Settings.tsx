@@ -7,7 +7,7 @@ import {
 import Icon from '../components/Icon'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -757,7 +757,7 @@ export default function Settings() {
 
   function startInstall(toolName: string) {
     setInstallTool(toolName); setInstallLines([]); setInstallDone(false)
-    const ws = new WebSocket(`${getWsBase()}/ws/install/${toolName}`)
+    const ws = new WebSocket(wsUrl(`/ws/install/${toolName}`))
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
       if (msg.type === 'stdout' || msg.type === 'stderr' || msg.type === 'error') setInstallLines(prev => [...prev, msg.data])

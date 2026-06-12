@@ -7,7 +7,7 @@ import { getTargets } from '../api/client'
 import type { TargetSummary, ScanCategory, Finding } from '../types'
 import { useAppStore } from '@/stores/appStore'
 import { useToast } from '@/contexts/ToastContext'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -235,7 +235,7 @@ export default function AuditBuilder() {
     if (!scanId || !generatedScript) return
     wsRef.current?.close()
     setRunState('running'); setTermLines([{ kind: 'prompt', text: `executing audit ${scanId.slice(0, 8)} against target…` }])
-    const ws = new WebSocket(`${getWsBase()}/ws/execute/${scanId}`)
+    const ws = new WebSocket(wsUrl(`/ws/execute/${scanId}`))
     wsRef.current = ws
     ws.onopen = () => ws.send(JSON.stringify({ action: 'run', script: generatedScript }))
     ws.onmessage = ev => {

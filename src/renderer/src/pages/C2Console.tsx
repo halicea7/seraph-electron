@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '@/components/Icon'
 import Terminal, { TerminalHandle } from '../components/Terminal'
-import { getApiBase, getWsBase } from '@/lib/config'
+import { getApiBase, wsUrl } from '@/lib/config'
 import { useAppStore } from '@/stores/appStore'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -629,7 +629,7 @@ export default function C2Console() {
       const { instance_db_id } = await res.json()
       setProvisionInstanceId(instance_db_id)
       setLaunchFormOpen(false)
-      const ws = new WebSocket(`${getWsBase()}/ws/cloud/provision/${instance_db_id}`)
+      const ws = new WebSocket(wsUrl(`/ws/cloud/provision/${instance_db_id}`))
       provisionWsRef.current = ws
       ws.onmessage = e => {
         try {
@@ -911,7 +911,7 @@ export default function C2Console() {
 
   function connectTerminal(session: C2Session) {
     wsRef.current?.close()
-    const ws = new WebSocket(`${getWsBase()}/ws/c2/${session.id}`)
+    const ws = new WebSocket(wsUrl(`/ws/c2/${session.id}`))
     wsRef.current = ws
     terminalRef.current?.clear()
 
