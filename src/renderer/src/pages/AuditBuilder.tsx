@@ -94,6 +94,7 @@ export default function AuditBuilder() {
   const [termLines, setTermLines] = useState<TermLine[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const termEndRef = useRef<HTMLDivElement | null>(null)
+  const retestRef = useRef<{ findingId: string; title: string } | null>(null)
 
   // Results
   const [findings, setFindings] = useState<Finding[]>([])
@@ -232,13 +233,12 @@ export default function AuditBuilder() {
   }
 
   // ── Run (live, over /ws/execute — backend auto-parses to findings on exit) ────
-  function handleRun() {
-    if (!scanId || !generatedScript) return
+  function runScan(sid: string, script: string) {
     wsRef.current?.close()
-    setRunState('running'); setTermLines([{ kind: 'prompt', text: `executing audit ${scanId.slice(0, 8)} against target…` }])
-    const ws = new WebSocket(wsUrl(`/ws/execute/${scanId}`))
+    setRunState('running'); setTermLines([{ kind: 'prompt', text: `executing audit ${sid.slice(0, 8)} against target…` }])
+    const ws = new WebSocket(wsUrl(`/ws/execute/${sid}`))
     wsRef.current = ws
-    ws.onopen = () => ws.send(JSON.stringify({ action: 'run', script: generatedScript }))
+    ws.onopen = () => ws.send(JSON.stringify({ action: 'run', script }))
     ws.onmessage = ev => {
       const msg = JSON.parse(ev.data) as { type: string; data?: string; code?: number }
       if (msg.type === 'stdout') setTermLines(p => [...p, { kind: 'stdout', text: msg.data ?? '' }])
@@ -248,11 +248,47 @@ export default function AuditBuilder() {
         setRunState('done')
         setTermLines(p => [...p, { kind: msg.code === 0 ? 'ok' : 'stderr', text: `exit ${msg.code ?? 0}` }])
         loadFindings(); loadCoverage()
-        toast(msg.code === 0 ? 'Audit complete — findings updated' : `Audit exited ${msg.code}`, msg.code === 0 ? 'success' : 'info')
+        const retest = retestRef.current
+        if (retest) {
+          retestRef.current = null
+          ;(async () => {
+            try {
+              const er = await fetch(`${getApiBase()}/findings/${retest.findingId}/retest/evaluate`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scan_id: sid }),
+              })
+              const ev2 = await er.json()
+              toast(ev2.still_present
+                ? `Retest: “${retest.title}” still present`
+                : `Retest: “${retest.title}” not found — marked remediated`,
+                ev2.still_present ? 'info' : 'success')
+              loadFindings()
+            } catch { toast('Retest evaluation failed', 'error') }
+          })()
+        } else {
+          toast(msg.code === 0 ? 'Audit complete — findings updated' : `Audit exited ${msg.code}`, msg.code === 0 ? 'success' : 'info')
+        }
       }
     }
     ws.onerror = () => { setTermLines(p => [...p, { kind: 'stderr', text: '[websocket error]' }]); setRunState('done') }
     ws.onclose = () => setRunState(s => (s === 'running' ? 'done' : s))
+  }
+
+  function handleRun() {
+    if (!scanId || !generatedScript) return
+    retestRef.current = null
+    runScan(scanId, generatedScript)
+  }
+
+  async function handleRetest(finding: Finding) {
+    try {
+      const r = await fetch(`${getApiBase()}/findings/${finding.id}/retest`, { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.detail || 'Retest not available for this finding')
+      retestRef.current = { findingId: finding.id, title: finding.title }
+      setGeneratedScript(d.script); setScanId(d.scan_id); setComplianceReport(null)
+      toast(`Re-running the check for “${finding.title}”…`, 'info')
+      runScan(d.scan_id, d.script)
+    } catch (e) { toast(e instanceof Error ? e.message : 'Retest failed', 'error') }
   }
 
   function stopRun() { wsRef.current?.close(); setRunState('done') }
@@ -571,7 +607,7 @@ export default function AuditBuilder() {
           </div>
           {findings.length === 0 && !loadingFindings
             ? <EmptyState icon="flag" title="No findings yet" hint="Run a check above (or import results) to populate findings." pad={28} />
-            : <FindingsTable findings={findings} loading={loadingFindings} />}
+            : <FindingsTable findings={findings} loading={loadingFindings} onRetest={handleRetest} />}
         </Section>
       </div>
 

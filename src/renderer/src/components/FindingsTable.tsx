@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import type React from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, Filter, Plus, Trash2, Zap, Loader } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, Filter, Plus, Trash2, Zap, Loader, RefreshCw } from 'lucide-react'
 import type { Finding, FindingNote } from '../types/index'
 import { getApiBase } from '@/lib/config'
 
@@ -26,9 +26,11 @@ interface FindingsTableProps {
   findings: Finding[]
   loading?: boolean
   onDelete?: (id: string) => void
+  /** When provided, shows a "Retest" action that re-runs the finding's originating check. */
+  onRetest?: (finding: Finding) => void
 }
 
-export default function FindingsTable({ findings, loading, onDelete }: FindingsTableProps) {
+export default function FindingsTable({ findings, loading, onDelete, onRetest }: FindingsTableProps) {
   const [sortField, setSortField] = useState<'severity' | 'title' | 'framework'>('severity')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [filterSeverity, setFilterSeverity] = useState<string>('all')
@@ -320,15 +322,27 @@ export default function FindingsTable({ findings, loading, onDelete }: FindingsT
                     </div>
                   )}
 
-                  {/* Delete finding */}
-                  {onDelete && (
-                    <div className="flex justify-end pt-1">
-                      <button
-                        onClick={() => onDelete(finding.id)}
-                        className="flex items-center gap-1.5 px-3 py-1 rounded text-xs text-red-400 border border-red-900/40 hover:bg-red-900/20 transition-colors"
-                      >
-                        <Trash2 size={11} /> Delete Finding
-                      </button>
+                  {/* Actions */}
+                  {(onDelete || onRetest) && (
+                    <div className="flex justify-end gap-2 pt-1">
+                      {onRetest && (
+                        <button
+                          onClick={() => onRetest(finding)}
+                          title="Re-run the originating check to verify a fix"
+                          className="flex items-center gap-1.5 px-3 py-1 rounded text-xs"
+                          style={{ color: 'var(--accent)', border: '1px solid var(--accent-border)', background: 'var(--accent-2)' }}
+                        >
+                          <RefreshCw size={11} /> Retest
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(finding.id)}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded text-xs text-red-400 border border-red-900/40 hover:bg-red-900/20 transition-colors"
+                        >
+                          <Trash2 size={11} /> Delete Finding
+                        </button>
+                      )}
                     </div>
                   )}
 
