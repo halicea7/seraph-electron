@@ -44,6 +44,8 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
   const [enrichedData, setEnrichedData] = useState<Record<string, { cvss_score: string | null; cve_id: string | null }>>({})
   const [shots, setShots] = useState<Record<string, { id: string; url: string }[]>>({})
   const [lightboxShot, setLightboxShot] = useState<string | null>(null)
+  const [aiRemediation, setAiRemediation] = useState<Record<string, string>>({})
+  const [aiLoading, setAiLoading] = useState<string | null>(null)
 
   const frameworks = useMemo(() => {
     const set = new Set(findings.map(f => f.framework).filter(Boolean) as string[])
@@ -108,6 +110,18 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
     setNotes(prev => ({ ...prev, [findingId]: [...(prev[findingId] || []), newNote] }))
     setNoteInput(prev => ({ ...prev, [findingId]: '' }))
     setSavingNote(null)
+  }
+
+  async function handleRemediate(findingId: string) {
+    setAiLoading(findingId)
+    try {
+      const r = await fetch(`${getApiBase()}/findings/${findingId}/ai-remediate`, { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.detail || 'AI request failed')
+      setAiRemediation(prev => ({ ...prev, [findingId]: d.ai_remediation }))
+    } catch (e) {
+      setAiRemediation(prev => ({ ...prev, [findingId]: `⚠ ${e instanceof Error ? e.message : 'AI request failed'}` }))
+    } finally { setAiLoading(null) }
   }
 
   async function handleEnrich(findingId: string) {
@@ -350,6 +364,23 @@ export default function FindingsTable({ findings, loading, onDelete, onRetest }:
                       </div>
                     </div>
                   )}
+
+                  {/* AI remediation */}
+                  <div>
+                    {aiRemediation[finding.id] && (
+                      <div className="text-sm text-slate-300" style={{ whiteSpace: 'pre-wrap', background: 'var(--bg)', border: '1px solid var(--rule)', borderRadius: 3, padding: '10px 12px', marginBottom: 8, lineHeight: 1.55 }}>
+                        {aiRemediation[finding.id]}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleRemediate(finding.id)}
+                      disabled={aiLoading === finding.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '5px 10px', color: 'var(--accent)', border: '1px solid var(--accent-border)', background: 'var(--accent-2)', cursor: aiLoading === finding.id ? 'default' : 'pointer', fontFamily: 'var(--font-mono)', opacity: aiLoading === finding.id ? 0.6 : 1 }}
+                    >
+                      {aiLoading === finding.id ? <Loader size={11} className="animate-spin" /> : <Zap size={11} />}
+                      {aiLoading === finding.id ? 'Thinking…' : aiRemediation[finding.id] ? 'Regenerate (AI)' : 'Suggest remediation (AI)'}
+                    </button>
+                  </div>
 
                   {/* Actions */}
                   {(onDelete || onRetest) && (
